@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #FFF9F0;
+    color: #4A3F55;
+    font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Quicksand', system-ui, -apple-system, sans-serif;
+    font-weight: 700;
+  }
+}
+
+/* Custom Soft Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FFFDF9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FFD6BA;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FF8FA3;
+}
+
+/* Print Stylesheet for Picture Book */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  header, nav, footer, button, .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+}
+
+/* Accessibility: Respect Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-delay: -1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    background-attachment: initial !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
