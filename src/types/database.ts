@@ -105,6 +105,7 @@ export interface Story {
   next_drawing_ideas: string[];
   generation_stage?: GenerationStage;
   faithfulness_score?: number;
+  grounded_objects?: string[];
   created_at: string;
   updated_at: string;
   // joined fields

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import HTMLFlipBook from 'react-pageflip';
 import { 
   Play, 
   Pause, 
@@ -17,7 +18,10 @@ import {
   ArrowLeft,
   Check,
   Copy,
-  Clock
+  Clock,
+  Maximize2,
+  Minimize2,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
@@ -27,6 +31,43 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { Textarea } from '@/components/ui/Textarea';
+import { soundEffects } from '@/lib/sound';
+
+// Helper for emotion emoji
+const getEmotionEmoji = (emotion: string): string => {
+  const e = (emotion || '').toLowerCase();
+  if (e.includes('vui') || e.includes('hân hoan')) return '😊';
+  if (e.includes('hồi hộp') || e.includes('kỳ bí')) return '😯';
+  if (e.includes('dũng cảm') || e.includes('mạnh mẽ')) return '🦁';
+  if (e.includes('tò mò') || e.includes('khám phá')) return '🔍';
+  if (e.includes('ấm áp') || e.includes('yêu thương')) return '💖';
+  if (e.includes('hài hước') || e.includes('ngộ nghĩnh')) return '😄';
+  if (e.includes('tự hào')) return '🌟';
+  if (e.includes('buồn')) return '🥺';
+  if (e.includes('sợ')) return '🫣';
+  return '✨';
+};
+
+// ForwardRef page wrapper required by react-pageflip
+interface FlipPageProps {
+  children: React.ReactNode;
+  className?: string;
+  isBedtime?: boolean;
+}
+
+const FlipPage = React.forwardRef<HTMLDivElement, FlipPageProps>(({ children, className = '', isBedtime }, ref) => {
+  return (
+    <div
+      ref={ref}
+      className={`h-full w-full select-none overflow-hidden transition-colors duration-500 ${
+        isBedtime ? 'bg-[#231e38] text-[#F3EFE6]' : 'bg-[#FFFDF9] text-ink'
+      } ${className}`}
+    >
+      {children}
+    </div>
+  );
+});
+FlipPage.displayName = 'FlipPage';
 
 export const StoryReadingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -43,35 +84,59 @@ export const StoryReadingPage: React.FC = () => {
           page_number: 1,
           text_content: 'Ngày xửa ngày xưa, trong một khu rừng thần tiên tràn ngập ánh nắng ban mai...',
           emotion: 'hân hoan',
-          focus_region: { x: 30, y: 40, zoom: 1.4 },
+          focus_region: { x: 50, y: 50, zoom: 1.15 },
           created_at: new Date().toISOString(),
         },
       ];
 
+  const totalPages = pages.length;
+  // 0-indexed page in story
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
-  // Bedtime Mode State
+  // Layout mode: Desktop flipbook or mobile single view
+  const [isMobile, setIsMobile] = useState<boolean>(() => 
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Bedtime Mode
   const [isBedtimeMode, setIsBedtimeMode] = useState(false);
   const [bedtimeTimerMinutes, setBedtimeTimerMinutes] = useState<number>(0);
   const bedtimeTimerRef = useRef<number | null>(null);
+
+  // Font Size: 'sm' | 'md' | 'lg'
+  const [fontSizeLevel, setFontSizeLevel] = useState<'sm' | 'md' | 'lg'>('md');
+
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // TTS State
   const [isPlayingVoice, setIsPlayingVoice] = useState(false);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number | null>(null);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
-  const [_availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [hasVietnameseVoice, setHasVietnameseVoice] = useState(true);
 
-  // Modals
+  // Modals & User Feedback
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [kidReaction, setKidReaction] = useState<'love' | 'happy' | 'neutral' | null>(null);
 
+  // Flipbook Ref
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bookRef = useRef<any>(null);
   const readingTimeSecondsRef = useRef(0);
 
-  // Track listening time
+  // Tracking reading time
   useEffect(() => {
     const interval = setInterval(() => {
       readingTimeSecondsRef.current += 1;
@@ -90,8 +155,6 @@ export const StoryReadingPage: React.FC = () => {
     const updateVoices = () => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices();
-        setAvailableVoices(voices);
-
         const viVoice = voices.find(
           (v) => v.lang.includes('vi') || v.lang.includes('VI') || v.name.toLowerCase().includes('vietnam')
         );
@@ -127,33 +190,76 @@ export const StoryReadingPage: React.FC = () => {
     };
   }, [bedtimeTimerMinutes]);
 
-  // Trigger Confetti on the last page
+  // Trigger celebration on ending page
   useEffect(() => {
-    if (currentPageIndex === pages.length - 1) {
+    if (currentPageIndex === totalPages) {
+      soundEffects.playSuccess();
       confetti({
-        particleCount: 80,
-        spread: 70,
+        particleCount: 90,
+        spread: 80,
         origin: { y: 0.6 },
-        colors: ['#FF8FA3', '#7C6CF0', '#C9F0DD', '#FFD6BA'],
+        colors: ['#D13A5E', '#6C5CE7', '#C9F0DD', '#FFD6BA', '#FFF1B8'],
       });
     }
-  }, [currentPageIndex, pages.length]);
+  }, [currentPageIndex, totalPages]);
 
-  // Stop TTS on unmount or page change
-  const stopVoice = () => {
+  // Stop TTS helper
+  const stopVoice = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
     setIsPlayingVoice(false);
     setCurrentSentenceIndex(null);
+  }, []);
+
+  // Stop voice on page transition
+  useEffect(() => {
+    stopVoice();
+  }, [currentPageIndex, stopVoice]);
+
+  // Fullscreen toggler
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch {
+      // Fullscreen not permitted
+    }
   };
 
-  useEffect(() => {
-    return () => stopVoice();
-  }, [currentPageIndex]);
+  // Turn page safely in FlipBook or Mobile
+  const goToPage = (pageIdx: number) => {
+    const clamped = Math.max(0, Math.min(totalPages, pageIdx));
+    setCurrentPageIndex(clamped);
+    if (!isMobile && bookRef.current) {
+      try {
+        const pageFlip = bookRef.current.pageFlip();
+        if (pageFlip) {
+          // flip to spread index (each story page is 2 flipbook pages)
+          pageFlip.turnToPage(clamped * 2);
+        }
+      } catch {
+        // Ignored
+      }
+    }
+  };
 
-  // Read current page aloud
-  const currentPage = pages[currentPageIndex] || pages[0];
+  // Flip callback from react-pageflip
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onFlip = (e: any) => {
+    soundEffects.playMagic();
+    const flipbookPage = e.data;
+    const storyIdx = Math.floor(flipbookPage / 2);
+    setCurrentPageIndex(Math.min(totalPages, storyIdx));
+  };
+
+  // TTS sentence breakdown for current page
+  const currentPage = pages[Math.min(currentPageIndex, pages.length - 1)] || pages[0];
   const sentences = currentPage.text_content
     .split(/(?<=[.?!])\s+/)
     .filter((s) => s.trim().length > 0);
@@ -180,10 +286,10 @@ export const StoryReadingPage: React.FC = () => {
       if (idx >= sentences.length) {
         setIsPlayingVoice(false);
         setCurrentSentenceIndex(null);
-        // Auto-turn page if not last page
-        if (currentPageIndex < pages.length - 1) {
+        // Auto-turn page if not ending page
+        if (currentPageIndex < totalPages) {
           setTimeout(() => {
-            setCurrentPageIndex((prev) => prev + 1);
+            goToPage(currentPageIndex + 1);
           }, 800);
         }
         return;
@@ -233,342 +339,685 @@ export const StoryReadingPage: React.FC = () => {
     toast.success(vi.report.reportSuccess);
   };
 
+  // Clamped Ken Burns parameters to ensure artwork is NEVER cropped
+  const focusRegion = currentPage.focus_region || { x: 50, y: 50, zoom: 1.15 };
+  const safeZoom = Math.min(1.35, Math.max(1.0, focusRegion.zoom || 1.15));
+  const clampedX = Math.max(20, Math.min(80, focusRegion.x ?? 50));
+  const clampedY = Math.max(20, Math.min(80, focusRegion.y ?? 50));
+  const panX = (50 - clampedX) * 0.25;
+  const panY = (50 - clampedY) * 0.25;
+
+  const isReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Font size mapping
+  const fontSizeClass = 
+    fontSizeLevel === 'sm' ? 'text-[clamp(18px,2vw,24px)]' :
+    fontSizeLevel === 'lg' ? 'text-[clamp(26px,2.8vw,36px)]' :
+    'text-[clamp(22px,2.4vw,32px)]';
+
+  // Grounded objects list
+  const groundedObjects = story?.grounded_objects && story.grounded_objects.length > 0
+    ? story.grounded_objects
+    : story?.drawing?.ai_analysis?.objects || [];
+
   if (!story) {
     return (
-      <div className="p-8 text-center space-y-4">
-        <p className="text-main-muted">Không tìm thấy câu chuyện này.</p>
-        <Link to="/library">
-          <Button variant="primary">{vi.reader.backToLibrary}</Button>
-        </Link>
+      <div className="min-h-screen flex items-center justify-center p-8 text-center bg-bg">
+        <div className="space-y-4">
+          <p className="text-ink-soft">Không tìm thấy câu chuyện này.</p>
+          <Button variant="primary" onClick={() => navigate('/library')}>
+            {vi.reader.backToLibrary}
+          </Button>
+        </div>
       </div>
     );
   }
 
-  const focusRegion = currentPage.focus_region || { x: 50, y: 50, zoom: 1.3 };
-
   return (
     <div
-      className={`min-h-[calc(100vh-140px)] transition-colors duration-700 rounded-3xl p-4 md:p-8 ${
+      className={`min-h-screen flex flex-col justify-between transition-colors duration-700 selection:bg-brand-100 selection:text-brand-700 ${
         isBedtimeMode
-          ? 'bg-indigo-950 text-indigo-100 shadow-2xl'
-          : 'bg-white/60 text-main'
+          ? 'bg-[#181424] text-[#F3EFE6]'
+          : 'bg-[#FFF9F0] text-ink'
       }`}
     >
-      {/* Top Reading Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 no-print">
-        <button
-          onClick={() => navigate('/library')}
-          className={`flex items-center gap-1.5 text-xs font-heading font-bold px-3 py-2 rounded-xl transition-colors min-h-[44px] ${
-            isBedtimeMode
-              ? 'text-indigo-200 hover:bg-indigo-900'
-              : 'text-main-muted hover:text-main hover:bg-peach/30'
-          }`}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>{vi.reader.backToLibrary}</span>
-        </button>
+      {/* 1. TOP MINIMALIST HEADER */}
+      <header
+        className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 lg:px-8 py-3 transition-colors ${
+          isBedtimeMode
+            ? 'bg-[#181424]/90 border-[#322947] text-[#F3EFE6]'
+            : 'bg-surface/90 border-ink/10 text-ink'
+        }`}
+      >
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          
+          {/* Back button & Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/library')}
+              className={`rounded-full min-h-[44px] ${isBedtimeMode ? 'text-[#F3EFE6] hover:bg-white/10' : ''}`}
+              leftIcon={<ArrowLeft className="w-4 h-4" />}
+            >
+              <span className="hidden sm:inline">{vi.reader.backToLibrary}</span>
+            </Button>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {/* Bedtime Mode Toggle */}
-          <Button
-            variant={isBedtimeMode ? 'bedtime' : 'outline'}
-            size="sm"
-            onClick={() => setIsBedtimeMode(!isBedtimeMode)}
-            leftIcon={isBedtimeMode ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4" />}
-          >
-            {isBedtimeMode ? 'Đèn ngày' : vi.reader.bedtimeMode}
-          </Button>
-
-          {/* Share Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsShareModalOpen(true)}
-            leftIcon={<Share2 className="w-4 h-4" />}
-            className={isBedtimeMode ? 'text-indigo-200 hover:bg-indigo-900' : ''}
-          >
-            {vi.share.title.split(' ')[0]}
-          </Button>
-
-          {/* Print Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handlePrint}
-            leftIcon={<Printer className="w-4 h-4" />}
-            className={isBedtimeMode ? 'text-indigo-200 hover:bg-indigo-900' : ''}
-          >
-            {vi.reader.printStory}
-          </Button>
-
-          {/* Report Button */}
-          <button
-            onClick={() => setIsReportModalOpen(true)}
-            className={`p-2 rounded-xl transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center ${
-              isBedtimeMode ? 'text-indigo-300 hover:bg-indigo-900' : 'text-main-muted hover:text-rose-500'
-            }`}
-            title={vi.reader.reportStory}
-            aria-label={vi.reader.reportStory}
-          >
-            <Flag className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Bedtime Active Banner */}
-      {isBedtimeMode && (
-        <div className="mb-6 p-3.5 rounded-2xl bg-indigo-900/80 border border-indigo-700/50 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
-          <div className="flex items-center gap-2">
-            <Moon className="w-4 h-4 text-amber-300 animate-pulse" />
-            <span>{vi.reader.bedtimeActive}</span>
+            <div className="min-w-0">
+              <h1 className="font-heading font-extrabold text-sm sm:text-base truncate max-w-[200px] sm:max-w-sm md:max-w-md">
+                {story.title}
+              </h1>
+              <p className="text-xs text-ink-soft font-semibold truncate">
+                {currentPageIndex >= totalPages ? 'Trang kết' : `Trang ${currentPageIndex + 1} / ${totalPages}`} · Bé {story.child?.nickname || 'Bé'}
+              </p>
+            </div>
           </div>
 
+          {/* Controls: Font Size, Bedtime, Fullscreen, Options */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            
+            {/* Font Size Selector */}
+            <div className="hidden sm:flex items-center gap-1 bg-ink/5 rounded-full p-1 border border-ink/10">
+              {(['sm', 'md', 'lg'] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  onClick={() => setFontSizeLevel(lvl)}
+                  className={`px-2 py-0.5 rounded-full text-xs font-bold transition-all ${
+                    fontSizeLevel === lvl
+                      ? isBedtimeMode
+                        ? 'bg-magic-600 text-white'
+                        : 'bg-brand-600 text-white'
+                      : isBedtimeMode
+                      ? 'text-[#F3EFE6]/70 hover:text-white'
+                      : 'text-ink-soft hover:text-ink'
+                  }`}
+                  title={`Cỡ chữ: ${lvl.toUpperCase()}`}
+                >
+                  {lvl === 'sm' ? 'A' : lvl === 'md' ? 'A+' : 'A++'}
+                </button>
+              ))}
+            </div>
+
+            {/* Bedtime Mode Toggle */}
+            <Button
+              variant={isBedtimeMode ? 'magic' : 'secondary'}
+              size="sm"
+              onClick={() => setIsBedtimeMode(!isBedtimeMode)}
+              leftIcon={isBedtimeMode ? <Sun className="w-3.5 h-3.5 text-butter" /> : <Moon className="w-3.5 h-3.5" />}
+              className="rounded-full text-xs"
+            >
+              <span className="hidden md:inline">{isBedtimeMode ? 'Đèn ngày' : 'Ru ngủ'}</span>
+            </Button>
+
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                isBedtimeMode
+                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+              }`}
+              title={isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}
+              aria-label="Toàn màn hình"
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Share */}
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                isBedtimeMode
+                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+              }`}
+              title={vi.share.title}
+              aria-label={vi.share.title}
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+
+            {/* Print */}
+            <button
+              onClick={handlePrint}
+              className={`hidden sm:flex p-2.5 rounded-full min-w-[44px] min-h-[44px] items-center justify-center transition-colors ${
+                isBedtimeMode
+                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+              }`}
+              title={vi.reader.printStory}
+              aria-label={vi.reader.printStory}
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+
+            {/* Report */}
+            <button
+              onClick={() => setIsReportModalOpen(true)}
+              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                isBedtimeMode
+                  ? 'text-[#F3EFE6]/60 hover:text-danger hover:bg-white/10'
+                  : 'text-ink-faint hover:text-danger hover:bg-danger-bg'
+              }`}
+              title={vi.reader.reportStory}
+              aria-label={vi.reader.reportStory}
+            >
+              <Flag className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Bedtime Active Indicator Banner */}
+      {isBedtimeMode && (
+        <div className="bg-[#241c3b] border-b border-[#3d2f61] px-4 py-2 text-xs text-[#E3D9FF] flex flex-wrap items-center justify-center gap-4">
+          <div className="flex items-center gap-1.5 font-bold">
+            <Moon className="w-3.5 h-3.5 text-butter animate-pulse" />
+            <span>Chế độ ru ngủ đang bật: ánh sáng dịu, giọng kể chậm rãi</span>
+          </div>
           <div className="flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5" />
-            <span>{vi.reader.bedtimeTimer}</span>
+            <Clock className="w-3 h-3" />
+            <span>Hẹn giờ tắt:</span>
             <select
               value={bedtimeTimerMinutes}
               onChange={(e) => setBedtimeTimerMinutes(Number(e.target.value))}
-              className="bg-indigo-950 border border-indigo-700 rounded-lg px-2 py-1 text-xs text-amber-200 focus:outline-none"
+              aria-label="Hẹn giờ tắt âm thanh ru ngủ"
+              className="bg-[#181424] border border-[#4c3b7a] rounded-full px-2.5 py-0.5 text-xs text-[#E3D9FF] focus:outline-none"
             >
-              <option value={0}>{vi.reader.timerOff}</option>
-              <option value={15}>{vi.reader.timer15m}</option>
-              <option value={30}>{vi.reader.timer30m}</option>
+              <option value={0}>Không hẹn giờ</option>
+              <option value={15}>15 phút</option>
+              <option value={30}>30 phút</option>
+              <option value={45}>45 phút</option>
             </select>
           </div>
         </div>
       )}
 
-      {/* Story Book Container */}
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Story Title & Child Tag */}
-        <div className="text-center space-y-1">
-          <Badge variant={isBedtimeMode ? 'neutral' : 'mint'} size="sm">
-            🎨 {story.child?.nickname || 'Bé'} ({story.child?.age || 5} tuổi)
-          </Badge>
-          <h1
-            className={`text-2xl sm:text-3xl md:text-4xl font-heading font-black ${
-              isBedtimeMode ? 'text-amber-100' : 'text-main'
-            }`}
-          >
-            {story.title}
-          </h1>
-        </div>
+      {/* 2. MAIN READING STAGE */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 md:py-10 flex flex-col justify-center items-center">
+        
+        {/* DESKTOP / TABLET: 2-PAGE SPREAD WITH REACT-PAGEFLIP */}
+        {!isMobile ? (
+          <div className="w-full flex justify-center items-center py-2">
+            <div className="relative shadow-pop rounded-[28px] overflow-hidden border border-ink/10 bg-surface">
+              {/* Spine Gradient Center Shadow */}
+              <div className="absolute inset-y-0 left-1/2 -ml-3 w-6 pointer-events-none z-20 bg-gradient-to-r from-black/10 via-black/25 to-black/10 opacity-60" />
 
-        {/* Two-Column Picture Book Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-          {/* Left Column: Ken Burns Zoomed Drawing */}
-          <div className="aspect-[4/3] rounded-3xl overflow-hidden bg-cream-300 relative shadow-soft-lg border-2 border-peach/50">
-            {story.drawing?.image_path ? (
-              <motion.img
-                key={currentPage.id}
-                src={story.drawing.image_path}
-                alt={story.title}
-                initial={{
-                  scale: 1,
-                  x: 0,
-                  y: 0,
-                }}
-                animate={{
-                  scale: focusRegion.zoom,
-                  x: `${(50 - focusRegion.x) * 0.4}%`,
-                  y: `${(50 - focusRegion.y) * 0.4}%`,
-                }}
-                transition={{ duration: 3.5, ease: 'easeInOut' }}
-                className="w-full h-full object-cover origin-center"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-6xl">
-                🎨
-              </div>
-            )}
+              <HTMLFlipBook
+                width={500}
+                height={620}
+                size="stretch"
+                minWidth={380}
+                maxWidth={560}
+                minHeight={520}
+                maxHeight={740}
+                maxShadowOpacity={0.4}
+                showCover={false}
+                mobileScrollSupport={false}
+                className="book-container"
+                ref={bookRef}
+                onFlip={onFlip}
+                startPage={currentPageIndex * 2}
+                drawShadow={true}
+                flippingTime={800}
+                usePortrait={false}
+                startZIndex={0}
+                autoSize={true}
+                clickEventForward={true}
+                useMouseEvents={true}
+                swipeDistance={30}
+                showPageCorners={true}
+                disableFlipByClick={false}
+                style={{}}
+              >
+                {/* Generate two facing pages for each story page */}
+                {pages.map((pg) => [
+                  // LEFT SPREAD PAGE: Polaroid Artwork Frame
+                  <FlipPage key={`left-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-10 flex flex-col justify-between">
+                    <div className="space-y-4">
+                      {/* Top Header of Left Page */}
+                      <div className="flex items-center justify-between">
+                        <Badge variant={isBedtimeMode ? 'lavender' : 'peach'} size="sm">
+                          {pg.page_number === 1 ? 'Khởi đầu' : `Chương ${pg.page_number}`}
+                        </Badge>
+                        <span className="text-xs font-bold font-heading px-2.5 py-1 rounded-full bg-ink/5 flex items-center gap-1">
+                          <span>{getEmotionEmoji(pg.emotion)}</span>
+                          <span className="capitalize">{pg.emotion}</span>
+                        </span>
+                      </div>
 
-            {/* Emotion Tag */}
-            <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-main shadow-soft">
-              Cảm xúc: {currentPage.emotion}
+                      {/* Polaroid / Paper Framed Artwork */}
+                      <div className="p-3 pb-5 bg-white rounded-2xl shadow-card border border-ink/10 rotate-[-1deg] transition-transform hover:rotate-0">
+                        <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+                          {story.drawing?.image_path ? (
+                            <motion.img
+                              key={pg.id}
+                              src={story.drawing.image_path}
+                              alt={story.title}
+                              initial={isReducedMotion ? false : { scale: 1, x: 0, y: 0 }}
+                              animate={isReducedMotion ? { scale: 1, x: 0, y: 0 } : {
+                                scale: safeZoom,
+                                x: `${panX}%`,
+                                y: `${panY}%`,
+                              }}
+                              transition={{ duration: 4.5, ease: 'easeInOut' }}
+                              className="w-full h-full object-contain select-none"
+                            />
+                          ) : (
+                            <div className="text-6xl select-none">🎨</div>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2 tracking-wide">
+                          Tranh vẽ của Bé {story.child?.nickname || ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* "Bé đã vẽ, AI thấy gì" Grounded Object Chips */}
+                    {groundedObjects.length > 0 && (
+                      <div className="pt-3 border-t border-ink/10 space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-soft">
+                          <Sparkles className="w-3 h-3 text-magic-600" />
+                          <span>Bé đã vẽ, AI thấy gì:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {groundedObjects.slice(0, 4).map((obj: string, oIdx: number) => (
+                            <span
+                              key={oIdx}
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                isBedtimeMode
+                                  ? 'bg-[#32274d] text-lavender border-[#4a3a70]'
+                                  : 'bg-surface-2 text-ink-soft border-ink/10'
+                              }`}
+                            >
+                              ✨ {obj}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </FlipPage>,
+
+                  // RIGHT SPREAD PAGE: Modern Story Text with Karaoke Sentence Highlight
+                  <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
+                    <div className="space-y-6">
+                      {/* Top Header of Right Page */}
+                      <div className="flex items-center justify-between text-xs font-bold text-ink-soft border-b border-ink/10 pb-3">
+                        <span className="font-heading tracking-wider uppercase text-[11px] text-brand-600">
+                          {story.title}
+                        </span>
+                        <span>Trang {pg.page_number} / {totalPages}</span>
+                      </div>
+
+                      {/* Main Story Text with Karaoke Highlighting */}
+                      <div className={`font-story leading-[1.7] ${fontSizeClass} tracking-wide space-y-2 select-text`}>
+                        {sentences.map((sent, sIdx) => {
+                          const isHighlighted = isPlayingVoice && currentSentenceIndex === sIdx;
+                          return (
+                            <span
+                              key={sIdx}
+                              className={`transition-all duration-300 rounded-lg px-1.5 py-0.5 inline-block ${
+                                isHighlighted
+                                  ? isBedtimeMode
+                                    ? 'bg-butter text-[#181424] font-black shadow-sm scale-[1.02]'
+                                    : 'bg-brand-100 text-brand-700 font-black shadow-sm scale-[1.02]'
+                                  : ''
+                              }`}
+                            >
+                              {sent}{' '}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Page Footer Decor */}
+                    <div className="pt-4 border-t border-ink/10 flex items-center justify-between text-xs text-ink-faint font-heading">
+                      <span>DrawToStory</span>
+                      <span>· {pg.page_number} ·</span>
+                    </div>
+                  </FlipPage>
+                ])}
+
+                {/* FINAL SPREAD: CELEBRATION & NEXT DRAWING IDEAS */}
+                <FlipPage key="final-left" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
+                  <div className="space-y-6 text-center">
+                    <div className="w-16 h-16 rounded-full bg-butter/30 mx-auto flex items-center justify-center text-4xl shadow-sm">
+                      🎉
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink">
+                        {vi.reader.congratsTitle}
+                      </h2>
+                      <p className="text-sm font-semibold text-success leading-relaxed max-w-sm mx-auto">
+                        💡 {vi.reader.moralTitle} <strong className="text-ink">{story.moral}</strong>
+                      </p>
+                    </div>
+
+                    {/* Kid Emotion Feedback Buttons */}
+                    <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 space-y-2 max-w-xs mx-auto">
+                      <p className="text-xs font-bold text-ink-soft">Bé thấy câu chuyện hôm nay thế nào?</p>
+                      <div className="flex justify-center gap-3">
+                        {[
+                          { key: 'love', emoji: '😍', label: 'Rất thích' },
+                          { key: 'happy', emoji: '🙂', label: 'Vui vẻ' },
+                          { key: 'neutral', emoji: '😕', label: 'Bình thường' },
+                        ].map((rx) => (
+                          <button
+                            key={rx.key}
+                            onClick={() => {
+                              soundEffects.playMagic();
+                              setKidReaction(rx.key as 'love' | 'happy' | 'neutral');
+                              toast.success('Cảm ơn bé đã chấm điểm câu chuyện! ❤️');
+                            }}
+                            className={`p-2.5 rounded-2xl text-2xl transition-all transform ${
+                              kidReaction === rx.key
+                                ? 'bg-brand-600 scale-125 shadow-btn-primary'
+                                : 'bg-surface hover:scale-110 shadow-sm border border-ink/10'
+                            }`}
+                            title={rx.label}
+                          >
+                            {rx.emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-xs text-ink-faint">
+                    Bé hãy tiếp tục khám phá thêm các bức vẽ mới nhé!
+                  </div>
+                </FlipPage>
+
+                <FlipPage key="final-right" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2 border-b border-ink/10 pb-3">
+                      <Sparkles className="w-5 h-5 text-magic-600" />
+                      <h3 className="font-heading font-black text-lg text-ink">
+                        {vi.reader.nextDrawingIdeasTitle}
+                      </h3>
+                    </div>
+                    <p className="text-xs text-ink-soft">
+                      {vi.reader.nextDrawingSubtitle}
+                    </p>
+
+                    {/* 3 Next Drawing Ideas */}
+                    <div className="space-y-2.5">
+                      {story.next_drawing_ideas?.map((idea, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-2xl bg-surface border border-ink/10 shadow-card flex items-center gap-3 text-xs font-bold text-ink group hover:border-brand-600 transition-colors"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-peach flex items-center justify-center text-ink shrink-0 font-extrabold text-[11px]">
+                            {idx + 1}
+                          </span>
+                          <span className="leading-snug">{idea}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Actions: Print & Read Again */}
+                  <div className="pt-4 border-t border-ink/10 flex items-center justify-between gap-3">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => goToPage(0)}
+                      leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                    >
+                      Đọc lại từ đầu
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handlePrint}
+                      leftIcon={<Printer className="w-3.5 h-3.5" />}
+                    >
+                      In tranh & truyện
+                    </Button>
+                  </div>
+                </FlipPage>
+              </HTMLFlipBook>
             </div>
           </div>
+        ) : (
+          /* MOBILE SINGLE PAGE VIEW: Top 55% Artwork, Bottom 45% Text with Swipe */
+          <div className="w-full flex flex-col gap-4">
+            {currentPageIndex < totalPages ? (
+              <>
+                {/* Mobile Top 55% Artwork Stage */}
+                <div className="relative rounded-[24px] overflow-hidden bg-white p-3 shadow-card border border-ink/10">
+                  <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+                    {story.drawing?.image_path ? (
+                      <motion.img
+                        key={currentPage.id}
+                        src={story.drawing.image_path}
+                        alt={story.title}
+                        initial={isReducedMotion ? false : { scale: 1, x: 0, y: 0 }}
+                        animate={isReducedMotion ? { scale: 1, x: 0, y: 0 } : {
+                          scale: safeZoom,
+                          x: `${panX}%`,
+                          y: `${panY}%`,
+                        }}
+                        transition={{ duration: 3.5, ease: 'easeInOut' }}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-6xl">🎨</div>
+                    )}
+                  </div>
 
-          {/* Right Column: Book Page Text Content with Airy Typography */}
-          <div
-            className={`p-6 sm:p-8 md:p-10 rounded-3xl flex flex-col justify-between min-h-[300px] border transition-colors shadow-soft ${
-              isBedtimeMode
-                ? 'bg-indigo-900/60 border-indigo-700/60 text-indigo-100'
-                : 'bg-white border-white text-main'
-            }`}
-          >
-            {/* Page Content */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs font-heading font-bold text-main-muted">
-                <span className={isBedtimeMode ? 'text-indigo-300' : 'text-primary'}>
-                  {vi.reader.pageOf} {currentPage.page_number} / {pages.length}
-                </span>
-                <span className={isBedtimeMode ? 'text-indigo-300' : 'text-accent'}>
-                  ✨ DrawToStory
-                </span>
-              </div>
+                  {/* Badges on mobile artwork */}
+                  <div className="absolute top-5 left-5">
+                    <Badge variant="neutral" size="sm" className="shadow-sm">
+                      {getEmotionEmoji(currentPage.emotion)} {currentPage.emotion}
+                    </Badge>
+                  </div>
 
-              {/* Text with real-time sentence highlighting */}
-              <div className="text-lg sm:text-xl md:text-2xl font-sans font-medium leading-relaxed tracking-wide space-y-2">
-                {sentences.map((sent, sIdx) => {
-                  const isHighlighted = isPlayingVoice && currentSentenceIndex === sIdx;
-                  return (
-                    <span
-                      key={sIdx}
-                      className={`transition-colors duration-200 rounded px-1 ${
-                        isHighlighted
-                          ? isBedtimeMode
-                            ? 'bg-amber-400 text-indigo-950 font-bold'
-                            : 'bg-primary-light text-primary-dark font-bold'
-                          : ''
+                  <div className="absolute top-5 right-5">
+                    <Badge variant="primary" size="sm">
+                      Trang {currentPage.page_number} / {totalPages}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Mobile Bottom Text with Karaoke Highlighting */}
+                <div className={`p-5 rounded-[24px] border border-ink/10 shadow-card transition-colors ${
+                  isBedtimeMode ? 'bg-[#231e38] text-[#F3EFE6]' : 'bg-surface text-ink'
+                }`}>
+                  <div className={`font-story leading-[1.7] ${fontSizeClass} space-y-1.5`}>
+                    {sentences.map((sent, sIdx) => {
+                      const isHighlighted = isPlayingVoice && currentSentenceIndex === sIdx;
+                      return (
+                        <span
+                          key={sIdx}
+                          className={`transition-all duration-300 rounded px-1 ${
+                            isHighlighted
+                              ? isBedtimeMode
+                                ? 'bg-butter text-[#181424] font-black'
+                                : 'bg-brand-100 text-brand-700 font-black'
+                              : ''
+                          }`}
+                        >
+                          {sent}{' '}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {/* Mobile Grounded Objects Tags */}
+                  {groundedObjects.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-ink/10 flex flex-wrap gap-1.5">
+                      {groundedObjects.slice(0, 3).map((obj: string, oIdx: number) => (
+                        <span
+                          key={oIdx}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-2 text-ink-soft border border-ink/10"
+                        >
+                          ✨ {obj}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Mobile Ending Page */
+              <div className="p-6 rounded-[28px] bg-surface border border-ink/10 shadow-card text-center space-y-5">
+                <div className="text-5xl">🎉</div>
+                <h2 className="text-2xl font-heading font-black text-ink">{vi.reader.congratsTitle}</h2>
+                <p className="text-sm font-semibold text-success">
+                  💡 {vi.reader.moralTitle} <strong className="text-ink">{story.moral}</strong>
+                </p>
+
+                {/* Rating */}
+                <div className="flex justify-center gap-3 pt-2">
+                  {[
+                    { key: 'love', emoji: '😍' },
+                    { key: 'happy', emoji: '🙂' },
+                    { key: 'neutral', emoji: '😕' },
+                  ].map((rx) => (
+                    <button
+                      key={rx.key}
+                      onClick={() => {
+                        soundEffects.playMagic();
+                        setKidReaction(rx.key as 'love' | 'happy' | 'neutral');
+                        toast.success('Cảm ơn bé đã chấm điểm! ❤️');
+                      }}
+                      className={`p-3 rounded-2xl text-2xl transition-all ${
+                        kidReaction === rx.key ? 'bg-brand-600 scale-110 shadow-btn-primary' : 'bg-surface-2'
                       }`}
                     >
-                      {sent}{' '}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
+                      {rx.emoji}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Reading Audio Control Bar */}
-            <div className="mt-8 pt-4 border-t border-peach/30 flex flex-wrap items-center justify-between gap-3">
-              <Button
-                variant={isBedtimeMode ? 'bedtime' : 'primary'}
-                size="md"
-                onClick={handlePlayVoice}
-                leftIcon={isPlayingVoice ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              >
-                {isPlayingVoice ? vi.reader.pauseVoice : vi.reader.playVoice}
-              </Button>
+                {/* Next Drawing Ideas */}
+                <div className="text-left space-y-2 pt-3 border-t border-ink/10">
+                  <p className="text-xs font-bold text-ink-soft">{vi.reader.nextDrawingIdeasTitle}:</p>
+                  {story.next_drawing_ideas?.map((idea, idx) => (
+                    <div key={idx} className="p-3 bg-surface-2 rounded-xl text-xs font-bold text-ink">
+                      ✏️ {idea}
+                    </div>
+                  ))}
+                </div>
 
-              {/* Voice Speed Controls */}
-              <div className="flex items-center gap-2 text-xs">
-                <Volume2 className="w-4 h-4 text-main-muted" />
-                <span className="font-heading font-bold text-main-muted">
-                  {vi.reader.voiceSpeed}
-                </span>
-                {[0.8, 1.0, 1.2].map((rate) => (
-                  <button
-                    key={rate}
-                    onClick={() => {
-                      setSpeechRate(rate);
-                      if (isPlayingVoice) stopVoice();
-                    }}
-                    className={`px-2 py-1 rounded-lg font-bold min-h-[36px] ${
-                      speechRate === rate
-                        ? 'bg-primary text-white'
-                        : isBedtimeMode
-                        ? 'bg-indigo-800 text-indigo-200'
-                        : 'bg-cream-200 text-main'
-                    }`}
-                  >
-                    {rate}x
-                  </button>
-                ))}
+                <div className="flex gap-2 pt-2">
+                  <Button variant="secondary" size="md" className="flex-1" onClick={() => goToPage(0)}>
+                    Đọc lại
+                  </Button>
+                  <Button variant="primary" size="md" className="flex-1" onClick={handlePrint}>
+                    In tranh
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        </div>
-
-        {/* Page Navigation Buttons */}
-        <div className="flex items-center justify-between pt-4 no-print">
-          <Button
-            variant="outline"
-            size="md"
-            disabled={currentPageIndex === 0}
-            onClick={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
-            leftIcon={<ChevronLeft className="w-4 h-4" />}
-          >
-            {vi.reader.previousPage}
-          </Button>
-
-          {/* Quick Page Jump Dots */}
-          <div className="flex items-center gap-2">
-            {pages.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentPageIndex(idx)}
-                className={`h-3 rounded-full transition-all duration-300 min-h-[44px] min-w-[20px] flex items-center justify-center ${
-                  idx === currentPageIndex
-                    ? 'w-8 bg-primary'
-                    : isBedtimeMode
-                    ? 'w-3 bg-indigo-800 hover:bg-indigo-700'
-                    : 'w-3 bg-peach hover:bg-primary/50'
-                }`}
-                aria-label={`Trang ${idx + 1}`}
-              >
-                <span className="sr-only">Trang {idx + 1}</span>
-              </button>
-            ))}
-          </div>
-
-          <Button
-            variant="primary"
-            size="md"
-            disabled={currentPageIndex === pages.length - 1}
-            onClick={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
-            rightIcon={<ChevronRight className="w-4 h-4" />}
-          >
-            {vi.reader.nextPage}
-          </Button>
-        </div>
-
-        {/* Last Page Celebration & Next Drawing Ideas */}
-        {currentPageIndex === pages.length - 1 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className={`p-6 md:p-8 rounded-3xl border-2 space-y-6 ${
-              isBedtimeMode
-                ? 'bg-indigo-900/80 border-indigo-700 text-indigo-100'
-                : 'bg-mint-light/80 border-mint text-main shadow-soft'
-            }`}
-          >
-            <div className="text-center space-y-2">
-              <span className="text-4xl block">🎉</span>
-              <h3 className="text-xl md:text-2xl font-heading font-black">
-                {vi.reader.congratsTitle}
-              </h3>
-              <p className="text-sm font-semibold text-emerald-800">
-                💡 {vi.reader.moralTitle} <strong className="text-main">{story.moral}</strong>
-              </p>
-            </div>
-
-            {/* Next Drawing Ideas */}
-            <div className="space-y-3 pt-3 border-t border-mint">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-accent" />
-                <h4 className="font-heading font-black text-base">
-                  {vi.reader.nextDrawingIdeasTitle}
-                </h4>
-              </div>
-              <p className="text-xs text-main-muted">
-                {vi.reader.nextDrawingSubtitle}
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {story.next_drawing_ideas?.map((idea, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-center gap-2.5 ${
-                      isBedtimeMode
-                        ? 'bg-indigo-950 border-indigo-700 text-indigo-200'
-                        : 'bg-white border-peach/50 text-main shadow-soft'
-                    }`}
-                  >
-                    <span className="w-6 h-6 rounded-full bg-peach flex items-center justify-center font-bold text-main shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span>{idea}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
         )}
-      </div>
+      </main>
+
+      {/* 3. STICKY BOTTOM PLAYBACK CONTROLLER */}
+      <footer
+        className={`sticky bottom-0 z-30 backdrop-blur-md border-t px-4 py-3 transition-colors ${
+          isBedtimeMode
+            ? 'bg-[#181424]/95 border-[#322947]'
+            : 'bg-surface/95 border-ink/10'
+        }`}
+      >
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          
+          {/* Left: Previous Page & Dot Pagination */}
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={currentPageIndex === 0}
+              onClick={() => goToPage(currentPageIndex - 1)}
+              leftIcon={<ChevronLeft className="w-4 h-4" />}
+              className="rounded-full min-h-[44px]"
+            >
+              <span className="hidden sm:inline">{vi.reader.previousPage}</span>
+            </Button>
+
+            {/* Dot Pagination Indicator */}
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: totalPages + 1 }).map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => goToPage(idx)}
+                  className={`h-2.5 rounded-full transition-all duration-300 min-h-[44px] min-w-[20px] flex items-center justify-center ${
+                    idx === currentPageIndex
+                      ? isBedtimeMode
+                        ? 'w-6 bg-magic-600'
+                        : 'w-6 bg-brand-600'
+                      : isBedtimeMode
+                      ? 'w-2.5 bg-white/20 hover:bg-white/40'
+                      : 'w-2.5 bg-ink/15 hover:bg-ink/30'
+                  }`}
+                  aria-label={idx === totalPages ? 'Trang kết' : `Trang ${idx + 1}`}
+                >
+                  <span className="sr-only">{idx === totalPages ? 'Trang kết' : `Trang ${idx + 1}`}</span>
+                </button>
+              ))}
+            </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={currentPageIndex >= totalPages}
+              onClick={() => goToPage(currentPageIndex + 1)}
+              rightIcon={<ChevronRight className="w-4 h-4" />}
+              className="rounded-full min-h-[44px]"
+            >
+              <span className="hidden sm:inline">{vi.reader.nextPage}</span>
+            </Button>
+          </div>
+
+          {/* Center / Right: Big 56px TTS Play/Pause & Voice Settings */}
+          <div className="flex items-center gap-3">
+            
+            {/* Speed Selector */}
+            <div className="flex items-center gap-1 text-xs font-bold text-ink-soft">
+              <Volume2 className="w-3.5 h-3.5 hidden sm:inline" />
+              {[0.8, 1.0, 1.2].map((rate) => (
+                <button
+                  key={rate}
+                  onClick={() => {
+                    setSpeechRate(rate);
+                    if (isPlayingVoice) stopVoice();
+                  }}
+                  className={`px-2 py-1 rounded-full text-xs font-bold transition-all min-h-[36px] ${
+                    speechRate === rate
+                      ? isBedtimeMode
+                        ? 'bg-magic-600 text-white'
+                        : 'bg-brand-600 text-white'
+                      : isBedtimeMode
+                      ? 'bg-white/10 text-[#F3EFE6]'
+                      : 'bg-surface-2 text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+
+            {/* Giant 56px Play/Pause Button */}
+            <Button
+              variant={isBedtimeMode ? 'magic' : 'primary'}
+              size="lg"
+              onClick={handlePlayVoice}
+              className="w-14 h-14 rounded-full shadow-btn-primary p-0 flex items-center justify-center shrink-0"
+              aria-label={isPlayingVoice ? vi.reader.pauseVoice : vi.reader.playVoice}
+            >
+              {isPlayingVoice ? (
+                <Pause className="w-6 h-6 fill-current" />
+              ) : (
+                <Play className="w-6 h-6 fill-current ml-0.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </footer>
 
       {/* Share Modal */}
       <Modal
@@ -578,8 +1027,8 @@ export const StoryReadingPage: React.FC = () => {
         description={vi.share.subtitle}
       >
         <div className="space-y-4 pt-2">
-          <div className="p-3 bg-cream-200 rounded-2xl border border-peach/50 flex items-center justify-between gap-2">
-            <span className="text-xs text-main font-mono truncate">
+          <div className="p-3 bg-surface-2 rounded-2xl border border-ink/10 flex items-center justify-between gap-2">
+            <span className="text-xs text-ink font-mono truncate">
               {window.location.origin}/shared/{story.share_token}
             </span>
             <Button
@@ -592,14 +1041,14 @@ export const StoryReadingPage: React.FC = () => {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-peach/30">
-            <span className="text-xs text-main-muted">Trạng thái chia sẻ:</span>
+          <div className="flex items-center justify-between pt-4 border-t border-ink/10">
+            <span className="text-xs text-ink-soft">Trạng thái chia sẻ:</span>
             <button
               onClick={async () => {
                 await toggleStoryShare(story.id, !story.is_shared);
                 toast.success(story.is_shared ? 'Đã hủy chia sẻ công khai' : 'Đã bật chia sẻ công khai');
               }}
-              className="text-xs font-heading font-bold text-primary hover:underline"
+              className="text-xs font-heading font-bold text-brand-600 hover:underline"
             >
               {story.is_shared ? vi.share.revokeButton : 'Bật chia sẻ liên kết'}
             </button>
