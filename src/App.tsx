@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { router } from '@/app/router';
 import { useAuthStore } from '@/store/authStore';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { SystemBanner } from '@/components/layout/SystemBanner';
 
 export const App: React.FC = () => {
   const initialize = useAuthStore((state) => state.initialize);
@@ -14,6 +15,7 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <SystemBanner />
       <RouterProvider router={router} />
       <Toaster 
         position="top-center" 

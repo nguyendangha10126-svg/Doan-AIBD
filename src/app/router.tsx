@@ -32,6 +32,7 @@ import { AuditLogsPage } from '@/pages/admin/AuditLogsPage';
 
 // Common Pages
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { StyleguidePage } from '@/pages/dev/StyleguidePage';
 
 // Guards
 import { ProtectedRoute, AdminRoute, GuestRoute } from './guards';
@@ -57,6 +58,12 @@ export const router = createBrowserRouter([
     element: <SharedStoryPage />,
   },
 
+  // Dev Styleguide Route
+  {
+    path: '/dev/styleguide',
+    element: <StyleguidePage />,
+  },
+
   // User App Protected Routes
   {
     path: '/',
@@ -70,6 +77,7 @@ export const router = createBrowserRouter([
       { path: 'create', element: <CreateStoryPage /> },
       { path: 'story/:id', element: <StoryReadingPage /> },
       { path: 'library', element: <LibraryPage /> },
+      { path: 'kid', element: <KidModePage /> },
       { path: 'kid-mode', element: <KidModePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'trust', element: <TrustPage /> },

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Profile, Child } from '@/types/database';
 import { supabase, isDemoMode } from '@/lib/supabase';
+import { fastHashPin } from '@/lib/utils';
 
 export interface AuthState {
   profile: Profile | null;
@@ -29,7 +30,7 @@ const DEMO_ADMIN_PROFILE: Profile = {
   role: 'admin',
   is_locked: false,
   daily_quota: 100,
-  parental_pin_hash: '1234',
+  parental_pin_hash: fastHashPin('1234'),
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -40,7 +41,7 @@ const DEMO_USER_PROFILE: Profile = {
   role: 'user',
   is_locked: false,
   daily_quota: 5,
-  parental_pin_hash: '1234',
+  parental_pin_hash: fastHashPin('1234'),
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -287,11 +288,12 @@ export const useAuthStore = create<AuthState>()(
         const { profile } = get();
         if (!profile) return false;
 
-        const updated = { ...profile, parental_pin_hash: pin };
+        const hashed = fastHashPin(pin.trim());
+        const updated = { ...profile, parental_pin_hash: hashed };
         if (!isDemoMode) {
           await supabase
             .from('profiles')
-            .update({ parental_pin_hash: pin })
+            .update({ parental_pin_hash: hashed })
             .eq('id', profile.id);
         }
         set({ profile: updated });
@@ -300,8 +302,12 @@ export const useAuthStore = create<AuthState>()(
 
       verifyPin: (pin: string) => {
         const { profile } = get();
-        const expectedPin = profile?.parental_pin_hash || '1234';
-        return pin.trim() === expectedPin.trim();
+        const stored = profile?.parental_pin_hash;
+        if (!stored) {
+          return pin.trim() === '1234';
+        }
+        const hashed = fastHashPin(pin.trim());
+        return hashed === stored || pin.trim() === stored;
       },
     }),
     {

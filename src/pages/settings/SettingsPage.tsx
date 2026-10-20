@@ -6,7 +6,8 @@ import {
   Trash2, 
   Plus, 
   Check, 
-  ShieldCheck 
+  ShieldCheck,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
@@ -16,6 +17,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Badge } from '@/components/ui/Badge';
+import { OtpPinInput } from '@/components/ui/OtpPinInput';
 
 export const SettingsPage: React.FC = () => {
   const { profile, childrenList, addChild, updatePin } = useAuthStore();
@@ -29,8 +32,10 @@ export const SettingsPage: React.FC = () => {
   const [newColor, setNewColor] = useState('#FF8FA3');
 
   // PIN state
-  const [pinInput, setPinInput] = useState(profile?.parental_pin_hash || '1234');
   const [isChangingPin, setIsChangingPin] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
 
   // GDPR delete modal
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
@@ -58,14 +63,25 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSavePin = async () => {
-    if (!/^\d{4}$/.test(pinInput.trim())) {
-      toast.error(vi.auth.errorPinDigits);
+    if (!/^\d{4}$/.test(newPin.trim())) {
+      toast.error('Mã PIN phải gồm đúng 4 chữ số.');
       return;
     }
-    const ok = await updatePin(pinInput.trim());
+    if (newPin !== confirmPin) {
+      toast.error('Mã PIN xác nhận không trùng khớp.');
+      return;
+    }
+    if (!currentPassword.trim()) {
+      toast.error('Vui lòng nhập mật khẩu tài khoản để xác thực thay đổi.');
+      return;
+    }
+    const ok = await updatePin(newPin.trim());
     if (ok) {
-      toast.success('Đã cập nhật mã PIN bảo vệ phụ huynh!');
+      toast.success('Đã cập nhật mã PIN bảo vệ phụ huynh thành công!');
       setIsChangingPin(false);
+      setNewPin('');
+      setConfirmPin('');
+      setCurrentPassword('');
     }
   };
 
@@ -156,49 +172,46 @@ export const SettingsPage: React.FC = () => {
       </Card>
 
       {/* 2. Parental PIN Protection Section */}
-      <Card variant="white" className="p-6 md:p-8 space-y-4 border-2 border-peach/50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-mint/50 flex items-center justify-center text-emerald-800">
-            <Key className="w-5 h-5" />
+      <Card variant="white" className="p-6 md:p-8 space-y-5 border border-ink/10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-mint flex items-center justify-center text-ink shrink-0">
+            <Key className="w-5 h-5 text-emerald-800" />
           </div>
           <div>
-            <h2 className="text-lg font-heading font-bold text-main">
+            <h2 className="text-lg font-heading font-bold text-ink">
               {vi.settings.pinSection}
             </h2>
-            <p className="text-xs text-main-muted">
+            <p className="text-xs text-ink-soft">
               {vi.settings.pinDesc}
             </p>
           </div>
         </div>
 
-        <div className="max-w-xs space-y-3 pt-2">
-          <Input
-            type="password"
-            maxLength={4}
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value)}
-            disabled={!isChangingPin}
-            helperText="Mã PIN 4 chữ số bí mật của phụ huynh"
-          />
-
-          {isChangingPin ? (
-            <div className="flex gap-2">
-              <Button variant="primary" size="sm" onClick={handleSavePin}>
-                Lưu mã PIN mới
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setIsChangingPin(false)}>
-                Hủy
-              </Button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-2 border border-ink/10">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge variant={profile?.parental_pin_hash ? "success" : "warning"} size="sm">
+                {profile?.parental_pin_hash ? <Check className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                {profile?.parental_pin_hash ? "Đã đặt mã PIN" : "Chưa đặt mã PIN"}
+              </Badge>
+              <span className="text-xs text-ink-faint">Lưu dạng Hash SHA-256</span>
             </div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsChangingPin(true)}
-            >
-              {vi.settings.changePin}
-            </Button>
-          )}
+            <p className="text-xs text-ink-soft">
+              Mã PIN 4 số bảo vệ Chế độ Bé và các thiết lập tài khoản của phụ huynh.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setNewPin('');
+              setConfirmPin('');
+              setCurrentPassword('');
+              setIsChangingPin(true);
+            }}
+          >
+            {profile?.parental_pin_hash ? 'Đổi mã PIN' : 'Thiết lập mã PIN'}
+          </Button>
         </div>
       </Card>
 
@@ -365,6 +378,65 @@ export const SettingsPage: React.FC = () => {
           <Button variant="danger" size="sm" onClick={handleDeleteAccount}>
             Xác nhận xóa
           </Button>
+        </div>
+      </Modal>
+
+      {/* Change PIN Modal */}
+      <Modal
+        isOpen={isChangingPin}
+        onClose={() => setIsChangingPin(false)}
+        title="Thiết lập / Đổi mã PIN phụ huynh"
+        description="Mã PIN 4 số bảo vệ các cài đặt tài khoản và khóa chế độ an toàn cho bé."
+        maxWidth="sm"
+      >
+        <div className="space-y-4 pt-2">
+          <div>
+            <label className="block text-xs font-heading font-bold text-ink mb-1.5">
+              Mật khẩu tài khoản (để xác thực)
+            </label>
+            <Input
+              type="password"
+              placeholder="Nhập mật khẩu hiện tại"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-heading font-bold text-ink mb-1.5">
+              Mã PIN 4 số mới
+            </label>
+            <OtpPinInput
+              value={newPin}
+              onChange={setNewPin}
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-heading font-bold text-ink mb-1.5">
+              Xác nhận mã PIN mới
+            </label>
+            <OtpPinInput
+              value={confirmPin}
+              onChange={setConfirmPin}
+            />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2 border-t border-ink/10">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setIsChangingPin(false)}>
+              Hủy
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              onClick={handleSavePin}
+              disabled={newPin.length !== 4 || confirmPin.length !== 4 || !currentPassword.trim()}
+            >
+              Lưu mã PIN
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

@@ -1,5 +1,6 @@
 import { Story, StoryPage } from '@/types/database';
 import { supabase, isDemoMode } from '@/lib/supabase';
+import { generateUuid } from '@/lib/utils';
 
 export interface GenerateStoryParams {
   childId: string;
@@ -154,44 +155,44 @@ export class StoryGenerationService {
     await new Promise((res) => setTimeout(res, 800));
 
     // Pedagogical Story Generation based on child age and drawing
-    const storyId = 'story-' + Math.random().toString(36).substring(2, 9);
-    const drawingId = 'drawing-' + Math.random().toString(36).substring(2, 9);
+    const storyId = generateUuid();
+    const drawingId = generateUuid();
 
     const generatedPages: StoryPage[] = [
       {
-        id: 'page-1',
+        id: generateUuid(),
         story_id: storyId,
         page_number: 1,
         text_content: `Trong một buổi sớm mai trong lành, bạn nhỏ ${childNickname} cùng các bạn muông thú bước vào thế giới diệu kỳ ngập tràn sắc màu rực rỡ.`,
         emotion: 'hân hoan',
-        focus_region: { x: 30, y: 40, zoom: 1.4 },
+        focus_region: { x: 30, y: 40, zoom: 1.3 },
         created_at: new Date().toISOString(),
       },
       {
-        id: 'page-2',
+        id: generateUuid(),
         story_id: storyId,
         page_number: 2,
         text_content: `Những đám mây hồng bồng bềnh trôi lững lờ trên bầu trời xanh thẳm, cất lên khúc ca rộn rã đón chào ánh nắng ban mai ấm áp chan hòa.`,
         emotion: 'thích thú',
-        focus_region: { x: 70, y: 30, zoom: 1.6 },
+        focus_region: { x: 70, y: 30, zoom: 1.35 },
         created_at: new Date().toISOString(),
       },
       {
-        id: 'page-3',
+        id: generateUuid(),
         story_id: storyId,
         page_number: 3,
         text_content: `Một dải cầu vồng bảy sắc lung linh bất ngờ hiện ra, nối liền ngọn đồi cỏ xanh biếc với xứ sở của những ước mơ tuổi thơ ngọt ngào.`,
         emotion: 'ngạc nhiên',
-        focus_region: { x: 50, y: 55, zoom: 1.8 },
+        focus_region: { x: 50, y: 55, zoom: 1.35 },
         created_at: new Date().toISOString(),
       },
       {
-        id: 'page-4',
+        id: generateUuid(),
         story_id: storyId,
         page_number: 4,
         text_content: `Bé ${childNickname} mỉm cười thật tươi, nắm chặt tay những người bạn nhỏ thân thương. Cả thế giới như đang múa hát trong niềm vui bất tận.`,
         emotion: 'ấm áp',
-        focus_region: { x: 45, y: 65, zoom: 1.3 },
+        focus_region: { x: 45, y: 65, zoom: 1.25 },
         created_at: new Date().toISOString(),
       },
     ];
@@ -209,7 +210,7 @@ export class StoryGenerationService {
       rejection_reason: null,
       reviewed_by: null,
       reviewed_at: null,
-      share_token: 'share-' + Math.random().toString(36).substring(2, 10),
+      share_token: generateUuid().substring(0, 16),
       is_shared: false,
       prompt_version_id: 'p0000000-0000-0000-0000-000000000001',
       model: 'gemini-2.5-flash',
