@@ -1,0 +1,23 @@
+{
+  "id": "fixture-04-screenshot-text",
+  "name": "Ảnh chụp màn hình có chứa đoạn văn bản",
+  "mockFilename": "screenshot_document_article.png",
+  "simulatedInspection": {
+    "is_drawing": false,
+    "image_type": "screenshot_text",
+    "confidence": 0.95,
+    "contains_real_person_face": false,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["đoạn văn bản in", "thanh trình duyệt"],
+    "colors": ["trắng", "đen"],
+    "mood": "khô khan thông tin",
+    "characters": []
+  },
+  "expected": {
+    "image_type": "screenshot_text",
+    "canProceed": false,
+    "expectedErrorCode": "NOT_A_DRAWING",
+    "expectedErrorMessage": "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé"
+  }
+}

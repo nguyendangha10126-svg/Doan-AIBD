@@ -1,0 +1,23 @@
+{
+  "id": "fixture-01-real-child-drawing",
+  "name": "Tranh vẽ tay hoa và cầu vồng của bé",
+  "mockFilename": "tranh_ve_cau_vong_be_bo.jpg",
+  "simulatedInspection": {
+    "is_drawing": true,
+    "image_type": "child_drawing",
+    "confidence": 0.98,
+    "contains_real_person_face": false,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["cầu vồng", "ngọn đồi cỏ", "hoa mặt trời"],
+    "colors": ["đỏ", "vàng", "xanh lá", "xanh da trời"],
+    "mood": "vui tươi và ấm áp",
+    "characters": ["chú thỏ trắng"]
+  },
+  "expected": {
+    "image_type": "child_drawing",
+    "canProceed": true,
+    "expectedStatus": "auto_approved",
+    "minFaithfulnessScore": 80
+  }
+}

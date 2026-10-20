@@ -1,0 +1,23 @@
+{
+  "id": "fixture-05-blurry-image",
+  "name": "Ảnh rung lắc mờ không rõ nét vẽ",
+  "mockFilename": "blurry_camera_motion.jpg",
+  "simulatedInspection": {
+    "is_drawing": false,
+    "image_type": "other",
+    "confidence": 0.85,
+    "contains_real_person_face": false,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["vệt màu nhòe"],
+    "colors": ["xám", "mờ nhạt"],
+    "mood": "hỗn loạn không xác định",
+    "characters": []
+  },
+  "expected": {
+    "image_type": "other",
+    "canProceed": false,
+    "expectedErrorCode": "NOT_A_DRAWING",
+    "expectedErrorMessage": "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé"
+  }
+}

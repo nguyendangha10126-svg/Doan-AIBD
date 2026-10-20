@@ -18,14 +18,21 @@ export interface InputSafetyCheckResult {
 
 export function evaluateInputSafety(
   inspection: Layer1Inspection,
-  activeRules: SafetyRuleRow[]
+  activeRules: SafetyRuleRow[],
+  strictDrawingCheck: boolean = true
 ): InputSafetyCheckResult {
-  // 1. Mandatory Child Safety Checks
-  if (!inspection.is_drawing) {
+  // 1. Mandatory Drawing Verification
+  const allowedTypes = strictDrawingCheck
+    ? ['child_drawing']
+    : ['child_drawing', 'artwork'];
+
+  const isEligibleDrawing = inspection.is_drawing && allowedTypes.includes(inspection.image_type);
+
+  if (!isEligibleDrawing) {
     return {
       isSafe: false,
       errorCode: 'NOT_A_DRAWING',
-      errorMessage: 'Hình ảnh được tải lên không phải là tranh vẽ hoặc tranh tô màu của bé. Vui lòng chụp bức tranh con vẽ nhé!',
+      errorMessage: 'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé',
       blockedRules: [],
     };
   }
@@ -75,4 +82,3 @@ export function evaluateInputSafety(
     blockedRules: [],
   };
 }
-

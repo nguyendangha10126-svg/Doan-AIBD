@@ -1,0 +1,23 @@
+{
+  "id": "fixture-06-dark-image",
+  "name": "Ảnh chụp phòng tối thiếu sáng",
+  "mockFilename": "dark_underexposed_room.jpg",
+  "simulatedInspection": {
+    "is_drawing": false,
+    "image_type": "other",
+    "confidence": 0.90,
+    "contains_real_person_face": false,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["vùng tối đen"],
+    "colors": ["đen", "xám đậm"],
+    "mood": "u tối thiếu sáng",
+    "characters": []
+  },
+  "expected": {
+    "image_type": "other",
+    "canProceed": false,
+    "expectedErrorCode": "NOT_A_DRAWING",
+    "expectedErrorMessage": "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé"
+  }
+}

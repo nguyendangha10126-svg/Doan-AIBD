@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
-    "check:contrast": "node scripts/check-contrast.js"
+    "check:contrast": "node scripts/check-contrast.js",
+    "test:pipeline": "node scripts/test-pipeline.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

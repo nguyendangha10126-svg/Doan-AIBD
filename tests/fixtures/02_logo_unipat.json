@@ -1,0 +1,23 @@
+{
+  "id": "fixture-02-logo-unipat",
+  "name": "Ảnh logo đồ họa Unipat",
+  "mockFilename": "unipat_logo_brand.png",
+  "simulatedInspection": {
+    "is_drawing": false,
+    "image_type": "logo_graphic",
+    "confidence": 0.99,
+    "contains_real_person_face": false,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["chữ cái U", "biểu trưng thương hiệu phẳng"],
+    "colors": ["xanh dương", "trắng"],
+    "mood": "trang trọng công nghiệp",
+    "characters": []
+  },
+  "expected": {
+    "image_type": "logo_graphic",
+    "canProceed": false,
+    "expectedErrorCode": "NOT_A_DRAWING",
+    "expectedErrorMessage": "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé"
+  }
+}

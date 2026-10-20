@@ -56,6 +56,8 @@ const INITIAL_DEMO_STORIES: Story[] = [
       image_path: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80',
       ai_analysis: {
         is_drawing: true,
+        image_type: 'child_drawing',
+        confidence: 0.98,
         contains_real_person_face: false,
         pii_detected: false,
         risk_categories: [],
@@ -141,6 +143,8 @@ const INITIAL_DEMO_STORIES: Story[] = [
       image_path: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80',
       ai_analysis: {
         is_drawing: true,
+        image_type: 'child_drawing',
+        confidence: 0.95,
         contains_real_person_face: false,
         pii_detected: false,
         risk_categories: ['Quái vật rùng rợn'],

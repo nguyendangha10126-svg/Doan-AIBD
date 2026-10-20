@@ -28,8 +28,25 @@ export interface RiskReason {
   severity: number;
 }
 
+export type ImageType = 
+  | 'child_drawing' 
+  | 'artwork' 
+  | 'logo_graphic' 
+  | 'photo' 
+  | 'screenshot_text' 
+  | 'other';
+
+export type GenerationStage = 
+  | 'analyzing' 
+  | 'safety' 
+  | 'writing' 
+  | 'judging' 
+  | 'done';
+
 export interface DrawingAiAnalysis {
   is_drawing: boolean;
+  image_type: ImageType;
+  confidence: number;
   contains_real_person_face: boolean;
   pii_detected: boolean;
   risk_categories: string[];
@@ -86,6 +103,8 @@ export interface Story {
   prompt_version_id: string | null;
   model: string;
   next_drawing_ideas: string[];
+  generation_stage?: GenerationStage;
+  faithfulness_score?: number;
   created_at: string;
   updated_at: string;
   // joined fields
@@ -101,6 +120,7 @@ export interface StoryPage {
   text_content: string;
   emotion: string;
   focus_region: FocusRegion;
+  grounded_objects?: string[];
   created_at: string;
 }
 

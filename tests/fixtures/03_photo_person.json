@@ -1,0 +1,23 @@
+{
+  "id": "fixture-03-photo-person",
+  "name": "Ảnh chụp khuôn mặt người thật ngoài đời",
+  "mockFilename": "photo_portrait_real_child.jpg",
+  "simulatedInspection": {
+    "is_drawing": false,
+    "image_type": "photo",
+    "confidence": 0.97,
+    "contains_real_person_face": true,
+    "pii_detected": false,
+    "risk_categories": [],
+    "objects": ["khuôn mặt người thật", "áo len"],
+    "colors": ["màu da người", "nâu"],
+    "mood": "đời thường",
+    "characters": []
+  },
+  "expected": {
+    "image_type": "photo",
+    "canProceed": false,
+    "expectedErrorCode": "NOT_A_DRAWING",
+    "expectedErrorMessage": "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé"
+  }
+}

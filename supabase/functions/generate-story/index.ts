@@ -11,6 +11,7 @@ import {
   Layer2StorySchema,
   Layer3JsonSchema,
   Layer3Judge,
+  Layer3JudgeSchema,
 } from '../_shared/schemas.ts';
 import { evaluateInputSafety, SafetyRuleRow } from '../_shared/safety.ts';
 
@@ -117,22 +118,39 @@ serve(async (req: Request) => {
     );
     const mimeType = fileData.type || 'image/jpeg';
 
-    // 6. Fetch Active Safety Rules
+    // 6. Fetch Active Safety Rules & App Settings
     const { data: rulesData } = await supabase
       .from('safety_rules')
       .select('*')
       .eq('is_active', true);
     const activeRules: SafetyRuleRow[] = (rulesData as SafetyRuleRow[]) || [];
 
+    const { data: settingsRows } = await supabase.from('app_settings').select('*');
+    const settingsMap = new Map((settingsRows || []).map((s) => [s.key, s.value]));
+    const strictDrawingCheck = (settingsMap.get('strict_drawing_check') ?? 'true') === 'true';
+    const moderationMode = settingsMap.get('moderation_mode') || 'auto';
+    const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10);
+
     // ========================================================
     // LAYER 1: MULTIMODAL INPUT SAFETY & DRAWING UNDERSTANDING
     // ========================================================
-    const layer1Prompt = `Hãy quan sát kỹ bức ảnh này và phân tích xem:
-1. Có phải tranh vẽ tay hoặc tranh tô màu của trẻ em không? (is_drawing: true/false)
-2. Có chứa khuôn mặt người thật ngoài đời không? (contains_real_person_face: true/false)
-3. Có chứa thông tin cá nhân PII (số điện thoại, địa chỉ nhà, tên trường học) viết trên giấy không? (pii_detected: true/false)
-4. Liệt kê các chi tiết nhận diện được (objects), màu sắc chủ đạo (colors), cảm xúc toát ra (mood), và các nhân vật nổi bật (characters).
-5. Nếu có chi tiết bạo lực, người lớn, quái vật ghê rợn, hãy đưa tên danh mục vào risk_categories.`;
+    const layer1Prompt = `Hãy quan sát thật kỹ bức ảnh này và phân tích theo cấu trúc:
+1. Xác định image_type:
+   - "child_drawing": nét vẽ tay hoặc hình tô màu của trẻ em trên giấy (bút chì, sáp màu, màu nước, phấn màu).
+   - "artwork": tranh vẽ nghệ thuật kỹ thuật số hoặc hội họa chuyên nghiệp.
+   - "logo_graphic": biểu trưng, logo thương hiệu, đồ họa số phẳng, clipart hoặc nhãn dán.
+   - "photo": ảnh chụp đời thực (người thật, cảnh vật, đồ vật thực tế).
+   - "screenshot_text": ảnh chụp màn hình ứng dụng, website, văn bản chữ in.
+   - "other": loại ảnh khác.
+2. Đánh giá độ tin cậy confidence (0.0 đến 1.0).
+3. is_drawing: true nếu là child_drawing hoặc artwork; false nếu là photo, logo_graphic, screenshot_text, other.
+4. contains_real_person_face: true nếu có khuôn mặt người thật ngoài đời trong ảnh.
+5. pii_detected: true nếu có số điện thoại, địa chỉ nhà, tên trường học trên giấy vẽ.
+6. objects: danh sách chi tiết các đồ vật, con vật nhận diện được từ các nét vẽ (ví dụ: bông hoa, mặt trời, chú mèo, ngôi nhà).
+7. colors: các màu sắc chủ đạo trong bức vẽ.
+8. mood: cảm xúc toát ra từ tranh (vui tươi, ấm áp, ngộ nghĩnh).
+9. characters: các nhân vật nổi bật trong tranh.
+10. risk_categories: danh mục nhạy cảm nếu có (bạo lực, rùng rợn).`;
 
     const layer1Result = await callGeminiStructured<Layer1Inspection>({
       contents: [
@@ -145,12 +163,12 @@ serve(async (req: Request) => {
         },
       ],
       responseSchema: Layer1JsonSchema,
-      temperature: 0.2,
+      temperature: 0.1,
     });
 
     const validatedInspection = Layer1InspectionSchema.parse(layer1Result.data);
 
-    // Save drawing analysis
+    // Save drawing with full ai_analysis
     const { data: newDrawing } = await supabase
       .from('drawings')
       .insert({
@@ -163,10 +181,9 @@ serve(async (req: Request) => {
 
     const drawingId = newDrawing?.id;
 
-    // Safety Check on Input
-    const inputSafety = evaluateInputSafety(validatedInspection, activeRules);
+    // Safety Check on Input with strict drawing setting
+    const inputSafety = evaluateInputSafety(validatedInspection, activeRules, strictDrawingCheck);
     if (!inputSafety.isSafe) {
-      // Log blocked attempt to ai_logs
       await supabase.from('ai_logs').insert({
         user_id: currentUserId,
         story_id: null,
@@ -192,109 +209,128 @@ serve(async (req: Request) => {
     }
 
     // ========================================================
-    // LAYER 2: CREATIVE AGE-ADAPTIVE STORYTELLING
+    // LAYER 2: CREATIVE AGE-ADAPTIVE GROUNDED STORYTELLING
     // ========================================================
-    // Fetch Active System Prompt
     const { data: activePromptRow } = await supabase
       .from('system_prompts')
       .select('*')
       .eq('is_active', true)
       .single();
 
-    const systemPromptText = activePromptRow?.prompt_text || 'Bạn là tác giả truyện tranh thiếu nhi Việt Nam.';
+    const systemPromptText = activePromptRow?.prompt_text || 'Bạn là tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương.';
     const promptVersionId = activePromptRow?.id || null;
 
     const rulesContext = activeRules
       .map((r) => `- [${r.action.toUpperCase()}] ${r.category}: ${r.description}`)
       .join('\n');
 
-    const layer2UserPrompt = `Thông tin bé:
+    const layer2UserPrompt = `Thông tin bé yêu:
 - Biệt danh: "${child.nickname}"
 - Độ tuổi: ${child.age} tuổi
 
-Kết quả quan sát tranh của bé:
-- Các đồ vật/chi tiết: ${validatedInspection.objects.join(', ')}
+SỰ THẬT TỪ TRANH VẼ CỦA BÉ (BẮT BUỘC PHẢI BÁM SÁT 100%, TUYỆT ĐỐI KHÔNG BỊA ĐẶT RA NGOÀI):
+- Các đồ vật / chi tiết đã vẽ: ${validatedInspection.objects.join(', ')}
+- Các nhân vật chính đã vẽ: ${validatedInspection.characters.join(', ')}
 - Màu sắc chủ đạo: ${validatedInspection.colors.join(', ')}
 - Cảm xúc toát ra: ${validatedInspection.mood}
-- Các nhân vật chính: ${validatedInspection.characters.join(', ')}
 
 Bộ quy tắc an toàn trẻ em cần tuyệt đối tuân thủ:
 ${rulesContext}
 
-Yêu cầu sáng tác:
-- Viết câu chuyện tranh 4 đến 5 trang, lấy cảm hứng trực tiếp từ các nét vẽ trên.
-- Mỗi trang dài đúng 30-50 từ tiếng Việt, phù hợp với sự tiếp thu của bé ${child.age} tuổi.
-- Mỗi trang kèm 'emotion' và 'focus_region' {x, y, zoom} tương ứng với vị trí chi tiết trên bức tranh để zoom tạo chuyển động.
-- Kết thúc có hậu, có bài học đạo đức 'moral' ấm áp.
-- Kèm đúng 3 ý tưởng 'next_drawing_ideas' để khuyến khích bé vẽ tiếp.`;
+YÊU CẦU SÁNG TÁC BẮT BUỘC:
+1. TIÊU ĐỀ: Bắt buộc phải chứa ít nhất một nhân vật hoặc đồ vật thật có trong nét vẽ của con (ví dụ nếu có bông hoa thì tiêu đề phải có "bông hoa").
+2. CỐT TRUYỆN: Lấy cảm hứng trực tiếp từ các nét vẽ trên. Tuyệt đối KHÔNG tự ý sáng tác ra nhân vật chính không có trong tranh. Biệt danh của bé "${child.nickname}" được dùng làm người kể hoặc nhân vật đồng hành.
+3. TỪNG TRANG: Viết câu chuyện 4 đến 5 trang, mỗi trang đúng 30-50 từ tiếng Việt phù hợp lứa tuổi ${child.age}.
+4. MỖI TRANG CÓ 'grounded_objects': danh sách các đồ vật/nhân vật xuất hiện trong trang (BẮT BUỘC là tập con của [${validatedInspection.objects.join(', ')}]).
+5. MỖI TRANG CÓ 'focus_region': {x, y, zoom} với x, y từ 0-100 và zoom tối đa 1.35 để không bị crop mất nội dung bức tranh.
+6. Kết thúc có hậu với bài học đạo đức 'moral' và đúng 3 gợi ý 'next_drawing_ideas'.`;
 
-    let storyGenerationResult;
-    try {
-      storyGenerationResult = await callGeminiStructured<Layer2Story>({
-        systemInstruction: systemPromptText,
-        contents: [{ role: 'user', parts: [{ text: layer2UserPrompt }] }],
-        responseSchema: Layer2JsonSchema,
-        temperature: 0.7,
-      });
-      Layer2StorySchema.parse(storyGenerationResult.data);
-    } catch {
-      // Retry once on schema mismatch
-      storyGenerationResult = await callGeminiStructured<Layer2Story>({
-        systemInstruction: systemPromptText,
-        contents: [
-          { role: 'user', parts: [{ text: layer2UserPrompt + '\nLƯU Ý: Phải tuân thủ chính xác định dạng JSON schema yêu cầu.' }] },
-        ],
-        responseSchema: Layer2JsonSchema,
-        temperature: 0.6,
-      });
-      Layer2StorySchema.parse(storyGenerationResult.data);
-    }
+    let storyGenerationResult = await callGeminiStructured<Layer2Story>({
+      systemInstruction: systemPromptText,
+      contents: [{ role: 'user', parts: [{ text: layer2UserPrompt }] }],
+      responseSchema: Layer2JsonSchema,
+      temperature: 0.6,
+    });
 
-    const generatedStory = storyGenerationResult.data;
+    let generatedStory = Layer2StorySchema.parse(storyGenerationResult.data);
 
     // ========================================================
-    // LAYER 3: OUTPUT SAFETY JUDGE
+    // LAYER 3: OUTPUT SAFETY JUDGE & FAITHFULNESS
     // ========================================================
-    const judgePrompt = `Bạn là Giám định viên An toàn Nội dung Trẻ em (Responsible AI Safety Judge).
-Nhiệm vụ: Thẩm định câu chuyện sau đây viết cho bé ${child.age} tuổi dựa trên bộ quy tắc an toàn.
+    const judgePrompt = `Bạn là Giám định viên Độc lập về An toàn Nội dung Trẻ em và Độ Bám sát Tranh vẽ (Responsible AI Safety & Faithfulness Judge).
+Nhiệm vụ: Thẩm định câu chuyện sau đây viết cho bé ${child.age} tuổi.
 
 Tiêu đề: "${generatedStory.title}"
 Tóm tắt: "${generatedStory.summary}"
 Bài học: "${generatedStory.moral}"
 Nội dung các trang:
-${generatedStory.pages.map((p) => `Trang ${p.page_number}: ${p.text_content}`).join('\n')}
+${generatedStory.pages.map((p) => `Trang ${p.page_number} (${p.grounded_objects?.join(', ')}): ${p.text_content}`).join('\n')}
+
+Danh sách đồ vật/nhân vật thật trong nét vẽ của bé:
+${validatedInspection.objects.join(', ')} | ${validatedInspection.characters.join(', ')}
 
 Bộ quy tắc an toàn đang áp dụng:
 ${rulesContext}
 
 Yêu cầu chấm điểm:
-1. Chấm risk_score từ 0 đến 100 (0 là cực kỳ trong sáng, an toàn tuyệt đối; 100 là cực kỳ nguy hiểm/độc hại).
-2. Liệt kê violation_reasons nếu có bất kỳ chi tiết nào chạm vào quy tắc.
-3. recommended_action: 'auto_approved' (nếu rủi ro <= 25), 'pending_review' (nếu cần người duyệt 26-60), hoặc 'rejected' (nếu > 60 hoặc vi phạm rule block).
-4. Viết pedagogical_feedback ngắn gọn.`;
+1. risk_score: từ 0 (an toàn tuyệt đối) đến 100 (rất nguy hiểm/độc hại).
+2. faithfulness_score: từ 0 (bịa đặt hoàn toàn ngoài tranh) đến 100 (bám sát từng nét vẽ của con). Tiêu đề và cốt truyện phải nhắc đến nhân vật trong tranh.
+3. recommended_action: 'auto_approved' (nếu risk_score <= 25 và faithfulness_score >= 60), 'pending_review' (nếu cần người duyệt 26-60 hoặc faithfulness < 60), hoặc 'rejected' (nếu rủi ro > 60 hoặc vi phạm block).
+4. violation_reasons: danh sách vi phạm nếu có.
+5. pedagogical_feedback: nhận xét ngắn gọn mang tính xây dựng.`;
 
-    const judgeResult = await callGeminiStructured<Layer3Judge>({
+    let judgeResult = await callGeminiStructured<Layer3Judge>({
       contents: [{ role: 'user', parts: [{ text: judgePrompt }] }],
       responseSchema: Layer3JsonSchema,
       temperature: 0.1,
     });
 
-    const judgment = judgeResult.data;
+    let judgment = Layer3JudgeSchema.parse(judgeResult.data);
 
-    // Check App Settings (moderation_mode and threshold)
-    const { data: settingsRows } = await supabase.from('app_settings').select('*');
-    const settingsMap = new Map((settingsRows || []).map((s) => [s.key, s.value]));
-    const moderationMode = settingsMap.get('moderation_mode') || 'auto';
-    const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10);
+    // If faithfulness score < 60, regenerate once with Judge feedback
+    if (judgment.faithfulness_score < 60) {
+      console.log(`Low faithfulness (${judgment.faithfulness_score}), regenerating once with Judge feedback...`);
+      const retryPrompt = layer2UserPrompt + `\n\nLƯU Ý ĐẶC BIỆT TỪ GIÁM ĐỊNH VIÊN: Câu chuyện vừa viết chưa bám sát các chi tiết thật trong tranh vẽ (Điểm bám sát chỉ đạt ${judgment.faithfulness_score}/100). Góp ý: ${judgment.pedagogical_feedback}. Hãy viết lại câu chuyện mới bám thật sát các đồ vật: ${validatedInspection.objects.join(', ')}.`;
 
+      storyGenerationResult = await callGeminiStructured<Layer2Story>({
+        systemInstruction: systemPromptText,
+        contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
+        responseSchema: Layer2JsonSchema,
+        temperature: 0.5,
+      });
+      generatedStory = Layer2StorySchema.parse(storyGenerationResult.data);
+
+      // Re-evaluate Judge
+      judgeResult = await callGeminiStructured<Layer3Judge>({
+        contents: [{ role: 'user', parts: [{ text: judgePrompt }] }],
+        responseSchema: Layer3JsonSchema,
+        temperature: 0.1,
+      });
+      judgment = Layer3JudgeSchema.parse(judgeResult.data);
+    }
+
+    // Determine Final Status
     let finalStatus: 'auto_approved' | 'pending_review' | 'rejected' = 'auto_approved';
 
     if (judgment.risk_score > 60 || judgment.recommended_action === 'rejected') {
       finalStatus = 'rejected';
-    } else if (moderationMode === 'manual_all' || judgment.risk_score > autoApproveMaxRisk || judgment.recommended_action === 'pending_review') {
+    } else if (
+      moderationMode === 'manual_all' ||
+      judgment.risk_score > autoApproveMaxRisk ||
+      judgment.faithfulness_score < 60 ||
+      judgment.recommended_action === 'pending_review'
+    ) {
       finalStatus = 'pending_review';
     } else {
       finalStatus = 'auto_approved';
+    }
+
+    // Rejection reason or low faithfulness reason
+    let rejectionReason: string | null = null;
+    if (finalStatus === 'rejected') {
+      rejectionReason = judgment.pedagogical_feedback;
+    } else if (finalStatus === 'pending_review' && judgment.faithfulness_score < 60) {
+      rejectionReason = 'LOW_FAITHFULNESS';
     }
 
     // 7. Insert Story into Database
@@ -308,8 +344,10 @@ Yêu cầu chấm điểm:
         moral: generatedStory.moral,
         status: finalStatus,
         risk_score: judgment.risk_score,
+        faithfulness_score: judgment.faithfulness_score,
+        generation_stage: 'done',
         risk_reasons: judgment.violation_reasons,
-        rejection_reason: finalStatus === 'rejected' ? judgment.pedagogical_feedback : null,
+        rejection_reason: rejectionReason,
         prompt_version_id: promptVersionId,
         model: storyGenerationResult.model,
         next_drawing_ideas: generatedStory.next_drawing_ideas,
@@ -329,6 +367,7 @@ Yêu cầu chấm điểm:
       text_content: p.text_content,
       emotion: p.emotion,
       focus_region: p.focus_region,
+      grounded_objects: p.grounded_objects,
     }));
 
     await supabase.from('story_pages').insert(pagesToInsert);
@@ -357,6 +396,7 @@ Yêu cầu chấm điểm:
         data: {
           ...insertedStory,
           pages: generatedStory.pages,
+          drawing: newDrawing,
         },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -396,4 +436,3 @@ Yêu cầu chấm điểm:
     );
   }
 });
-
