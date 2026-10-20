@@ -6,9 +6,10 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
   {
-    ignores: ['dist', 'node_modules', 'supabase/functions/**'],
+    ignores: ['dist', 'node_modules', 'supabase/functions/**', 'docs/screenshots/**'],
   },
   js.configs.recommended,
+  // 1. Frontend React/TypeScript configuration
   {
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: {
@@ -35,6 +36,8 @@ export default [
         HTMLSpanElement: 'readonly',
         KeyboardEvent: 'readonly',
         Intl: 'readonly',
+        SpeechSynthesisVoice: 'readonly',
+        SpeechSynthesisUtterance: 'readonly',
       },
     },
     plugins: {
@@ -52,5 +55,26 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  // 2. Node.js automation scripts & tooling configuration
+  {
+    files: ['scripts/**/*.js', 'vite.config.ts', 'tailwind.config.js', 'postcss.config.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        localStorage: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-undef': 'error',
+    },
+  },
 ];
-

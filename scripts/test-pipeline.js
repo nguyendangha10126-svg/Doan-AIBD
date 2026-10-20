@@ -41,6 +41,17 @@ function evaluateInputSafety(inspection, activeRules = [], strictDrawingCheck = 
     };
   }
 
+  const blockedRules = (activeRules || []).filter(
+    (rule) => rule.action === 'block' && (inspection.risk_categories || []).includes(rule.category)
+  );
+  if (blockedRules.length > 0) {
+    return {
+      isSafe: false,
+      errorCode: 'CUSTOM_RULE_VIOLATION',
+      errorMessage: `Ảnh vi phạm quy tắc: ${blockedRules[0].description}`,
+    };
+  }
+
   return { isSafe: true };
 }
 
@@ -123,3 +134,4 @@ function runFixtureTests() {
 }
 
 runFixtureTests();
+
