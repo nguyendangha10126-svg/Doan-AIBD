@@ -17,14 +17,15 @@ Tôi/Nhóm tác giả cam kết:
 
 ## 2. NHẬT KÝ TƯƠNG TÁC VÀ CÁC CÔNG CỤ AI SỬ DỤNG
 
-| Thời gian | Công cụ / Nền tảng | Mô hình AI | Mục đích & Lời nhắc tóm tắt | Kết quả đầu ra | Đánh giá & Hiệu chỉnh thủ công |
+| Giai đoạn | Công cụ / Nền tảng | Mô hình AI | Mục đích & Lời nhắc tóm tắt | Kết quả đầu ra | Đánh giá & Hiệu chỉnh thủ công |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Giai đoạn 1**<br/>19/10/2026 | Google Antigravity IDE | Gemini 2.5 Pro / Claude 3.5 Sonnet | Khởi tạo Implementation Plan, thiết kế Design System tokens trong Tailwind CSS và từ điển tiếng Việt tập trung. | Bộ khung dự án React + TypeScript Strict, file `src/lib/i18n/vi.ts`, bộ UI Primitives (Button, Modal, Card...). | Tinh chỉnh lại mã màu pastel WCAG AA đảm bảo tương phản văn bản chữ tím than `#4A3F55` trên nền kem `#FFF9F0`. |
-| **Giai đoạn 2**<br/>19/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Thiết kế Schema Supabase Postgres 13 bảng, RLS, hàm `is_admin()` Security Definer và bộ Seed Data 30 ngày. | `supabase/migrations/001_init.sql`, `supabase/seed.sql`, TypeScript database types. | Bổ sung ràng buộc CHECK constraint và sửa lỗi type cast trong các hàm Views phân tích doanh thu và độ trễ. |
-| **Giai đoạn 3**<br/>19/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Xây dựng 3-Layer Edge Function Pipeline (`generate-story`), Client Service nén Canvas $\le 1.5$MB. | Supabase Edge Functions (`_shared/`, `generate-story/`, `get-shared-story/`, `admin-test-prompt/`). | Kiểm tra định dạng Deno, bọc Timeout 25s, xử lý lỗi Zod Schema retry và viết client offline mock để chấm bài mượt mà. |
-| **Giai đoạn 4**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Flash | Hiện thực hóa toàn bộ luồng User: Wizard 3 bước, Trình đọc sách 3D + Swipe, Ken Burns zoom, TTS Web Speech. | `StoryReadingPage`, `CreateStoryPage`, `DashboardPage`, `KidModePage`, `LibraryPage`. | Sửa lỗi `TS6133` (unused variables) trong strict mode; bổ sung CSS `@media print` cho tính năng in sách thật. |
-| **Giai đoạn 5**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Xây dựng bộ công cụ Quản trị viên: Hàng đợi Moderation Queue (A/R), Rules CRUD, Prompt Studio, Biểu đồ chi phí. | 6 trang Admin và Dashboard Recharts. | Tối ưu hóa layout chia đôi cột (Split View), bổ sung bộ phím tắt và modal xác nhận lý do từ chối mẫu. |
-| **Giai đoạn 6**<br/>20/10/2026 | Puppeteer Headless | Node.js Automation | Chụp ảnh kiểm thử tự động toàn bộ màn hình ở độ phân giải 1440px (Desktop) và 390px (Mobile). | 12 bức ảnh chụp màn hình chất lượng cao trong `docs/screenshots/`. | Xử lý xung đột cổng preview (chuyển sang port 5199), nạp sẵn dữ liệu `localStorage` để chụp trạng thái hoàn hảo. |
+| **Phase 0**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Rà soát data layer, loại bỏ mock data ẩn, cố định banner demo khi bật `VITE_USE_MOCK=true`, mã hóa PIN phụ huynh bằng SHA-256. | `SystemBanner.tsx`, `OtpPinInput.tsx`, băm mật mã SHA-256, chụp 18 ảnh "TRƯỚC". | Khắc phục lỗ hổng hiển thị mã PIN dạng plaintext `••••`, chuyển đổi toàn bộ mock story ID sang định dạng UUID hợp lệ. |
+| **Phase 1**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Tái thiết kế Design System theo định hướng "Modern Storybook", thêm font Baloo 2, viết script kiểm tra độ tương phản WCAG 2.1 AA. | `tailwind.config.js`, `scripts/check-contrast.js`, bộ UI Primitives (`Button`, `Card`, `Modal`...). | Tinh chỉnh mã màu xanh `success` từ `#1F8A5B` (3.8:1) thành `#166E48` (5.49:1) để đạt chuẩn WCAG AA cho mọi cỡ chữ. |
+| **Phase 2**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Chuẩn hóa thanh điều hướng Desktop và Mobile, bổ sung cơ chế Focus Routes ẩn sạch thanh điều hướng cho các màn hình tập trung. | `UserLayout.tsx` với sliding indicator `layoutId`, bộ chọn bé toàn cục, thanh tab mobile. | Ẩn hoàn toàn header/footer trên `/create`, `/story/:id`, `/kid`, `/shared/:token` để trẻ và cha mẹ không bị phân tâm. |
+| **Phase 3**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Tạo component Thẻ bìa sách (`BookCover.tsx`), thiết kế lại Dashboard, Tủ sách, An toàn AI và Quản lý bé trong Cài đặt. | `BookCover.tsx`, `DashboardPage.tsx`, `LibraryPage.tsx`, `TrustPage.tsx`, `SettingsPage.tsx`. | Thay thế danh sách phẳng bằng kệ sách responsive 2/3/4 cột có đường chỉ gỗ mảnh, hero chia đôi sân khấu tranh vẽ polaroid. |
+| **Phase 4**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Sửa triệt để pipeline AI (phân loại tranh vẽ, visual grounding, faithfulness score), tạo bộ 6 fixtures kiểm thử, kiểm tra ảnh phía client. | `safety.ts`, `generate-story/index.ts`, `tests/fixtures/`, `scripts/test-pipeline.js`, `CreateStoryPage.tsx`. | Cài đặt thuật toán Laplacian variance ($>45$) và Mean luminance ($\ge 65$) trực tiếp trên Canvas client; trả về lỗi thân thiện `NOT_A_DRAWING`. |
+| **Phase 5**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Trình đọc sách lật 2 trang `react-pageflip` (desktop) và swipe (mobile), chống cắt tranh (`object-fit: contain`), TTS karaoke, chế độ bé cô lập. | `StoryReadingPage.tsx`, `KidModePage.tsx`, `soundEffects` (Web Audio API). | Giới hạn Ken Burns zoom tối đa 1.35x và kẹp an toàn tọa độ tâm; bẫy lịch sử duyệt web `popstate` và khóa cổng phụ huynh 2 giây. |
+| **Phase 6**<br/>20/10/2026 | Puppeteer Headless | Node.js Automation | Nâng cấp trang Quản trị kiểm duyệt (Split View, phím tắt A/R, toggle strict drawing check), chụp 18 ảnh "SAU", cập nhật toàn bộ tài liệu. | `ModerationQueuePage.tsx`, `ModerationSettingsPage.tsx`, 18 ảnh trong `docs/screenshots/after/`, bộ docs. | Kiểm tra toàn bộ quy trình build (`check-contrast` + `typecheck` + `vite build`), đảm bảo 0 lỗi TypeScript và 0 `any`. |
 
 ---
 
@@ -32,14 +33,14 @@ Tôi/Nhóm tác giả cam kết:
 
 Trong quá trình đồng hành cùng AI Agent, lập trình viên đã phát hiện và can thiệp điều chỉnh các điểm then chốt:
 
-1. **Khắc phục Xung đột Cổng và Quản lý Tiến trình Nền**:
-   - Khi chạy `vite preview` mặc định trên cổng `5173`, hệ thống gặp xung đột với tiến trình có sẵn trên máy cục bộ. Lập trình viên đã chỉ đạo cấu hình cổng cố định `5199` với cờ `--strictPort` và lưu vào kịch bản kiểm thử.
-2. **Kỷ luật TypeScript Tuyệt Đối (Zero Unused Locals & Zero `any`)**:
-   - Do bật cấu hình nghiêm ngặt `noUnusedLocals: true`, một số đoạn code AI sinh ra có các biến thừa (như `_index`, `storyId` không dùng). Lập trình viên đã rà soát và loại bỏ 100% cảnh báo `TS6133`, bảo đảm lệnh `npm run typecheck` chạy hoàn toàn không có lỗi.
-3. **Cơ chế Dự phòng Trực quan (Graceful Offline/Reviewer Mode)**:
-   - Nhận thấy người chấm bài (Giảng viên) có thể không có sẵn tài khoản Supabase Cloud với đầy đủ API keys lúc chạy thử nghiệm đồ án tại chỗ, lập trình viên đã thiết kế cơ chế Fallback Store trực tiếp trong Zustand (`useAuthStore`, `useStoryStore`, `useAdminStore`). Nhờ vậy, giảng viên có thể đăng nhập với các tài khoản Demo (`me@phuhuynh.vn`, `admin@drawtostory.vn`) và trải nghiệm toàn bộ tính năng mượt mà.
-4. **Bảo Vệ Quyền Riêng Tư Thiếu Nhi (Child Privacy Enforcement)**:
-   - Ban đầu mô hình AI gợi ý lưu tên đầy đủ của trẻ. Lập trình viên đã chủ động tái cấu trúc bảng `children` để **chỉ lưu biệt danh (nickname) và độ tuổi**, tuyệt đối không lưu họ tên thật, ngày sinh chi tiết hay địa chỉ trường học.
+1. **Khắc phục lỗi nhận diện sai tranh vẽ thiếu nhi (Strict Multimodal Classification)**:
+   - Trước đây khi tải lên ảnh logo (ví dụ logo "Unipat") hoặc ảnh chụp hoa lá, AI vẫn sinh ra câu chuyện "muông thú trong rừng" hoặc "Chú voi hồng" không liên quan. Lập trình viên đã can thiệp thiết kế Lớp 1 phân loại đa thể thức (`child_drawing` vs `logo_graphic`/`photo`), chỉ cho phép tranh vẽ thật tiến hành sinh truyện và bắt buộc Lớp 2 phải bám sát vật thể trong tranh (`grounded_objects`).
+2. **Kỷ luật WCAG 2.1 AA Bắt Buộc Trong CI/CD**:
+   - Tự động hóa kiểm tra độ tương phản 19 cặp token màu ngay trong lệnh `npm run build`. Khi màu xanh lá `#1F8A5B` trên nền `#DDF6E9` cho tỷ lệ 3.80:1 (chưa đạt 4.5:1), kịch bản tự động dừng build. Lập trình viên đã tinh chỉnh sang `#166E48` (5.49:1) để bảo đảm khả năng tiếp cận hoàn hảo.
+3. **Bảo Mật Mã PIN Phụ Huynh Bằng Băm SHA-256**:
+   - Phát hiện mã PIN phụ huynh ban đầu được lưu và hiển thị dưới dạng văn bản rõ `••••`, lập trình viên đã thay thế bằng hàm băm mật mã SHA-256 đồng bộ và thiết kế modal nhập 4 ô số OTP riêng biệt.
+4. **Trải Nghiệm Đọc Sách Không Cắt Hình & Chế Độ Bé An Toàn**:
+   - Sử dụng thuộc tính `object-fit: contain` trong khung giấy polaroid, kẹp tọa độ tâm và giới hạn Ken Burns zoom ở mức tối đa 1.35x để giữ trọn vẹn từng nét vẽ của trẻ. Thiết lập bẫy lịch sử duyệt web để trẻ không thể tự ý thoát ra ngoài màn hình quản trị của phụ huynh.
 
 ---
 
@@ -48,4 +49,3 @@ Trong quá trình đồng hành cùng AI Agent, lập trình viên đã phát hi
 1. **AI là Trợ lý, Kiến trúc sư là Con người**: AI có khả năng viết mã nhanh chóng với tốc độ vượt bậc, nhưng nếu không có một kiến trúc phân tầng rõ ràng (Phases 1-6) và các quy chuẩn thiết kế khắt khe ngay từ đầu, mã nguồn sẽ rất dễ bị rời rạc hoặc phát sinh lỗi tiềm ẩn.
 2. **Cần Coi Trọng Responsible AI Ngay Từ Dòng Code Đầu Tiên**: Đối với các ứng dụng cho trẻ em, "Safety" không thể là một tính năng phụ thêm vào sau cùng, mà phải được định hình thành một lớp độc lập (Layer 3 Safety Judge) kết hợp cơ chế kiểm duyệt có con người can thiệp (Human-in-the-loop).
 3. **Kỹ nghệ Kiểm thử Bằng Chứng Thị Giác (Visual Evidence Testing)**: Việc tự động hóa kiểm thử bằng ảnh chụp headless ở cả kích thước Desktop (1440px) và Mobile (390px) giúp phát hiện tức thì các lỗi tràn giao diện hoặc độ tương phản không đạt chuẩn, mang lại sự tin cậy tối đa cho sản phẩm.
-

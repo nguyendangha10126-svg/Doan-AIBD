@@ -94,7 +94,9 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <AdminOverviewPage /> },
+      { path: 'overview', element: <AdminOverviewPage /> },
       { path: 'queue', element: <ModerationQueuePage /> },
+      { path: 'moderation', element: <ModerationQueuePage /> },
       { path: 'rules', element: <SafetyRulesPage /> },
       { path: 'prompts', element: <SystemPromptsPage /> },
       { path: 'costs', element: <CostsQuotasPage /> },

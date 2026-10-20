@@ -40,6 +40,7 @@ export interface AdminState {
   moderationMode: 'auto' | 'manual_all';
   autoApproveMaxRisk: number;
   globalDailyLimit: number;
+  strictDrawingCheck: boolean;
   
   // Actions
   toggleSafetyRule: (ruleId: string) => void;
@@ -55,6 +56,7 @@ export interface AdminState {
   batchModeration: (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => void;
 
   updateModerationSettings: (mode: 'auto' | 'manual_all', maxRisk: number) => void;
+  setStrictDrawingCheck: (val: boolean) => void;
   updateGlobalDailyLimit: (limit: number) => void;
   toggleUserLock: (userId: string) => void;
   updateUserQuota: (userId: string, quota: number) => void;
@@ -188,6 +190,7 @@ export const useAdminStore = create<AdminState>()(
       moderationMode: 'auto',
       autoApproveMaxRisk: 25,
       globalDailyLimit: 5,
+      strictDrawingCheck: true,
 
       toggleSafetyRule: (ruleId: string) => {
         set((state) => ({
@@ -310,6 +313,11 @@ export const useAdminStore = create<AdminState>()(
           autoApproveMaxRisk: maxRisk,
         });
         get().logAudit('UPDATE_SETTINGS', 'app_settings', 'moderation_mode', { mode, maxRisk });
+      },
+
+      setStrictDrawingCheck: (val: boolean) => {
+        set({ strictDrawingCheck: val });
+        get().logAudit('UPDATE_STRICT_DRAWING', 'app_settings', 'strict_drawing_check', { enabled: val });
       },
 
       updateGlobalDailyLimit: (limit: number) => {

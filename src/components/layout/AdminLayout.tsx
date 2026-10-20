@@ -42,21 +42,21 @@ export const AdminLayout: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-cream-300 flex flex-col md:flex-row text-main">
+    <div className="min-h-screen bg-bg flex flex-col md:flex-row text-ink selection:bg-brand-100 selection:text-brand-700">
       {/* Mobile Header Bar */}
-      <div className="md:hidden bg-white border-b border-peach/50 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+      <div className="md:hidden bg-surface border-b border-ink/10 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-accent text-white flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-bold">
             <Sparkles className="w-4 h-4" />
           </div>
-          <span className="font-heading font-black text-base text-main">
-            DrawToStory <span className="text-accent text-xs font-semibold">Admin</span>
+          <span className="font-heading font-extrabold text-base text-ink">
+            DrawToStory <span className="text-brand-600 text-xs font-semibold">Admin</span>
           </span>
         </div>
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-xl bg-peach/30 text-main min-h-[44px] min-w-[44px] flex items-center justify-center"
+          className="p-2 rounded-xl bg-surface-2 text-ink min-h-[44px] min-w-[44px] flex items-center justify-center"
           aria-label="Menu"
         >
           {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -66,21 +66,21 @@ export const AdminLayout: React.FC = () => {
       {/* Desktop Sidebar / Mobile Drawer */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 w-64 bg-white/95 border-r border-peach/40 flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 md:static shadow-soft-lg md:shadow-none',
+          'fixed inset-y-0 left-0 z-40 w-64 bg-surface border-r border-ink/10 flex flex-col justify-between transition-transform duration-300 ease-in-out md:translate-x-0 md:static shadow-pop md:shadow-none',
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="p-5 flex flex-col gap-6">
           {/* Logo & Portal Info */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-accent to-primary flex items-center justify-center text-white shadow-soft">
+            <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white shadow-btn-primary">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-heading font-black text-lg text-main leading-tight block">
+              <span className="font-heading font-extrabold text-lg text-ink leading-tight block">
                 {vi.brand.name}
               </span>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-accent bg-accent/10 px-2 py-0.5 rounded-full inline-block mt-0.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600 bg-brand-100 px-2 py-0.5 rounded-full inline-block mt-0.5">
                 Admin Portal
               </span>
             </div>
@@ -100,8 +100,8 @@ export const AdminLayout: React.FC = () => {
                     cn(
                       'flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-sm font-heading font-bold transition-all min-h-[44px]',
                       isActive
-                        ? 'bg-accent text-white shadow-soft'
-                        : 'text-main-muted hover:text-main hover:bg-peach/30'
+                        ? 'bg-brand-600 text-white shadow-btn-primary'
+                        : 'text-ink-soft hover:text-ink hover:bg-surface-2'
                     )
                   }
                 >
@@ -121,16 +121,16 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         {/* Sidebar Footer Actions */}
-        <div className="p-4 border-t border-peach/40 flex flex-col gap-2 bg-cream-100">
+        <div className="p-4 border-t border-ink/10 flex flex-col gap-2 bg-surface-2">
           <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-8 h-8 rounded-full bg-accent text-white flex items-center justify-center text-xs font-bold">
+            <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
               AD
             </div>
             <div className="overflow-hidden">
-              <span className="block text-xs font-bold text-main truncate">
+              <span className="block text-xs font-bold text-ink truncate">
                 {profile?.full_name || 'Quản trị viên'}
               </span>
-              <span className="block text-[10px] text-accent font-semibold truncate">
+              <span className="block text-[10px] text-brand-600 font-semibold truncate">
                 Bảo vệ an toàn trẻ em
               </span>
             </div>
@@ -138,15 +138,15 @@ export const AdminLayout: React.FC = () => {
 
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-xs font-heading font-bold text-main px-3 py-2 rounded-xl hover:bg-peach/30 transition-colors min-h-[44px]"
+            className="flex items-center gap-2 text-xs font-heading font-bold text-ink-soft hover:text-ink px-3 py-2 rounded-xl hover:bg-surface transition-colors min-h-[44px]"
           >
-            <ArrowLeft className="w-4 h-4 text-primary" />
+            <ArrowLeft className="w-4 h-4 text-brand-600" />
             Về ứng dụng người dùng
           </button>
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-xs font-heading font-bold text-rose-500 px-3 py-2 rounded-xl hover:bg-rose-50 transition-colors min-h-[44px]"
+            className="flex items-center gap-2 text-xs font-heading font-bold text-danger px-3 py-2 rounded-xl hover:bg-danger-bg transition-colors min-h-[44px]"
           >
             <LogOut className="w-4 h-4" />
             {vi.nav.logout}
@@ -157,7 +157,7 @@ export const AdminLayout: React.FC = () => {
       {/* Backdrop for Mobile Drawer */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-main/40 backdrop-blur-sm z-30 md:hidden"
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -169,4 +169,3 @@ export const AdminLayout: React.FC = () => {
     </div>
   );
 };
-

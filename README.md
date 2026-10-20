@@ -8,201 +8,120 @@
 
 ## 🌟 GIỚI THIỆU TỔNG QUAN
 
-**DrawToStory** là một ứng dụng web cao cấp biến những bức tranh vẽ ngây ngô của trẻ em (từ 2 đến 12 tuổi) thành những cuốn **sách tranh cổ tích 4-5 trang sống động, có giọng đọc truyền cảm, lật trang 3D chân thực và hiệu ứng lia máy hoạt hình (Ken Burns effect)**.
+**DrawToStory** là một ứng dụng web cao cấp biến những bức tranh vẽ ngây ngô của trẻ em (từ 2 đến 12 tuổi) thành những cuốn **sách tranh cổ tích 4-5 trang sống động, có giọng đọc truyền cảm, lật trang chân thực (react-pageflip) và hiệu ứng lia máy hoạt hình (Ken Burns effect)**.
 
-Ứng dụng được thiết kế theo triết lý **Responsible AI (Trách nhiệm Trí tuệ Nhân tạo)**:
-1. **AI là trái tim của hệ thống**: Không chỉ là một chatbot văn bản, hệ thống vận hành một **Pipeline 3 Lớp chuyên sâu** kết hợp thị giác máy tính và sáng tác thích ứng theo lứa tuổi.
-2. **An toàn thiếu nhi tuyệt đối**: Tự động từ chối ảnh có mặt người thật, ngăn ngừa rò rỉ dữ liệu cá nhân (PII), và thẩm định độc lập điểm rủi ro tâm lý học sinh.
-3. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Moderation Queue), quản lý bộ quy tắc an toàn động (Safety Rules CRUD), phòng thí nghiệm Prompt Studio (Playground) và giám sát chi phí token thời gian thực.
-4. **Trải nghiệm đẳng cấp SaaS**: Hoàn toàn bằng tiếng Việt, thiết kế màu pastel ấm áp chuẩn WCAG AA, hỗ trợ đầy đủ Desktop và Mobile, in ấn thành sách thật (`@media print`).
-
----
-
-## 📸 BẰNG CHỨNG HÌNH ẢNH GIAO DIỆN (SCREENSHOT SHOWCASE)
-
-> Toàn bộ ảnh chụp được tự động hóa qua Headless Chrome ở 2 kích thước chuẩn: **Desktop (1440px)** và **Mobile (390px)**.
-
-### 1. Bảng Điều Khiển Phụ Huynh (Parent Dashboard)
-| Màn hình Desktop (1440px) | Màn hình Mobile (390px) |
-| :---: | :---: |
-| ![Dashboard Desktop](docs/screenshots/phase4_dashboard_desktop_1440.png) | ![Dashboard Mobile](docs/screenshots/phase4_dashboard_mobile_390.png) |
-
-### 2. Trình Đọc Sách 3D & Giọng Đọc Truyền Cảm (Ken Burns + Web Speech TTS)
-| Màn hình Desktop (1440px) | Màn hình Mobile (390px) |
-| :---: | :---: |
-| ![Reader Desktop](docs/screenshots/phase4_reader_desktop_1440.png) | ![Reader Mobile](docs/screenshots/phase4_reader_mobile_390.png) |
-
-### 3. Wizard Tạo Truyện Thần Kỳ 3 Bước & Phân Tích Canvas
-| Màn hình Desktop (1440px) | Màn hình Mobile (390px) |
-| :---: | :---: |
-| ![Create Desktop](docs/screenshots/phase4_create_desktop_1440.png) | ![Create Mobile](docs/screenshots/phase4_create_mobile_390.png) |
-
-### 4. Tổng Quan Điều Hành Admin & Biểu Đồ Chi Phí (Recharts)
-| Màn hình Desktop (1440px) | Màn hình Mobile (390px) |
-| :---: | :---: |
-| ![Admin Overview Desktop](docs/screenshots/phase5_admin_overview_desktop_1440.png) | ![Admin Overview Mobile](docs/screenshots/phase5_admin_overview_mobile_390.png) |
-
-### 5. Hàng Chờ Kiểm Duyệt Trực Quan (Moderation Queue with Split View & Hotkeys)
-| Màn hình Desktop (1440px) | Màn hình Mobile (390px) |
-| :---: | :---: |
-| ![Moderation Desktop](docs/screenshots/phase5_moderation_queue_desktop_1440.png) | ![Moderation Mobile](docs/screenshots/phase5_moderation_queue_mobile_390.png) |
+Ứng dụng được thiết kế theo triết lý **Modern Storybook** và **Responsible AI**:
+1. **Thiết kế Modern Storybook**: Nền kem ấm áp có nhiễu giấy siêu nhẹ (`3.5%`), không có tấm đế be dày, tranh của bé luôn là nhân vật chính đặt trong khung polaroid mềm mại, phông chữ `Baloo 2` chuẩn tiếng Việt và hệ thống màu sắc đạt chuẩn WCAG 2.1 AA.
+2. **AI là trái tim của hệ thống**: Vận hành **Pipeline 3 Lớp chuyên sâu** kết hợp thị giác máy tính, phân loại tranh vẽ nghiêm ngặt (`child_drawing`), bám sát vật thể tranh (`grounded_objects`) và chấm điểm trung thực (`faithfulness_score`).
+3. **An toàn thiếu nhi tuyệt đối**: Tự động từ chối ảnh có mặt người thật, ảnh chụp đời thường, logo đồ họa hoặc ảnh chụp màn hình văn bản với mã lỗi thân thiện `NOT_A_DRAWING`.
+4. **Chế độ Bé cô lập (Kid Mode)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, nút chạm lớn $\ge 72px$, âm thanh vui nhộn (Web Audio API) và cổng phụ huynh bảo mật (giữ 2 giây, đố toán hoặc mã PIN).
+5. **Trình đọc sách hoàn hảo (Reading View)**: Đọc từng câu với highlight karaoke, sách lật 2 trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ hiển thị `object-fit: contain` không bao giờ bị cắt mất viền, chế độ ru ngủ dịu mắt.
+6. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Moderation Queue với Split View và phím tắt `A`/`R`), bật tắt kiểm tra tranh vẽ nghiêm ngặt, quản lý bộ quy tắc an toàn động và giám sát chi phí token thời gian thực.
 
 ---
 
-## 🧠 KIẾN TRÚC PIPELINE AI 3 LỚP (TRÁI TIM CỦA HỆ THỐNG)
+## 📸 SO SÁNH GIAO DIỆN TRƯỚC VÀ SAU CẢI TIẾN (BEFORE & AFTER)
+
+> Toàn bộ ảnh chụp được tự động hóa qua Headless Chrome ở 2 độ phân giải: **Desktop (1440px)** và **Mobile (390px)** được lưu trữ trong `docs/screenshots/before/` và `docs/screenshots/after/`.
+
+### 1. Bảng Điều Khiển Phụ Huynh (Dashboard)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Dashboard Before](docs/screenshots/before/dashboard_desktop_1440.png) | ![Dashboard After](docs/screenshots/after/dashboard_desktop_1440.png) |
+
+### 2. Tủ Sách Kệ Gỗ & Thẻ Bìa Sách 3:4 (Library)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Library Before](docs/screenshots/before/library_desktop_1440.png) | ![Library After](docs/screenshots/after/library_desktop_1440.png) |
+
+### 3. Wizard Tạo Truyện Thần Kỳ (Create Story)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Create Before](docs/screenshots/before/create_desktop_1440.png) | ![Create After](docs/screenshots/after/create_desktop_1440.png) |
+
+### 4. Trình Đọc Sách Lật Trang & Karaoke TTS (Reading View)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Reader Before](docs/screenshots/before/reader_desktop_1440.png) | ![Reader After](docs/screenshots/after/reader_desktop_1440.png) |
+
+### 5. Góc Đọc Của Bé Cô Lập & Khóa Phụ Huynh (Kid Mode)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Kid Before](docs/screenshots/before/kid_desktop_1440.png) | ![Kid After](docs/screenshots/after/kid_desktop_1440.png) |
+
+### 6. Hàng Chờ Kiểm Duyệt Quản Trị Viên (Admin Moderation Queue)
+| Giao diện TRƯỚC (Before) | Giao diện SAU (Modern Storybook After) |
+| :---: | :---: |
+| ![Moderation Before](docs/screenshots/before/admin_moderation_desktop_1440.png) | ![Moderation After](docs/screenshots/after/admin_moderation_desktop_1440.png) |
+
+---
+
+## 🧠 KIẾN TRÚC PIPELINE AI 3 LỚP (RESPONSIBLE AI)
 
 ```
-[Ảnh tranh bé vẽ] 
+[Ảnh tải lên từ phụ huynh]
        │
        ▼
 ┌────────────────────────────────────────────────────────┐
-│ LỚP 1: INPUT SAFETY & MULTIMODAL VISION                │
-│ • Kiểm tra: Có phải tranh vẽ không? (is_drawing)       │
-│ • Chặn ảnh mặt người thật & quét thông tin PII         │
-│ • Trích xuất đồ vật, màu sắc, tâm trạng, nhân vật      │
-└──────────────────────┬─────────────────────────────────┘
-                       │ Dữ liệu ngữ nghĩa an toàn
-                       ▼
+│ LỚP 1: STRICT DRAWING CLASSIFICATION & INPUT SAFETY    │
+│ • Nhận diện thể thức: child_drawing vs photo/logo/text │
+│ • Kiểm tra khuôn mặt người lớn & thông tin cá nhân PII │
+│ • Từ chối ảnh không phải tranh vẽ: NOT_A_DRAWING       │
+│ • Trích xuất đặc trưng thị giác & grounded_objects     │
+└────────────────────────────────────────────────────────┘
+       │ (Hợp lệ: child_drawing)
+       ▼
 ┌────────────────────────────────────────────────────────┐
-│ LỚP 2: SÁNG TÁC THIẾU NHI THÍCH ỨNG ĐỘ TUỔI            │
-│ • Ghép động Active System Prompt + Safety Rules        │
-│ • Ngôn ngữ thích ứng: Mầm non (2-4), Tiểu học (5-12)   │
-│ • Tạo 4-5 trang (30-50 từ/trang), cảm xúc & moral      │
-│ • Xác định tọa độ Ken Burns {x, y, zoom} & 3 gợi ý vẽ  │
-│ • Kiểm định JSON Schema với Zod + 1x Auto-Retry        │
-└──────────────────────┬─────────────────────────────────┘
-                       │ Bản thảo câu chuyện
-                       ▼
+│ LỚP 2: VISUAL GROUNDING CREATIVE ENGINE                │
+│ • Sáng tác truyện 4-5 trang với font Baloo 2           │
+│ • Bắt buộc bám sát grounded_objects từ tranh của bé    │
+│ • Kẹp an toàn Ken Burns focus_region (zoom <= 1.35x)   │
+│ • Định dạng Zod Schema JSON có cấu trúc                │
+└────────────────────────────────────────────────────────┘
+       │
+       ▼
 ┌────────────────────────────────────────────────────────┐
-│ LỚP 3: OUTPUT SAFETY JUDGE (KIỂM DUYỆT ĐỘC LẬP)        │
-│ • Phiên LLM độc lập đóng vai Giám định viên Tâm lý     │
-│ • Chấm điểm Risk Score (0-100) theo 10 quy tắc an toàn │
-│ • Phân luồng: auto_approved | pending_review | rejected│
+│ LỚP 3: FAITHFULNESS SCORING & OUTPUT SAFETY JUDGE      │
+│ • Chấm điểm độ trung thực tranh vẽ (faithfulness_score)│
+│ • Tự động thử lại (retry) nếu điểm trung thực < 60     │
+│ • Chấm điểm rủi ro an toàn tâm lý thiếu nhi (0 - 100)  │
+│ • Định tuyến: auto_approved | pending_review | rejected│
 └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ CẤU TRÚC THƯ MỤC DỰ ÁN
+## 🛠️ HƯỚNG DẪN CÀI ĐẶT VÀ CHẠY DỰ ÁN
 
-```
-DoanAIBP/
-├── docs/                             # Tài liệu kỹ thuật & kiến trúc hoàn chỉnh
-│   ├── 01-NGHIEP-VU.md               # Nghiệp vụ, Persona, Luồng bài toán & RBAC
-│   ├── 02-GIAO-DIEN-AI.md            # Đặc tả Pipeline AI 3 lớp & Responsible AI
-│   ├── 03-KY-THUAT-FRONTEND.md       # Frontend SPA, Zustand Stores & Trải nghiệm
-│   ├── 04-KY-THUAT-ADMIN.md          # Phân hệ Quản trị, Moderation & Database Views
-│   ├── ASSUMPTIONS.md                # Toàn bộ giả định kỹ thuật & sản phẩm
-│   └── screenshots/                  # 12 bức ảnh kiểm thử 1440px và 390px
-├── public/                           # Tài nguyên tĩnh & favicon
-├── scripts/                          # Script kiểm thử tự động (take-screenshots.js)
-├── src/
-│   ├── app/                          # Routing, Route Guards (AuthGuard, RoleGuard)
-│   ├── components/                   # UI Primitives & Layouts (User & Admin)
-│   ├── features/
-│   │   ├── admin/                    # 6 màn hình quản trị hoàn chỉnh
-│   │   ├── ai/                       # Canvas Compression & Pipeline Progress
-│   │   ├── auth/                     # Đăng nhập, Đăng ký, Quên mật khẩu
-│   │   ├── reader/                   # 3D Flip, Swipe, TTS, Ken Burns, Ru ngủ
-│   │   ├── story/                    # Create Wizard, Thư viện, Chia sẻ
-│   │   └── user/                     # Dashboard, Settings, Kid Mode (Cổng phụ huynh)
-│   ├── lib/
-│   │   ├── i18n/vi.ts                # Từ điển tiếng Việt tập trung 100%
-│   │   └── supabase.ts               # Supabase Client khởi tạo
-│   ├── stores/                       # Zustand Stores (Auth, Story, Admin, UI)
-│   └── types/                        # TypeScript Strict Types
-├── supabase/
-│   ├── functions/                    # Deno Edge Functions (generate-story, etc.)
-│   ├── migrations/001_init.sql       # 13 bảng Postgres, RLS, Views & Triggers
-│   └── seed.sql                      # Dữ liệu mẫu 30 ngày, 10 safety rules, admin
-├── AI-DECLARATION.md                 # Tuyên bố minh bạch sử dụng AI học thuật
-├── tailwind.config.js                # Tokens màu pastel & font Quicksand/Nunito
-├── tsconfig.json                     # TypeScript cấu hình Strict
-├── vercel.json                       # Cấu hình Deploy SPA Rewrite
-└── package.json                      # Danh mục dependencies & scripts
-```
+### 1. Yêu Cầu Môi Trường
+- **Node.js**: Phiên bản 18 trở lên (khuyên dùng Node.js 20 LTS).
+- **Trình duyệt**: Google Chrome hoặc Microsoft Edge hiện đại.
 
----
-
-## 🔑 TÀI KHOẢN TRẢI NGHIỆM DÀNH CHO GIẢNG VIÊN (DEMO CREDENTIALS)
-
-Ứng dụng tích hợp sẵn cơ chế **Reviewer Offline Fallback**: Giảng viên có thể đăng nhập ngay mà không cần kết nối Supabase Cloud:
-
-| Vai trò (Role) | Email | Mật khẩu | Đặc quyền chính |
-| :--- | :--- | :--- | :--- |
-| **Quản trị viên (Admin)** | `admin@drawtostory.vn` | `Admin@123456` | Toàn quyền kiểm duyệt, chỉnh sửa Prompt Studio, quản lý Safety Rules, xem biểu đồ chi phí token. |
-| **Phụ huynh Demo 1** | `me@phuhuynh.vn` | `Parent@123456` | Có 2 bé (Bé Bơ 4 tuổi, Bé Khoai 7 tuổi), 4 truyện tranh mẫu, huy hiệu và streak sáng tạo. |
-| **Phụ huynh Demo 2** | `ba@phuhuynh.vn` | `Parent@123456` | Tài khoản gia đình thứ hai để kiểm thử phân quyền độc lập. |
-
-> *Mẹo tiện lợi:* Trên màn hình Đăng nhập (`/login`), có sẵn 3 nút bấm nhanh để điền ngay thông tin tài khoản mẫu chỉ với 1 click!
-
----
-
-## 🚀 HƯỚNG DẪN CÀI ĐẶT & CHẠY THỰC TẾ
-
-### 1. Yêu cầu môi trường
-- **Node.js**: Phiên bản 18.x trở lên.
-- **npm** hoặc **pnpm**.
-
-### 2. Cài đặt dependencies
+### 2. Cài Đặt Dependencies
 ```bash
-git clone https://github.com/your-username/drawtostory.git
-cd drawtostory
 npm install
 ```
 
-### 3. Cấu hình biến môi trường
-Tạo tệp `.env` dựa trên bản mẫu `.env.example`:
-```bash
-cp .env.example .env
-```
-Nội dung cơ bản trong `.env`:
-```ini
+### 3. Cấu Hình Biến Môi Trường (`.env`)
+Tạo file `.env` từ `.env.example`:
+```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_GEMINI_MODEL=gemini-2.5-flash
+VITE_USE_MOCK=false
 ```
+> **Lưu ý về Mock Data**: Ứng dụng kết nối trực tiếp với cơ sở dữ liệu Supabase thật. Nếu bật `VITE_USE_MOCK=true`, hệ thống sẽ hiển thị biểu ngữ dính cố định **"DỮ LIỆU DEMO"** trên cùng màn hình theo đúng quy chuẩn nghiệm thu.
 
-### 4. Khởi chạy máy chủ phát triển
-```bash
-npm run dev
-```
-Truy cập ứng dụng tại: `http://localhost:5173/`
+### 4. Các Lệnh Kiểm Thử & Chạy Ứng Dụng
 
-### 5. Kiểm tra chất lượng mã nguồn & Build sản phẩm
-```bash
-# Kiểm tra TypeScript nghiêm ngặt (0 lỗi)
-npm run typecheck
+| Lệnh | Mục đích |
+| :--- | :--- |
+| `npm run test:pipeline` | Chạy bộ kiểm thử tự động 6 fixtures phân loại tranh vẽ và kiểm tra toggle cài đặt |
+| `npm run typecheck` | Kiểm tra toàn bộ mã nguồn TypeScript Strict (`tsc --noEmit`) |
+| `npm run lint` | Chạy ESLint kiểm tra cú pháp và quy chuẩn mã nguồn |
+| `npm run build` | Tự động kiểm tra độ tương phản WCAG 2.1 AA (19 cặp màu), typecheck và đóng gói Vite |
+| `npm run dev` | Khởi chạy máy chủ phát triển tại `http://localhost:5173` |
 
-# Kiểm tra quy chuẩn mã nguồn ESLint
-npm run lint
-
-# Đóng gói sản phẩm sản xuất (Vite Build)
-npm run build
-
-# Chạy bản thử nghiệm Preview độc lập trên cổng 5199
-npm run preview -- --port 5199 --strictPort
-```
-
----
-
-## 🗄️ HƯỚNG DẪN TRIỂN KHAI BACKEND SUPABASE (NẾU DÙNG CLOUD THẬT)
-
-1. **Khởi tạo Database & Chạy Migrations**:
-   - Truy cập Supabase SQL Editor.
-   - Chạy nội dung tệp `supabase/migrations/001_init.sql` để tạo 13 bảng, RLS Policies, Triggers và 3 Views phân tích.
-   - Chạy tệp `supabase/seed.sql` để nạp 10 quy tắc an toàn, badges và dữ liệu 30 ngày.
-2. **Triển khai Supabase Edge Functions**:
-   ```bash
-   supabase functions deploy generate-story --no-verify-jwt
-   supabase functions deploy get-shared-story --no-verify-jwt
-   supabase functions deploy admin-test-prompt --no-verify-jwt
-   supabase secrets set GEMINI_API_KEY=your_google_gemini_api_key
-   ```
-
----
-
-## 📄 GIẤY PHÉP & BẢN QUYỀN
-
-Đồ án được thực hiện phục vụ mục đích học thuật trong khuôn khổ môn học **AI Based Programming** tại **Đại học Phú Xuân**. Toàn bộ mã nguồn và tài liệu tuân theo giấy phép mã nguồn mở MIT License.
-
+### 5. Lối Tắt Kiểm Thử Dành Cho Người Đánh Giá (Reviewer Shortcuts)
+- **Styleguide Tokens & Components**: Truy cập route `/dev/styleguide` để xem toàn bộ tokens màu, nút, thẻ, badge, modal, input, bottom sheet và empty states.
+- **Tài khoản Phụ huynh Demo**: `me@phuhuynh.vn` (Mật khẩu: bất kỳ $\ge 6$ ký tự, PIN mặc định: `1234`).
+- **Tài khoản Quản trị viên (Admin)**: `admin@drawtostory.vn` (Toàn quyền truy cập Cổng Admin `/admin`).
