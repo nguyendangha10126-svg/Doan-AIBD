@@ -19,24 +19,24 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     ref
   ) => {
     const variants = {
-      white: 'bg-white/95 border border-white/60 text-main shadow-soft',
-      cream: 'bg-cream-100 border border-peach/30 text-main shadow-soft',
-      peach: 'bg-peach/30 border border-peach text-main shadow-soft',
-      mint: 'bg-mint/30 border border-mint text-main shadow-soft',
-      sky: 'bg-sky/30 border border-sky text-main shadow-soft',
-      lavender: 'bg-lavender/30 border border-lavender text-main shadow-soft',
-      butter: 'bg-butter/30 border border-butter text-main shadow-soft',
-      glass: 'bg-white/80 backdrop-blur-md border border-white/40 shadow-soft',
+      white: 'bg-surface border border-ink/10 text-ink shadow-card',
+      cream: 'bg-surface-2 border border-ink/10 text-ink shadow-card',
+      peach: 'bg-peach/30 border border-peach-dark/30 text-ink shadow-card',
+      mint: 'bg-mint/30 border border-mint-dark/30 text-ink shadow-card',
+      sky: 'bg-sky/30 border border-sky-dark/30 text-ink shadow-card',
+      lavender: 'bg-lavender/30 border border-lavender-dark/30 text-ink shadow-card',
+      butter: 'bg-butter/30 border border-butter-dark/30 text-ink shadow-card',
+      glass: 'bg-surface/85 backdrop-blur-md border border-ink/10 text-ink shadow-card',
     };
 
     return (
       <motion.div
         ref={ref}
-        whileHover={isInteractive ? { y: -4, scale: 1.01 } : undefined}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        whileHover={isInteractive ? { y: -2 } : undefined}
+        transition={{ type: 'spring', stiffness: 350, damping: 22 }}
         className={cn(
-          'rounded-3xl p-6 transition-shadow relative overflow-hidden',
-          isInteractive && 'hover:shadow-soft-lg cursor-pointer',
+          'rounded-[28px] p-6 transition-all relative overflow-hidden',
+          isInteractive && 'hover:shadow-pop cursor-pointer',
           variants[variant],
           className
         )}
@@ -49,4 +49,3 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 );
 
 Card.displayName = 'Card';
-

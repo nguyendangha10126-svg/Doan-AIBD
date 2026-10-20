@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 
     | 'primary'
+    | 'magic'
     | 'accent'
     | 'mint'
     | 'peach'
@@ -13,6 +14,7 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
     | 'success'
     | 'warning'
     | 'danger'
+    | 'info'
     | 'neutral';
   size?: 'sm' | 'md';
 }
@@ -25,22 +27,24 @@ export const Badge: React.FC<BadgeProps> = ({
   ...props
 }) => {
   const variants = {
-    primary: 'bg-primary/15 text-primary-dark border-primary/30',
-    accent: 'bg-accent/15 text-accent-dark border-accent/30',
-    mint: 'bg-mint text-emerald-800 border-mint-dark',
-    peach: 'bg-peach text-amber-900 border-peach-dark',
-    sky: 'bg-sky text-sky-900 border-sky-dark',
-    lavender: 'bg-lavender text-purple-900 border-lavender-dark',
-    butter: 'bg-butter text-amber-900 border-butter-dark',
-    success: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    warning: 'bg-amber-100 text-amber-800 border-amber-300',
-    danger: 'bg-rose-100 text-rose-800 border-rose-300',
-    neutral: 'bg-gray-100 text-gray-700 border-gray-200',
+    primary: 'bg-brand-100 text-brand-700 border-brand-400/30',
+    magic: 'bg-magic-600/10 text-magic-600 border-magic-600/30',
+    accent: 'bg-magic-600/10 text-magic-600 border-magic-600/30',
+    mint: 'bg-[#C9F0DD] text-ink border-ink/10',
+    peach: 'bg-[#FFD6BA] text-ink border-ink/10',
+    sky: 'bg-[#CDE7FF] text-ink border-ink/10',
+    lavender: 'bg-[#E3D9FF] text-ink border-ink/10',
+    butter: 'bg-[#FFF1B8] text-ink border-ink/10',
+    success: 'bg-[#DDF6E9] text-[#166E48] border-[#166E48]/20',
+    warning: 'bg-[#FFF1B8] text-[#8A5A00] border-[#8A5A00]/20',
+    danger: 'bg-[#FFE3EA] text-[#B42343] border-[#B42343]/20',
+    info: 'bg-[#CDE7FF] text-[#1F5FA8] border-[#1F5FA8]/20',
+    neutral: 'bg-surface text-ink border-ink/15 shadow-xs',
   };
 
   const sizes = {
-    sm: 'text-xs px-2.5 py-0.5 font-medium rounded-full',
-    md: 'text-sm px-3.5 py-1 font-semibold rounded-full',
+    sm: 'text-xs px-2.5 py-0.5 font-heading font-bold rounded-full',
+    md: 'text-sm px-3.5 py-1 font-heading font-bold rounded-full',
   };
 
   return (
@@ -57,4 +61,3 @@ export const Badge: React.FC<BadgeProps> = ({
     </span>
   );
 };
-

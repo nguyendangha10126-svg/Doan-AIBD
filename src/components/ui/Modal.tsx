@@ -44,47 +44,53 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-main/40 backdrop-blur-sm"
+            className="fixed inset-0 bg-ink/40 backdrop-blur-sm"
             onClick={onClose}
           />
 
-          {/* Modal Container */}
+          {/* Modal / Bottom Sheet Container */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 15 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 380 }}
             className={cn(
-              'relative w-full bg-cream-100/95 border-2 border-white rounded-3xl p-6 md:p-8 shadow-soft-lg z-10 my-8 overflow-hidden text-main',
+              'relative w-full bg-surface border border-ink/10 shadow-pop z-10 overflow-hidden text-ink',
+              // Mobile is a bottom sheet with handle, desktop is centered card
+              'max-sm:rounded-t-[28px] max-sm:rounded-b-none max-sm:p-6 max-sm:max-h-[85vh] max-sm:overflow-y-auto',
+              'sm:rounded-[28px] sm:p-8 sm:my-8',
               maxWidthClasses[maxWidth]
             )}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Mobile Sheet Drag Indicator */}
+            <div className="w-12 h-1.5 bg-ink/15 rounded-full mx-auto mb-4 sm:hidden" />
+
             {/* Header */}
             {(title || showCloseButton) && (
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   {title && (
-                    <h3 className="text-xl md:text-2xl font-heading font-bold text-main">
+                    <h3 className="text-xl md:text-2xl font-heading font-extrabold text-ink tracking-tight">
                       {title}
                     </h3>
                   )}
                   {description && (
-                    <p className="text-sm text-main-muted mt-1">{description}</p>
+                    <p className="text-sm text-ink-soft mt-1 leading-relaxed">{description}</p>
                   )}
                 </div>
 
                 {showCloseButton && (
                   <button
                     onClick={onClose}
-                    className="p-2 rounded-full hover:bg-peach/40 text-main-muted hover:text-main transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
+                    className="p-2 rounded-full hover:bg-ink/5 text-ink-faint hover:text-ink transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-2"
                     aria-label="Đóng"
                   >
                     <X className="w-5 h-5" />
@@ -101,4 +107,3 @@ export const Modal: React.FC<ModalProps> = ({
     </AnimatePresence>
   );
 };
-
