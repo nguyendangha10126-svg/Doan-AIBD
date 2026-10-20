@@ -19,6 +19,8 @@ export interface AuthState {
   setSelectedChildId: (id: string | null) => void;
   setChildrenList: (children: Child[]) => void;
   addChild: (child: Omit<Child, 'id' | 'created_at' | 'parent_id'>) => Promise<Child>;
+  updateChild: (childId: string, updates: Partial<Omit<Child, 'id' | 'parent_id' | 'created_at'>>) => Promise<boolean>;
+  deleteChild: (childId: string) => Promise<boolean>;
   updatePin: (pin: string) => Promise<boolean>;
   verifyPin: (pin: string) => boolean;
 }
@@ -282,6 +284,29 @@ export const useAuthStore = create<AuthState>()(
           selectedChildId: newChild.id,
         });
         return newChild;
+      },
+
+      updateChild: async (childId, updates) => {
+        const { childrenList } = get();
+        const updatedList = childrenList.map((c) => (c.id === childId ? { ...c, ...updates } : c));
+        set({ childrenList: updatedList });
+        if (!isDemoMode) {
+          await supabase.from('children').update(updates).eq('id', childId);
+        }
+        return true;
+      },
+
+      deleteChild: async (childId) => {
+        const { childrenList, selectedChildId } = get();
+        const filtered = childrenList.filter((c) => c.id !== childId);
+        set({
+          childrenList: filtered,
+          selectedChildId: selectedChildId === childId ? (filtered[0]?.id || null) : selectedChildId,
+        });
+        if (!isDemoMode) {
+          await supabase.from('children').delete().eq('id', childId);
+        }
+        return true;
       },
 
       updatePin: async (pin: string) => {

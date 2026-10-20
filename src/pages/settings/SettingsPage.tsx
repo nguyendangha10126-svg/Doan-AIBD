@@ -7,29 +7,36 @@ import {
   Plus, 
   Check, 
   ShieldCheck,
-  Lock
+  Lock,
+  Edit2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
 import { vi } from '@/lib/i18n/vi';
+import { Child } from '@/types/database';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { OtpPinInput } from '@/components/ui/OtpPinInput';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export const SettingsPage: React.FC = () => {
-  const { profile, childrenList, addChild, updatePin } = useAuthStore();
-  const { exportUserDataJson, clearAllUserData } = useStoryStore();
+  const { profile, childrenList, addChild, updateChild, deleteChild, updatePin } = useAuthStore();
+  const { stories, exportUserDataJson, clearAllUserData } = useStoryStore();
 
-  // Child modal state
-  const [isAddChildOpen, setIsAddChildOpen] = useState(false);
-  const [newNickname, setNewNickname] = useState('');
-  const [newAge, setNewAge] = useState(5);
-  const [newEmoji, setNewEmoji] = useState('🥑');
-  const [newColor, setNewColor] = useState('#FF8FA3');
+  // Child modal state (Add & Edit)
+  const [isChildModalOpen, setIsChildModalOpen] = useState(false);
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
+  const [childNickname, setChildNickname] = useState('');
+  const [childAge, setChildAge] = useState(5);
+  const [childEmoji, setChildEmoji] = useState('🥑');
+  const [childColor, setChildColor] = useState('#FF8FA3');
+
+  // Delete child confirmation
+  const [childToDelete, setChildToDelete] = useState<Child | null>(null);
 
   // PIN state
   const [isChangingPin, setIsChangingPin] = useState(false);
@@ -37,29 +44,64 @@ export const SettingsPage: React.FC = () => {
   const [confirmPin, setConfirmPin] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
 
-  // GDPR delete modal
+  // GDPR delete account modal
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
-  const emojiOptions = ['🥑', '🐿️', '🐱', '🐰', '🐻', '🦁', '🌟', '🎨', '🚀', '🦕'];
-  const colorOptions = ['#FF8FA3', '#7C6CF0', '#C9F0DD', '#FFD6BA', '#CDE7FF', '#FFF1B8'];
+  const emojiOptions = ['🥑', '🐿️', '🐱', '🐰', '🐻', '🦁', '🌟', '🎨', '🚀', '🦕', '🌸', '🦊'];
+  const colorOptions = ['#FF8FA3', '#7C6CF0', '#C9F0DD', '#FFD6BA', '#CDE7FF', '#FFF1B8', '#F0607F', '#8B7CF6'];
+  const ageOptions = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  const handleOpenAddChild = () => {
+    setEditingChildId(null);
+    setChildNickname('');
+    setChildAge(5);
+    setChildEmoji('🥑');
+    setChildColor('#FF8FA3');
+    setIsChildModalOpen(true);
+  };
+
+  const handleOpenEditChild = (child: Child) => {
+    setEditingChildId(child.id);
+    setChildNickname(child.nickname);
+    setChildAge(child.age);
+    setChildEmoji(child.avatar_emoji);
+    setChildColor(child.avatar_color);
+    setIsChildModalOpen(true);
+  };
 
   const handleSaveChild = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNickname.trim()) {
+    if (!childNickname.trim()) {
       toast.error('Vui lòng nhập biệt danh cho bé');
       return;
     }
 
-    await addChild({
-      nickname: newNickname.trim(),
-      age: Number(newAge),
-      avatar_color: newColor,
-      avatar_emoji: newEmoji,
-    });
+    if (editingChildId) {
+      await updateChild(editingChildId, {
+        nickname: childNickname.trim(),
+        age: Number(childAge),
+        avatar_color: childColor,
+        avatar_emoji: childEmoji,
+      });
+      toast.success('Đã cập nhật hồ sơ bé yêu!');
+    } else {
+      await addChild({
+        nickname: childNickname.trim(),
+        age: Number(childAge),
+        avatar_color: childColor,
+        avatar_emoji: childEmoji,
+      });
+      toast.success('Đã thêm hồ sơ bé yêu thành công!');
+    }
 
-    toast.success('Đã thêm hồ sơ bé yêu thành công!');
-    setIsAddChildOpen(false);
-    setNewNickname('');
+    setIsChildModalOpen(false);
+  };
+
+  const handleDeleteChildConfirmed = async () => {
+    if (!childToDelete) return;
+    await deleteChild(childToDelete.id);
+    toast.success(`Đã xóa hồ sơ bé ${childToDelete.nickname}`);
+    setChildToDelete(null);
   };
 
   const handleSavePin = async () => {
@@ -72,7 +114,7 @@ export const SettingsPage: React.FC = () => {
       return;
     }
     if (!currentPassword.trim()) {
-      toast.error('Vui lòng nhập mật khẩu tài khoản để xác thực thay đổi.');
+      toast.error('Vui lòng nhập mật khẩu tài khoản để xác thực.');
       return;
     }
     const ok = await updatePin(newPin.trim());
@@ -86,49 +128,49 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleExportData = () => {
-    const jsonStr = exportUserDataJson();
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const dataStr = exportUserDataJson();
+    const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `drawtostory-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `drawtostory-data-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Đã xuất toàn bộ dữ liệu cá nhân thành công!');
+    toast.success('Đã tải xuống toàn bộ dữ liệu gia đình dạng JSON!');
   };
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccountConfirmed = () => {
     clearAllUserData();
+    toast.success('Đã xóa vĩnh viễn toàn bộ dữ liệu tài khoản');
     setIsDeleteAccountOpen(false);
-    toast.success('Đã xóa dữ liệu gia đình khỏi thiết bị.');
-    window.location.reload();
+    window.location.href = '/login';
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-8 max-w-4xl mx-auto py-2">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-heading font-black text-main">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-extrabold text-ink tracking-tight">
           {vi.settings.title}
         </h1>
-        <p className="text-xs sm:text-sm text-main-muted mt-1">
+        <p className="text-xs sm:text-sm text-ink-soft mt-1">
           {vi.settings.subtitle}
         </p>
       </div>
 
       {/* 1. Children Profiles Section */}
-      <Card variant="white" className="p-6 md:p-8 space-y-6 border-2 border-peach/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-peach/40 flex items-center justify-center text-primary-dark">
+      <Card variant="white" className="p-6 md:p-8 space-y-6 border border-ink/10 shadow-card">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-brand-100 flex items-center justify-center text-brand-700 shrink-0">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-heading font-bold text-main">
+              <h2 className="text-lg font-heading font-extrabold text-ink">
                 {vi.settings.childrenSection}
               </h2>
-              <p className="text-xs text-main-muted">
-                Dữ liệu tối thiểu: chỉ lưu biệt danh và độ tuổi để gợi ý từ vựng
+              <p className="text-xs text-ink-soft">
+                Quản lý độ tuổi để AI điều chỉnh độ dài câu chữ và bài học phù hợp
               </p>
             </div>
           </div>
@@ -136,49 +178,79 @@ export const SettingsPage: React.FC = () => {
           <Button
             variant="primary"
             size="sm"
-            onClick={() => setIsAddChildOpen(true)}
+            onClick={handleOpenAddChild}
             leftIcon={<Plus className="w-4 h-4" />}
           >
             {vi.settings.addChildButton}
           </Button>
         </div>
 
+        {/* Children Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {childrenList.map((kid) => (
-            <div
-              key={kid.id}
-              className="p-4 rounded-2xl bg-cream-100 border border-peach/50 flex items-center gap-4 shadow-soft"
-            >
+          {childrenList.map((kid) => {
+            const storyCount = stories.filter((s) => s.child_id === kid.id).length;
+
+            return (
               <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-soft shrink-0"
-                style={{ backgroundColor: kid.avatar_color + '30' }}
+                key={kid.id}
+                className="p-4 rounded-2xl bg-surface-2 border border-ink/10 flex items-center justify-between gap-3 shadow-xs hover:border-ink/20 transition-all"
               >
-                {kid.avatar_emoji}
+                <div className="flex items-center gap-3.5 overflow-hidden">
+                  <div
+                    className="w-13 h-13 rounded-2xl flex items-center justify-center text-3xl shadow-xs shrink-0"
+                    style={{ backgroundColor: kid.avatar_color + '35' }}
+                  >
+                    {kid.avatar_emoji}
+                  </div>
+                  <div className="overflow-hidden">
+                    <span className="font-heading font-extrabold text-base text-ink block truncate">
+                      {kid.nickname}
+                    </span>
+                    <span className="text-xs font-bold text-brand-600 block mt-0.5">
+                      {kid.age} tuổi • <strong>{storyCount}</strong> câu chuyện
+                    </span>
+                    <span className="text-[11px] text-ink-faint block mt-0.5">
+                      Hồ sơ đang hoạt động
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditChild(kid)}
+                    className="p-2 rounded-xl text-ink-faint hover:text-ink hover:bg-surface transition-colors cursor-pointer"
+                    title="Chỉnh sửa hồ sơ bé"
+                    aria-label={`Sửa hồ sơ ${kid.nickname}`}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  {childrenList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setChildToDelete(kid)}
+                      className="p-2 rounded-xl text-ink-faint hover:text-[#B42343] hover:bg-[#FFE3EA] transition-colors cursor-pointer"
+                      title="Xóa hồ sơ bé"
+                      aria-label={`Xóa hồ sơ ${kid.nickname}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div>
-                <span className="font-heading font-black text-base text-main block">
-                  {kid.nickname}
-                </span>
-                <span className="text-xs text-primary-dark font-bold block mt-0.5">
-                  {kid.age} tuổi
-                </span>
-                <span className="text-[11px] text-main-muted block mt-1">
-                  Đã tham gia sáng tác
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 
       {/* 2. Parental PIN Protection Section */}
-      <Card variant="white" className="p-6 md:p-8 space-y-5 border border-ink/10">
+      <Card variant="white" className="p-6 md:p-8 space-y-5 border border-ink/10 shadow-card">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-mint flex items-center justify-center text-ink shrink-0">
-            <Key className="w-5 h-5 text-emerald-800" />
+            <Key className="w-5 h-5 text-[#166E48]" />
           </div>
           <div>
-            <h2 className="text-lg font-heading font-bold text-ink">
+            <h2 className="text-lg font-heading font-extrabold text-ink">
               {vi.settings.pinSection}
             </h2>
             <p className="text-xs text-ink-soft">
@@ -190,16 +262,17 @@ export const SettingsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-surface-2 border border-ink/10">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Badge variant={profile?.parental_pin_hash ? "success" : "warning"} size="sm">
+              <Badge variant={profile?.parental_pin_hash ? 'success' : 'warning'} size="sm">
                 {profile?.parental_pin_hash ? <Check className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                {profile?.parental_pin_hash ? "Đã đặt mã PIN" : "Chưa đặt mã PIN"}
+                {profile?.parental_pin_hash ? 'Đã đặt mã PIN' : 'Chưa đặt mã PIN'}
               </Badge>
-              <span className="text-xs text-ink-faint">Lưu dạng Hash SHA-256</span>
+              <span className="text-xs text-ink-faint">Mã hóa 1 chiều SHA-256</span>
             </div>
             <p className="text-xs text-ink-soft">
               Mã PIN 4 số bảo vệ Chế độ Bé và các thiết lập tài khoản của phụ huynh.
             </p>
           </div>
+
           <Button
             variant="secondary"
             size="sm"
@@ -216,49 +289,49 @@ export const SettingsPage: React.FC = () => {
       </Card>
 
       {/* 3. GDPR Privacy & Data Ownership Section */}
-      <Card variant="white" className="p-6 md:p-8 space-y-6 border-2 border-peach/50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-sky/50 flex items-center justify-center text-sky-900">
+      <Card variant="white" className="p-6 md:p-8 space-y-6 border border-ink/10 shadow-card">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-sky flex items-center justify-center text-[#1F5FA8] shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-heading font-bold text-main">
+            <h2 className="text-lg font-heading font-extrabold text-ink">
               {vi.settings.privacySection}
             </h2>
-            <p className="text-xs text-main-muted">
+            <p className="text-xs text-ink-soft">
               Quyền kiểm soát dữ liệu cá nhân theo tiêu chuẩn GDPR & Responsible AI
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          {/* Export JSON */}
-          <div className="p-5 rounded-2xl bg-cream-100 border border-peach/40 flex flex-col justify-between space-y-4">
+        <div className="space-y-4 divide-y divide-ink/10">
+          {/* Export Data */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
             <div>
-              <h3 className="font-heading font-bold text-sm text-main">
+              <span className="text-sm font-heading font-extrabold text-ink block">
                 {vi.settings.exportData}
-              </h3>
-              <p className="text-xs text-main-muted mt-1 leading-relaxed">
+              </span>
+              <p className="text-xs text-ink-soft mt-0.5">
                 {vi.settings.exportDataDesc}
               </p>
             </div>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={handleExportData}
               leftIcon={<Download className="w-4 h-4" />}
             >
-              Tải file dữ liệu (.JSON)
+              Tải file JSON
             </Button>
           </div>
 
           {/* Delete Account */}
-          <div className="p-5 rounded-2xl bg-rose-50 border border-rose-200 flex flex-col justify-between space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4">
             <div>
-              <h3 className="font-heading font-bold text-sm text-rose-800">
+              <span className="text-sm font-heading font-extrabold text-[#B42343] block">
                 {vi.settings.deleteAccount}
-              </h3>
-              <p className="text-xs text-rose-600/90 mt-1 leading-relaxed">
+              </span>
+              <p className="text-xs text-ink-soft mt-0.5">
                 {vi.settings.deleteAccountDesc}
               </p>
             </div>
@@ -274,57 +347,90 @@ export const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Add Child Modal */}
+      {/* Add / Edit Child Modal with Age Chip Grid and Live Profile Preview */}
       <Modal
-        isOpen={isAddChildOpen}
-        onClose={() => setIsAddChildOpen(false)}
-        title={vi.settings.addChildButton}
-        description="Điền thông tin tối thiểu để AI điều chỉnh độ khó ngôn ngữ cho bé"
+        isOpen={isChildModalOpen}
+        onClose={() => setIsChildModalOpen(false)}
+        title={editingChildId ? 'Chỉnh sửa hồ sơ bé' : vi.settings.addChildButton}
+        description="Chọn độ tuổi và nhân vật đại diện để AI cá nhân hóa trải nghiệm đọc truyện."
       >
-        <form onSubmit={handleSaveChild} className="space-y-4 pt-2">
+        <form onSubmit={handleSaveChild} className="space-y-5 pt-2">
+          
+          {/* Live Profile Preview Card */}
+          <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 flex items-center gap-4 shadow-xs">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-xs shrink-0 transition-all"
+              style={{ backgroundColor: childColor + '35' }}
+            >
+              {childEmoji}
+            </div>
+            <div>
+              <span className="text-[11px] font-mono font-bold text-brand-600 uppercase tracking-wider block">
+                Thẻ xem trước
+              </span>
+              <h4 className="font-heading font-extrabold text-base text-ink">
+                {childNickname.trim() || 'Tên của bé'}
+              </h4>
+              <span className="text-xs text-ink-soft font-bold block mt-0.5">
+                Độ tuổi: {childAge} tuổi • Sẵn sàng dệt truyện
+              </span>
+            </div>
+          </div>
+
+          {/* Nickname Input */}
           <Input
             label={vi.settings.childNicknameLabel}
             placeholder={vi.settings.childNicknamePlaceholder}
-            value={newNickname}
-            onChange={(e) => setNewNickname(e.target.value)}
+            value={childNickname}
+            onChange={(e) => setChildNickname(e.target.value)}
             required
             autoFocus
           />
 
-          <div>
-            <label className="block text-sm font-heading font-bold text-main mb-1.5">
-              {vi.settings.childAgeLabel} ({newAge} tuổi)
+          {/* Age Chip Grid 2-12 */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-heading font-extrabold text-ink">
+              {vi.settings.childAgeLabel}: <span className="text-brand-600 font-bold">{childAge} tuổi</span>
             </label>
-            <input
-              type="range"
-              min={2}
-              max={12}
-              value={newAge}
-              onChange={(e) => setNewAge(Number(e.target.value))}
-              className="w-full accent-primary cursor-pointer"
-            />
-            <div className="flex justify-between text-[11px] text-main-muted font-bold mt-1">
-              <span>2 tuổi</span>
-              <span>7 tuổi</span>
-              <span>12 tuổi</span>
+            <div className="grid grid-cols-6 sm:grid-cols-11 gap-1.5">
+              {ageOptions.map((age) => (
+                <button
+                  key={age}
+                  type="button"
+                  onClick={() => setChildAge(age)}
+                  className={`h-10 rounded-xl text-xs font-heading font-bold transition-all border cursor-pointer flex items-center justify-center ${
+                    childAge === age
+                      ? 'bg-brand-600 text-white border-brand-600 shadow-btn-primary scale-105'
+                      : 'bg-surface text-ink border-ink/15 hover:bg-surface-2'
+                  }`}
+                  aria-label={`${age} tuổi`}
+                >
+                  {age}t
+                </button>
+              ))}
             </div>
+            <p className="text-[11px] text-ink-faint pt-0.5">
+              AI sẽ dùng độ tuổi để chọn lọc kho từ vựng và bài học đạo đức tương ứng.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-heading font-bold text-main mb-1.5">
-              {vi.settings.childEmojiLabel}
+          {/* Emoji Selection */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-heading font-extrabold text-ink">
+              Biểu tượng đại diện (Avatar)
             </label>
             <div className="flex flex-wrap gap-2">
               {emojiOptions.map((em) => (
                 <button
                   key={em}
                   type="button"
-                  onClick={() => setNewEmoji(em)}
-                  className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all ${
-                    newEmoji === em
-                      ? 'bg-primary text-white scale-110 shadow-soft'
-                      : 'bg-cream-200 hover:bg-peach/40'
+                  onClick={() => setChildEmoji(em)}
+                  className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all cursor-pointer border ${
+                    childEmoji === em
+                      ? 'bg-surface border-brand-600 shadow-card scale-110 ring-2 ring-brand-100'
+                      : 'bg-surface-2 border-ink/10 hover:bg-surface'
                   }`}
+                  aria-label={`Chọn icon ${em}`}
                 >
                   {em}
                 </button>
@@ -332,18 +438,19 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-heading font-bold text-main mb-1.5">
+          {/* Color Selection */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-heading font-extrabold text-ink">
               {vi.settings.childColorLabel}
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {colorOptions.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setNewColor(c)}
-                  className={`w-9 h-9 rounded-full transition-all border-2 ${
-                    newColor === c ? 'scale-110 border-main shadow-soft' : 'border-white'
+                  onClick={() => setChildColor(c)}
+                  className={`w-9 h-9 rounded-full transition-all border-2 cursor-pointer ${
+                    childColor === c ? 'scale-115 border-ink shadow-card' : 'border-surface shadow-xs'
                   }`}
                   style={{ backgroundColor: c }}
                   aria-label={`Màu ${c}`}
@@ -352,34 +459,28 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end gap-2 border-t border-peach/30">
-            <Button variant="ghost" size="sm" type="button" onClick={() => setIsAddChildOpen(false)}>
+          {/* Modal Actions */}
+          <div className="pt-4 flex justify-end gap-2 border-t border-ink/10">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setIsChildModalOpen(false)}>
               Hủy
             </Button>
             <Button variant="primary" size="sm" type="submit" rightIcon={<Check className="w-4 h-4" />}>
-              {vi.settings.saveChild}
+              {editingChildId ? 'Lưu thay đổi' : vi.settings.saveChild}
             </Button>
           </div>
         </form>
       </Modal>
 
-      {/* Delete Account Modal */}
-      <Modal
-        isOpen={isDeleteAccountOpen}
-        onClose={() => setIsDeleteAccountOpen(false)}
-        title={vi.settings.deleteAccountConfirm}
-        description="Thao tác này sẽ xóa vĩnh viễn toàn bộ lịch sử tranh vẽ, câu chuyện và nhật ký của gia đình. Bạn sẽ không thể khôi phục lại."
-        maxWidth="sm"
-      >
-        <div className="pt-4 flex justify-end gap-2 border-t border-peach/30">
-          <Button variant="ghost" size="sm" onClick={() => setIsDeleteAccountOpen(false)}>
-            Hủy bỏ
-          </Button>
-          <Button variant="danger" size="sm" onClick={handleDeleteAccount}>
-            Xác nhận xóa
-          </Button>
-        </div>
-      </Modal>
+      {/* Delete Child Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(childToDelete)}
+        onClose={() => setChildToDelete(null)}
+        onConfirm={handleDeleteChildConfirmed}
+        title={`Xác nhận xóa hồ sơ bé ${childToDelete?.nickname}?`}
+        description="Toàn bộ lịch sử liên quan đến hồ sơ này sẽ được giải phóng. Bạn có chắc chắn muốn xóa không?"
+        confirmText="Xóa hồ sơ"
+        cancelText="Giữ lại"
+      />
 
       {/* Change PIN Modal */}
       <Modal
@@ -396,7 +497,7 @@ export const SettingsPage: React.FC = () => {
             </label>
             <Input
               type="password"
-              placeholder="Nhập mật khẩu hiện tại"
+              placeholder="Nhập mật khẩu tài khoản"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
             />
@@ -439,6 +540,18 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Account Confirm Dialog requiring user to type "XOA" */}
+      <ConfirmDialog
+        isOpen={isDeleteAccountOpen}
+        onClose={() => setIsDeleteAccountOpen(false)}
+        onConfirm={handleDeleteAccountConfirmed}
+        title="Xóa vĩnh viễn toàn bộ tài khoản?"
+        description="Thao tác này sẽ xóa vĩnh viễn toàn bộ lịch sử tranh vẽ, câu chuyện và nhật ký của gia đình. Bạn sẽ không thể khôi phục lại bất kỳ dữ liệu nào."
+        confirmWord="XOA"
+        confirmText="Xác nhận xóa tài khoản"
+        cancelText="Hủy bỏ"
+      />
     </div>
   );
 };

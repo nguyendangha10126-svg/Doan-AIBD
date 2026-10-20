@@ -1,23 +1,21 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
-  Trash2, 
-  BookOpen, 
   Sparkles, 
-  Filter, 
-  AlertCircle, 
-  CheckCircle2 
+  Star,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { useAuthStore } from '@/store/authStore';
-import { vi } from '@/lib/i18n/vi';
-import { Story } from '@/types/database';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Modal } from '@/components/ui/Modal';
+import { Chip } from '@/components/ui/Chip';
+import { Input } from '@/components/ui/Input';
+import { BookCover } from '@/components/ui/BookCover';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export const LibraryPage: React.FC = () => {
@@ -28,7 +26,7 @@ export const LibraryPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChildFilter, setSelectedChildFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
-  const [storyToDelete, setStoryToDelete] = useState<Story | null>(null);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
 
   // Filter logic
   const filteredStories = stories.filter((story) => {
@@ -48,248 +46,183 @@ export const LibraryPage: React.FC = () => {
         return false;
       }
     }
+    // Favorites filter
+    if (onlyFavorites && !story.is_shared) {
+      return false;
+    }
     // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = story.title.toLowerCase().includes(q);
-      const matchMoral = story.moral.toLowerCase().includes(q);
-      const matchSummary = story.summary.toLowerCase().includes(q);
+      const matchMoral = story.moral?.toLowerCase().includes(q);
+      const matchSummary = story.summary?.toLowerCase().includes(q);
       return matchTitle || matchMoral || matchSummary;
     }
     return true;
   });
 
-  const handleDeleteConfirmed = async () => {
-    if (!storyToDelete) return;
-    const ok = await deleteStory(storyToDelete.id);
+  const handleDeleteStory = async (storyId: string) => {
+    const ok = await deleteStory(storyId);
     if (ok) {
-      toast.success(vi.library.deleteSuccess);
-      setStoryToDelete(null);
-    } else {
-      toast.error('Không thể xóa truyện');
+      toast.success('Đã xóa câu chuyện khỏi tủ sách');
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-black text-main">
-            {vi.library.title}
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-extrabold text-ink tracking-tight">
+            Tủ Sách Gia Đình
           </h1>
-          <p className="text-xs sm:text-sm text-main-muted mt-1">
-            {vi.library.subtitle}
+          <p className="text-xs sm:text-sm text-ink-soft mt-1">
+            Nơi lưu giữ từng ấn bản truyện tranh được dệt nên từ nét vẽ tuổi thơ của các con.
           </p>
         </div>
 
-        <Link to="/create">
-          <Button variant="primary" size="md" leftIcon={<Sparkles className="w-4 h-4" />}>
-            {vi.dashboard.ctaCreateStory}
-          </Button>
-        </Link>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={() => navigate('/create')}
+          leftIcon={<Sparkles className="w-4 h-4" />}
+        >
+          Sáng tác truyện mới
+        </Button>
       </div>
 
-      {/* Filters & Search Toolbar */}
-      <div className="bg-white/80 p-4 rounded-3xl border border-peach/50 shadow-soft flex flex-col md:flex-row gap-3 items-center justify-between">
-        {/* Search Input */}
-        <div className="relative w-full md:max-w-xs">
-          <Search className="w-4 h-4 text-main-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder={vi.library.searchPlaceholder}
+      {/* Filter Chips & Search Toolbar */}
+      <div className="bg-surface p-4 sm:p-5 rounded-[28px] border border-ink/10 shadow-card space-y-4">
+        
+        {/* Search Bar */}
+        <div className="max-w-md">
+          <Input
+            placeholder="Tìm theo tên truyện, nhân vật, bài học..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-2xl bg-cream-100 border border-peach/40 text-xs md:text-sm text-main placeholder:text-main-muted focus:outline-none focus:border-primary min-h-[44px]"
+            leftIcon={<Search className="w-4 h-4 text-ink-faint" />}
           />
         </div>
 
-        {/* Filter Dropdowns */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Child Filter */}
-          <div className="flex items-center gap-1.5 bg-cream-100 px-3 py-1.5 rounded-2xl border border-peach/40 min-h-[44px]">
-            <Filter className="w-3.5 h-3.5 text-main-muted" />
-            <select
-              value={selectedChildFilter}
-              onChange={(e) => setSelectedChildFilter(e.target.value)}
-              className="bg-transparent text-xs font-heading font-bold text-main focus:outline-none cursor-pointer"
-            >
-              <option value="all">{vi.library.filterAllChildren}</option>
-              {childrenList.map((kid) => (
-                <option key={kid.id} value={kid.id}>
-                  {kid.nickname} ({kid.age}t)
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Filter Chips Section */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-ink/10">
+          <span className="text-xs font-heading font-bold text-ink-faint mr-1">
+            Hồ sơ bé:
+          </span>
 
-          {/* Status Filter */}
-          <div className="flex items-center gap-1.5 bg-cream-100 px-3 py-1.5 rounded-2xl border border-peach/40 min-h-[44px]">
-            <select
-              value={selectedStatusFilter}
-              onChange={(e) => setSelectedStatusFilter(e.target.value)}
-              className="bg-transparent text-xs font-heading font-bold text-main focus:outline-none cursor-pointer"
+          <Chip
+            selected={selectedChildFilter === 'all'}
+            onClick={() => setSelectedChildFilter('all')}
+          >
+            Tất cả các bé
+          </Chip>
+
+          {childrenList.map((kid) => (
+            <Chip
+              key={kid.id}
+              selected={selectedChildFilter === kid.id}
+              onClick={() => setSelectedChildFilter(kid.id)}
+              icon={<span>{kid.avatar_emoji}</span>}
             >
-              <option value="all">{vi.library.filterAllStatus}</option>
-              <option value="approved">Đã sẵn sàng đọc</option>
-              <option value="pending">Đang chờ duyệt</option>
-              <option value="rejected">Cần vẽ lại</option>
-            </select>
-          </div>
+              {kid.nickname}
+            </Chip>
+          ))}
+        </div>
+
+        {/* Status Chips */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-ink/10">
+          <span className="text-xs font-heading font-bold text-ink-faint mr-1">
+            Trạng thái:
+          </span>
+
+          <Chip
+            selected={selectedStatusFilter === 'all'}
+            onClick={() => setSelectedStatusFilter('all')}
+          >
+            Tất cả trạng thái
+          </Chip>
+
+          <Chip
+            selected={selectedStatusFilter === 'approved'}
+            onClick={() => setSelectedStatusFilter('approved')}
+            icon={<CheckCircle2 className="w-3.5 h-3.5 text-[#166E48]" />}
+          >
+            Đã duyệt
+          </Chip>
+
+          <Chip
+            selected={selectedStatusFilter === 'pending'}
+            onClick={() => setSelectedStatusFilter('pending')}
+            icon={<Clock className="w-3.5 h-3.5 text-amber-600" />}
+          >
+            Đang chờ duyệt
+          </Chip>
+
+          <Chip
+            selected={selectedStatusFilter === 'rejected'}
+            onClick={() => setSelectedStatusFilter('rejected')}
+            icon={<AlertTriangle className="w-3.5 h-3.5 text-[#B42343]" />}
+          >
+            Cần vẽ lại
+          </Chip>
+
+          <Chip
+            selected={onlyFavorites}
+            onClick={() => setOnlyFavorites(!onlyFavorites)}
+            icon={<Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />}
+          >
+            Được yêu thích
+          </Chip>
+
+          {(selectedChildFilter !== 'all' || selectedStatusFilter !== 'all' || onlyFavorites || searchQuery) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedChildFilter('all');
+                setSelectedStatusFilter('all');
+                setOnlyFavorites(false);
+                setSearchQuery('');
+              }}
+              className="text-xs font-heading font-bold text-brand-600 hover:underline flex items-center gap-1 ml-auto cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Đặt lại bộ lọc</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Stories Grid */}
+      {/* Stories Grid with Wood Shelf Styling */}
       {filteredStories.length === 0 ? (
         <EmptyState
-          title={vi.library.emptySearch}
-          description="Hãy thử thay đổi từ khóa tìm kiếm hoặc tạo một câu chuyện mới cho bé!"
-          action={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedChildFilter('all');
-                setSelectedStatusFilter('all');
-              }}
-            >
-              Xóa bộ lọc
-            </Button>
-          }
+          title="Không tìm thấy cuốn sách nào"
+          description="Không có câu chuyện nào phù hợp với bộ lọc hiện tại. Thử xóa bộ lọc hoặc sáng tác câu chuyện mới nhé!"
+          actionText="Sáng tác truyện ngay"
+          onAction={() => navigate('/create')}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStories.map((story) => {
-            const isApproved = ['auto_approved', 'approved'].includes(story.status);
-            const isPending = story.status === 'pending_review';
-            const isRejected = story.status === 'rejected';
+        <div className="relative">
+          {/* Responsive Grid 2/3/4 cols */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-6">
+            {filteredStories.map((story) => (
+              <div key={story.id} className="relative">
+                <BookCover
+                  story={story}
+                  onRead={(id) => navigate(`/story/${id}`)}
+                  onDelete={handleDeleteStory}
+                  onShare={() => {
+                    navigator.clipboard?.writeText(window.location.origin + `/shared/${story.share_token}`);
+                    toast.success('Đã sao chép liên kết chia sẻ!');
+                  }}
+                />
+              </div>
+            ))}
+          </div>
 
-            return (
-              <Card
-                key={story.id}
-                variant="white"
-                className="flex flex-col justify-between border-2 border-peach/50 p-5 group"
-              >
-                <div className="space-y-3">
-                  {/* Image Cover */}
-                  <div
-                    onClick={() => {
-                      if (isApproved) navigate(`/story/${story.id}`);
-                    }}
-                    className={`aspect-[4/3] rounded-2xl overflow-hidden bg-cream-200 relative border border-peach/40 shadow-soft-inner ${
-                      isApproved ? 'cursor-pointer' : ''
-                    }`}
-                  >
-                    {story.drawing?.image_path ? (
-                      <img
-                        src={story.drawing.image_path}
-                        alt={story.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-5xl">
-                        🎨
-                      </div>
-                    )}
-
-                    {/* Status Badge */}
-                    <div className="absolute top-3 right-3">
-                      {isApproved && (
-                        <Badge variant="mint" size="sm">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Đã duyệt
-                        </Badge>
-                      )}
-                      {isPending && (
-                        <Badge variant="warning" size="sm">
-                          <AlertCircle className="w-3 h-3 mr-1" />
-                          Chờ duyệt
-                        </Badge>
-                      )}
-                      {isRejected && (
-                        <Badge variant="danger" size="sm">
-                          Cần sửa
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Title & Summary */}
-                  <div>
-                    <h3
-                      onClick={() => {
-                        if (isApproved) navigate(`/story/${story.id}`);
-                      }}
-                      className={`text-lg font-heading font-black text-main line-clamp-1 ${
-                        isApproved ? 'cursor-pointer hover:text-primary transition-colors' : ''
-                      }`}
-                    >
-                      {story.title}
-                    </h3>
-                    <p className="text-xs text-main-muted mt-1 line-clamp-2 leading-relaxed">
-                      {story.summary}
-                    </p>
-                  </div>
-
-                  {/* Moral */}
-                  <div className="p-2.5 rounded-xl bg-peach/20 border border-peach/30 text-[11px] font-semibold text-main line-clamp-1">
-                    💡 {story.moral}
-                  </div>
-                </div>
-
-                {/* Card Actions */}
-                <div className="mt-4 pt-3 border-t border-peach/30 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    {isApproved && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => navigate(`/story/${story.id}`)}
-                        leftIcon={<BookOpen className="w-3.5 h-3.5" />}
-                        className="text-xs"
-                      >
-                        Đọc
-                      </Button>
-                    )}
-
-                    <button
-                      onClick={() => setStoryToDelete(story)}
-                      className="p-2 rounded-xl text-main-muted hover:text-rose-500 hover:bg-rose-50 transition-colors min-h-[40px] min-w-[40px] flex items-center justify-center"
-                      title={vi.library.deleteButton}
-                      aria-label={vi.library.deleteButton}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <span className="text-[11px] text-main-muted font-bold">
-                    {story.pages?.length || 4} trang
-                  </span>
-                </div>
-              </Card>
-            );
-          })}
+          {/* Thin Wooden Shelf Line Accent */}
+          <div className="w-full h-3 bg-gradient-to-r from-[#D7A97E] via-[#F2D0A9] to-[#D7A97E] rounded-full shadow-xs border-b-2 border-[#B8875A]/60 -mt-2" />
         </div>
       )}
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={Boolean(storyToDelete)}
-        onClose={() => setStoryToDelete(null)}
-        title={vi.library.deleteConfirmTitle}
-        description={vi.library.deleteConfirmDesc}
-        maxWidth="sm"
-      >
-        <div className="pt-4 flex justify-end gap-2 border-t border-peach/30">
-          <Button variant="ghost" size="sm" onClick={() => setStoryToDelete(null)}>
-            {vi.library.cancelButton}
-          </Button>
-          <Button variant="danger" size="sm" onClick={handleDeleteConfirmed}>
-            {vi.library.deleteButton}
-          </Button>
-        </div>
-      </Modal>
     </div>
   );
 };
