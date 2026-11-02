@@ -238,7 +238,7 @@ export class StoryGenerationService {
       reviewed_at: null,
       share_token: generateUuid().substring(0, 16),
       is_shared: false,
-      prompt_version_id: 'p0000000-0000-0000-0000-000000000001',
+      prompt_version_id: 'f0000000-0000-0000-0000-000000000001',
       model: 'gemini-2.5-flash',
       next_drawing_ideas: [
         'Vẽ thêm một chú thỏ trắng đang ngắm cầu vồng',

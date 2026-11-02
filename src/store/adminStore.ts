@@ -132,7 +132,7 @@ QUY TẮC BẮT BUỘC:
 const INITIAL_AI_LOGS: AiLog[] = Array.from({ length: 25 }).map((_, i) => ({
   id: 'log-' + (i + 1),
   user_id: 'user-0000-0000-0000-000000000002',
-  story_id: 's0000001-0000-0000-0000-000000000001',
+  story_id: 'c0000001-0000-0000-0000-000000000001',
   action: 'generate_story_3_layers',
   model: 'gemini-2.5-flash',
   input_tokens: 850 + (i * 25),

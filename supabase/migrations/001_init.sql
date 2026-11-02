@@ -610,7 +610,7 @@ on conflict (id) do nothing;
 -- SYSTEM PROMPTS (v1.2 Active)
 insert into public.system_prompts (id, name, version, prompt_text, is_active, created_by, created_at)
 values (
-  'p0000000-0000-0000-0000-000000000001',
+  'f0000000-0000-0000-0000-000000000001',
   'Kể chuyện tranh thiếu nhi Việt Nam chuẩn mực v1.2',
   1,
   'Bạn là Bác Gấu Kể Chuyện - tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương và am hiểu tâm lý trẻ thơ.
@@ -631,16 +631,16 @@ on conflict (id) do nothing;
 -- 10 REALISTIC SAFETY RULES
 insert into public.safety_rules (id, category, description, severity, action, is_active, created_at)
 values
-  ('r0000001-0000-0000-0000-000000000001', 'Bạo lực & Vũ khí', 'Tranh vẽ hoặc văn bản chứa súng đạn, đao kiếm gây thương tích đẫm máu.', 5, 'block', true, now() - interval '30 days'),
-  ('r0000002-0000-0000-0000-000000000002', 'Nội dung người lớn', 'Mọi yếu tố không phù hợp với thuần phong mỹ tục lứa tuổi thiếu nhi.', 5, 'block', true, now() - interval '30 days'),
-  ('r0000003-0000-0000-0000-000000000003', 'Khuôn mặt người thật', 'Bảo vệ quyền riêng tư trẻ em: phát hiện ảnh chụp mặt thật thay vì tranh vẽ.', 5, 'block', true, now() - interval '30 days'),
-  ('r0000004-0000-0000-0000-000000000004', 'Thông tin cá nhân (PII)', 'Số điện thoại, địa chỉ nhà, tên trường học xuất hiện trên giấy vẽ.', 5, 'block', true, now() - interval '30 days'),
-  ('r0000005-0000-0000-0000-000000000005', 'Quái vật rùng rợn', 'Hình ảnh ma quỷ dị dạng gây ác mộng hoặc sang chấn tâm lý cho trẻ dưới 6 tuổi.', 4, 'flag', true, now() - interval '30 days'),
-  ('r0000006-0000-0000-0000-000000000006', 'Ngôn từ tiêu cực', 'Từ ngữ xúc phạm, chửi bậy, miệt thị bạn bè hoặc bắt nạt học đường.', 4, 'rewrite', true, now() - interval '30 days'),
-  ('r0000007-0000-0000-0000-000000000007', 'Hành vi nguy hiểm', 'Hành vi bắt chước nguy hại: nghịch diêm, sờ ổ điện, leo trèo ban công nguy hiểm.', 5, 'block', true, now() - interval '30 days'),
-  ('r0000008-0000-0000-0000-000000000008', 'Phân biệt đối xử', 'Phân biệt giàu nghèo, giới tính, màu da hoặc khuyết tật cơ thể.', 3, 'rewrite', true, now() - interval '30 days'),
-  ('r0000009-0000-0000-0000-000000000009', 'Bi kịch bế tắc', 'Cốt truyện tuyệt vọng, mất mát không lối thoát hoặc kết thúc đau thương.', 4, 'rewrite', true, now() - interval '30 days'),
-  ('r0000010-0000-0000-0000-000000000010', 'Xung đột gia đình gay gắt', 'Bạo lực gia đình, trẻ bỏ nhà ra đi hoặc thù ghét cha mẹ.', 4, 'flag', true, now() - interval '30 days')
+  ('e0000001-0000-0000-0000-000000000001', 'Bạo lực & Vũ khí', 'Tranh vẽ hoặc văn bản chứa súng đạn, đao kiếm gây thương tích đẫm máu.', 5, 'block', true, now() - interval '30 days'),
+  ('e0000002-0000-0000-0000-000000000002', 'Nội dung người lớn', 'Mọi yếu tố không phù hợp với thuần phong mỹ tục lứa tuổi thiếu nhi.', 5, 'block', true, now() - interval '30 days'),
+  ('e0000003-0000-0000-0000-000000000003', 'Khuôn mặt người thật', 'Bảo vệ quyền riêng tư trẻ em: phát hiện ảnh chụp mặt thật thay vì tranh vẽ.', 5, 'block', true, now() - interval '30 days'),
+  ('e0000004-0000-0000-0000-000000000004', 'Thông tin cá nhân (PII)', 'Số điện thoại, địa chỉ nhà, tên trường học xuất hiện trên giấy vẽ.', 5, 'block', true, now() - interval '30 days'),
+  ('e0000005-0000-0000-0000-000000000005', 'Quái vật rùng rợn', 'Hình ảnh ma quỷ dị dạng gây ác mộng hoặc sang chấn tâm lý cho trẻ dưới 6 tuổi.', 4, 'flag', true, now() - interval '30 days'),
+  ('e0000006-0000-0000-0000-000000000006', 'Ngôn từ tiêu cực', 'Từ ngữ xúc phạm, chửi bậy, miệt thị bạn bè hoặc bắt nạt học đường.', 4, 'rewrite', true, now() - interval '30 days'),
+  ('e0000007-0000-0000-0000-000000000007', 'Hành vi nguy hiểm', 'Hành vi bắt chước nguy hại: nghịch diêm, sờ ổ điện, leo trèo ban công nguy hiểm.', 5, 'block', true, now() - interval '30 days'),
+  ('e0000008-0000-0000-0000-000000000008', 'Phân biệt đối xử', 'Phân biệt giàu nghèo, giới tính, màu da hoặc khuyết tật cơ thể.', 3, 'rewrite', true, now() - interval '30 days'),
+  ('e0000009-0000-0000-0000-000000000009', 'Bi kịch bế tắc', 'Cốt truyện tuyệt vọng, mất mát không lối thoát hoặc kết thúc đau thương.', 4, 'rewrite', true, now() - interval '30 days'),
+  ('e0000010-0000-0000-0000-000000000010', 'Xung đột gia đình gay gắt', 'Bạo lực gia đình, trẻ bỏ nhà ra đi hoặc thù ghét cha mẹ.', 4, 'flag', true, now() - interval '30 days')
 on conflict (id) do nothing;
 
 -- GAMIFICATION BADGES
@@ -675,7 +675,7 @@ insert into public.stories (
   id, child_id, drawing_id, title, summary, moral, status, risk_score, faithfulness_score, generation_stage,
   risk_reasons, share_token, is_shared, model, next_drawing_ideas, created_at
 ) values (
-  's0000001-0000-0000-0000-000000000001',
+  'c0000001-0000-0000-0000-000000000001',
   '11111111-1111-1111-1111-111111111111',
   'd0000001-0000-0000-0000-000000000001',
   'Chú Voi Hồng và Chiếc Cầu Vồng Biết Cười',
@@ -696,10 +696,10 @@ on conflict (id) do nothing;
 
 insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, grounded_objects, created_at)
 values
-  ('s0000001-0000-0000-0000-000000000001', 1, 'Trên ngọn đồi cỏ xanh ngắt, có một chú voi con tên là Bông. Bông có đôi tai màu hồng phấn rất đặc biệt và chiếc vòi nhỏ lúc nào cũng lắc lư theo điệu nhạc của gió.', 'hân hoan', '{"x": 35, "y": 60, "zoom": 1.4}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 2, 'Một buổi chiều sau cơn mưa rào, bầu trời bỗng sáng bừng lên. Một dải cầu vồng bảy sắc lung linh vắt ngang qua sườn đồi, cong cong như nụ cười ngọt ngào của mẹ thiên nhiên.', 'ngạc nhiên', '{"x": 70, "y": 25, "zoom": 1.6}'::jsonb, '["cầu vồng", "đám mây"]'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 3, 'Voi Bông thích thú giơ cao chiếc vòi nhỏ, thổi những bong bóng nước lấp lánh bay lên. Từng hạt nước chạm vào cầu vồng liền hóa thành những nốt nhạc vui nhộn reo vang.', 'thích thú', '{"x": 50, "y": 50, "zoom": 1.8}'::jsonb, '["chú voi", "cầu vồng"]'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 4, 'Các bạn sóc nâu, thỏ trắng từ trong rừng cùng ùa ra nhảy múa. Bông nhận ra rằng, cảnh đẹp nhất không phải là ngắm nhìn một mình, mà là được cùng bạn bè cười thật giòn.', 'ấm áp', '{"x": 45, "y": 70, "zoom": 1.3}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days')
+  ('c0000001-0000-0000-0000-000000000001', 1, 'Trên ngọn đồi cỏ xanh ngắt, có một chú voi con tên là Bông. Bông có đôi tai màu hồng phấn rất đặc biệt và chiếc vòi nhỏ lúc nào cũng lắc lư theo điệu nhạc của gió.', 'hân hoan', '{"x": 35, "y": 60, "zoom": 1.4}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days'),
+  ('c0000001-0000-0000-0000-000000000001', 2, 'Một buổi chiều sau cơn mưa rào, bầu trời bỗng sáng bừng lên. Một dải cầu vồng bảy sắc lung linh vắt ngang qua sườn đồi, cong cong như nụ cười ngọt ngào của mẹ thiên nhiên.', 'ngạc nhiên', '{"x": 70, "y": 25, "zoom": 1.6}'::jsonb, '["cầu vồng", "đám mây"]'::jsonb, now() - interval '5 days'),
+  ('c0000001-0000-0000-0000-000000000001', 3, 'Voi Bông thích thú giơ cao chiếc vòi nhỏ, thổi những bong bóng nước lấp lánh bay lên. Từng hạt nước chạm vào cầu vồng liền hóa thành những nốt nhạc vui nhộn reo vang.', 'thích thú', '{"x": 50, "y": 50, "zoom": 1.8}'::jsonb, '["chú voi", "cầu vồng"]'::jsonb, now() - interval '5 days'),
+  ('c0000001-0000-0000-0000-000000000001', 4, 'Các bạn sóc nâu, thỏ trắng từ trong rừng cùng ùa ra nhảy múa. Bông nhận ra rằng, cảnh đẹp nhất không phải là ngắm nhìn một mình, mà là được cùng bạn bè cười thật giòn.', 'ấm áp', '{"x": 45, "y": 70, "zoom": 1.3}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days')
 on conflict (story_id, page_number) do nothing;
 
 -- Story 2: Bí Mật Dưới Bóng Rừng Già (Pending Review Queue Item)
@@ -717,7 +717,7 @@ insert into public.stories (
   id, child_id, drawing_id, title, summary, moral, status, risk_score, faithfulness_score, generation_stage,
   risk_reasons, share_token, is_shared, model, next_drawing_ideas, created_at
 ) values (
-  's0000002-0000-0000-0000-000000000002',
+  'c0000002-0000-0000-0000-000000000002',
   '22222222-2222-2222-2222-222222222222',
   'd0000002-0000-0000-0000-000000000002',
   'Bí Mật Dưới Bóng Rừng Già',
@@ -738,10 +738,10 @@ on conflict (id) do nothing;
 
 insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, grounded_objects, created_at)
 values
-  ('s0000002-0000-0000-0000-000000000002', 1, 'Hôm ấy, bạn Sóc Nâu mải mê nhặt những hạt dẻ vàng óng trong khu rừng già. Càng đi sâu, ánh mặt trời càng mờ dần sau những tán lá rậm rạp.', 'hồi hộp', '{"x": 20, "y": 30, "zoom": 1.3}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 2, 'Bỗng nhiên, một cái bóng to sừng sững xuất hiện phía sau gốc cây cổ thụ. Đôi mắt to tròn chớp chớp trong màn đêm yên tĩnh khiến Sóc Nâu giật mình nép vào bụi cỏ.', 'lo lắng', '{"x": 60, "y": 45, "zoom": 1.7}'::jsonb, '["bóng dáng to lớn"]'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 3, 'Nhưng kìa! Bàn tay to lớn chìa ra, không phải để dọa nạt, mà là nâng niu một chú chim non bị rơi khỏi tổ. Đó là Bác Khổng Lồ Rừng Xanh tốt bụng!', 'ngạc nhiên', '{"x": 50, "y": 70, "zoom": 1.5}'::jsonb, '["Bóng Khổng Lồ"]'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 4, 'Sóc Nâu thở phào mỉm cười. Cả hai cùng đưa chú chim về tổ ấm. Khu rừng bỗng chốc trở nên ấm áp và ngập tràn tình yêu thương.', 'vui sướng', '{"x": 40, "y": 50, "zoom": 1.2}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours')
+  ('c0000002-0000-0000-0000-000000000002', 1, 'Hôm ấy, bạn Sóc Nâu mải mê nhặt những hạt dẻ vàng óng trong khu rừng già. Càng đi sâu, ánh mặt trời càng mờ dần sau những tán lá rậm rạp.', 'hồi hộp', '{"x": 20, "y": 30, "zoom": 1.3}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours'),
+  ('c0000002-0000-0000-0000-000000000002', 2, 'Bỗng nhiên, một cái bóng to sừng sững xuất hiện phía sau gốc cây cổ thụ. Đôi mắt to tròn chớp chớp trong màn đêm yên tĩnh khiến Sóc Nâu giật mình nép vào bụi cỏ.', 'lo lắng', '{"x": 60, "y": 45, "zoom": 1.7}'::jsonb, '["bóng dáng to lớn"]'::jsonb, now() - interval '2 hours'),
+  ('c0000002-0000-0000-0000-000000000002', 3, 'Nhưng kìa! Bàn tay to lớn chìa ra, không phải để dọa nạt, mà là nâng niu một chú chim non bị rơi khỏi tổ. Đó là Bác Khổng Lồ Rừng Xanh tốt bụng!', 'ngạc nhiên', '{"x": 50, "y": 70, "zoom": 1.5}'::jsonb, '["Bóng Khổng Lồ"]'::jsonb, now() - interval '2 hours'),
+  ('c0000002-0000-0000-0000-000000000002', 4, 'Sóc Nâu thở phào mỉm cười. Cả hai cùng đưa chú chim về tổ ấm. Khu rừng bỗng chốc trở nên ấm áp và ngập tràn tình yêu thương.', 'vui sướng', '{"x": 40, "y": 50, "zoom": 1.2}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours')
 on conflict (story_id, page_number) do nothing;
 
 -- 30-DAY HISTORICAL DATA FOR CHARTS

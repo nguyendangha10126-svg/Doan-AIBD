@@ -27,7 +27,7 @@ export interface StoryState {
 // Initial demo seed stories for immediate local display
 const INITIAL_DEMO_STORIES: Story[] = [
   {
-    id: 's0000001-0000-0000-0000-000000000001',
+    id: 'c0000001-0000-0000-0000-000000000001',
     child_id: 'child-0001',
     drawing_id: 'd0000001-0000-0000-0000-000000000001',
     title: 'Chú Voi Hồng và Chiếc Cầu Vồng Biết Cười',
@@ -41,7 +41,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
     reviewed_at: null,
     share_token: 'voi-hong-cau-vong-share',
     is_shared: true,
-    prompt_version_id: 'p0000000-0000-0000-0000-000000000001',
+    prompt_version_id: 'f0000000-0000-0000-0000-000000000001',
     model: 'gemini-2.5-flash',
     next_drawing_ideas: [
       'Vẽ thêm bạn bướm vàng bay quanh tai voi',
@@ -71,7 +71,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
     pages: [
       {
         id: 'p1',
-        story_id: 's0000001-0000-0000-0000-000000000001',
+        story_id: 'c0000001-0000-0000-0000-000000000001',
         page_number: 1,
         text_content: 'Trên ngọn đồi cỏ xanh ngắt, có một chú voi con tên là Bông. Bông có đôi tai màu hồng phấn rất đặc biệt và chiếc vòi nhỏ lúc nào cũng lắc lư theo điệu nhạc của gió.',
         emotion: 'hân hoan',
@@ -80,7 +80,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p2',
-        story_id: 's0000001-0000-0000-0000-000000000001',
+        story_id: 'c0000001-0000-0000-0000-000000000001',
         page_number: 2,
         text_content: 'Một buổi chiều sau cơn mưa rào, bầu trời bỗng sáng bừng lên. Một dải cầu vồng bảy sắc lung linh vắt ngang qua sườn đồi, cong cong như nụ cười ngọt ngào của mẹ thiên nhiên.',
         emotion: 'ngạc nhiên',
@@ -89,7 +89,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p3',
-        story_id: 's0000001-0000-0000-0000-000000000001',
+        story_id: 'c0000001-0000-0000-0000-000000000001',
         page_number: 3,
         text_content: 'Voi Bông thích thú giơ cao chiếc vòi nhỏ, thổi những bong bóng nước lấp lánh bay lên. Từng hạt nước chạm vào cầu vồng liền hóa thành những nốt nhạc vui nhộn reo vang khắp sườn đồi.',
         emotion: 'thích thú',
@@ -98,7 +98,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p4',
-        story_id: 's0000001-0000-0000-0000-000000000001',
+        story_id: 'c0000001-0000-0000-0000-000000000001',
         page_number: 4,
         text_content: 'Các bạn sóc nâu, thỏ trắng từ trong rừng cùng ùa ra nhảy múa. Bông nhận ra rằng, cảnh đẹp nhất không phải là ngắm nhìn một mình, mà là được cùng bạn bè cười thật giòn.',
         emotion: 'ấm áp',
@@ -108,7 +108,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
     ],
   },
   {
-    id: 's0000002-0000-0000-0000-000000000002',
+    id: 'c0000002-0000-0000-0000-000000000002',
     child_id: 'child-0002',
     drawing_id: 'd0000002-0000-0000-0000-000000000002',
     title: 'Bí Mật Dưới Bóng Rừng Già',
@@ -128,7 +128,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
     reviewed_at: null,
     share_token: 'soc-nau-bong-rung-share',
     is_shared: false,
-    prompt_version_id: 'p0000000-0000-0000-0000-000000000001',
+    prompt_version_id: 'f0000000-0000-0000-0000-000000000001',
     model: 'gemini-2.5-flash',
     next_drawing_ideas: [
       'Vẽ thêm chiếc đèn pin tỏa ánh sáng vàng',
@@ -158,7 +158,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
     pages: [
       {
         id: 'p5',
-        story_id: 's0000002-0000-0000-0000-000000000002',
+        story_id: 'c0000002-0000-0000-0000-000000000002',
         page_number: 1,
         text_content: 'Hôm ấy, bạn Sóc Nâu mải mê nhặt những hạt dẻ vàng óng trong khu rừng già. Càng đi sâu, ánh mặt trời càng mờ dần sau những tán lá rậm rạp.',
         emotion: 'hồi hộp',
@@ -167,7 +167,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p6',
-        story_id: 's0000002-0000-0000-0000-000000000002',
+        story_id: 'c0000002-0000-0000-0000-000000000002',
         page_number: 2,
         text_content: 'Bỗng nhiên, một cái bóng to sừng sững xuất hiện phía sau gốc cây cổ thụ. Đôi mắt to tròn chớp chớp trong màn đêm khiến Sóc Nâu giật mình nép vào bụi cỏ.',
         emotion: 'lo lắng',
@@ -176,7 +176,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p7',
-        story_id: 's0000002-0000-0000-0000-000000000002',
+        story_id: 'c0000002-0000-0000-0000-000000000002',
         page_number: 3,
         text_content: 'Nhưng kìa! Bàn tay to lớn chìa ra, không phải để dọa nạt, mà là nâng niu một chú chim non bị rơi khỏi tổ. Đó là Bác Khổng Lồ Rừng Xanh tốt bụng!',
         emotion: 'ngạc nhiên',
@@ -185,7 +185,7 @@ const INITIAL_DEMO_STORIES: Story[] = [
       },
       {
         id: 'p8',
-        story_id: 's0000002-0000-0000-0000-000000000002',
+        story_id: 'c0000002-0000-0000-0000-000000000002',
         page_number: 4,
         text_content: 'Sóc Nâu thở phào mỉm cười. Cả hai cùng đưa chú chim về tổ ấm. Khu rừng bỗng chốc trở nên ấm áp và ngập tràn tình yêu thương muôn loài.',
         emotion: 'vui sướng',
