@@ -159,13 +159,12 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
    - `VITE_USE_MOCK`: `false` (hoặc `true` nếu muốn chạy chế độ demo).
 
 ### 2. Triển khai Backend lên Supabase
-1. Tạo một Project mới trên [Supabase Dashboard](https://supabase.com).
-2. Vào mục **SQL Editor** và chạy lần lượt các file script trong thư mục `supabase/`:
-   - `supabase/migrations/001_init.sql`: Tạo 13 bảng dữ liệu, Enums, hàm `is_admin()` Security Definer và chính sách RLS.
-   - `supabase/migrations/002_pipeline_ai_fixes.sql`: Cập nhật schema Lớp 1 phân loại tranh, `faithfulness_score`, `grounded_objects`, `strict_drawing_check`.
-   - `supabase/seed.sql`: Khởi tạo dữ liệu mẫu, bộ 10 quy tắc an toàn thiếu nhi, phiên bản prompt hệ thống.
-3. Tạo Storage Bucket `drawings` đặt quyền Private.
-4. Triển khai Supabase Edge Functions:
+1. Mở Project trên [Supabase Dashboard](https://supabase.com).
+2. Vào mục **SQL Editor** $\rightarrow$ chọn **New Query** và dán toàn bộ nội dung file tiện ích gom sẵn:
+   - `supabase/full_setup.sql`: Chứa trọn gói cấu trúc bảng, enum, hàm `is_admin()`, chính sách RLS, storage bucket `drawings`, các chỉ số Lớp 1-2-3 và toàn bộ dữ liệu mẫu (10 quy tắc an toàn, badge, prompt hệ thống v1.2, tài khoản demo).
+   - *(Hoặc có thể chạy riêng lẻ theo thứ tự: `supabase/migrations/001_init.sql` $\rightarrow$ `supabase/migrations/002_pipeline_ai_fixes.sql` $\rightarrow$ `supabase/seed.sql`)*.
+3. Bấm **Run** để khởi tạo database và dữ liệu mẫu trong 1 thao tác.
+4. Triển khai Supabase Edge Functions (nếu cần xử lý Gemini trên serverless Deno):
    ```bash
    # Cấu hình Secret Gemini API Key trên Supabase
    supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here

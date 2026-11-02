@@ -23,7 +23,8 @@ insert into public.app_settings (key, value) values
   ('moderation_mode', 'auto'),
   ('auto_approve_max_risk', '25'),
   ('daily_story_limit', '5'),
-  ('monthly_budget_usd', '50.00');
+  ('monthly_budget_usd', '50.00'),
+  ('strict_drawing_check', 'true');
 
 -- 3. PROFILES (1 Admin + 2 Demo Parents)
 -- Note: id uuid format

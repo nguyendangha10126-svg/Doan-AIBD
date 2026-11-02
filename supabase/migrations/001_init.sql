@@ -85,6 +85,8 @@ create table public.stories (
     status in ('generating', 'auto_approved', 'pending_review', 'approved', 'rejected', 'failed')
   ),
   risk_score integer not null default 0 check (risk_score between 0 and 100),
+  faithfulness_score integer not null default 100 check (faithfulness_score between 0 and 100),
+  generation_stage text not null default 'done',
   risk_reasons jsonb not null default '[]'::jsonb,
   rejection_reason text,
   reviewed_by uuid references public.profiles(id) on delete set null,
@@ -111,6 +113,7 @@ create table public.story_pages (
   text_content text not null,
   emotion text not null default 'vui vẻ',
   focus_region jsonb not null default '{"x": 50, "y": 50, "zoom": 1.2}'::jsonb,
+  grounded_objects jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   unique (story_id, page_number)
 );

@@ -1,5 +1,5 @@
 import { Story, StoryPage, GenerationStage } from '@/types/database';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { generateUuid } from '@/lib/utils';
 
 export interface GenerateStoryParams {
@@ -125,7 +125,7 @@ export class StoryGenerationService {
       // 2. Call Edge Function
       const { data: sessionData } = await supabase.auth.getSession();
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-story`,
+        `${supabaseUrl}/functions/v1/generate-story`,
         {
           method: 'POST',
           headers: {

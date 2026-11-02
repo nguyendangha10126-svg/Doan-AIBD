@@ -26,4 +26,6 @@ dist-ssr
 # Environment files
 .env
 .env.production
+supabase/functions/.env
+supabase/.temp/
 image.png
