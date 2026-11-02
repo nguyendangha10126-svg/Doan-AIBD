@@ -2,7 +2,8 @@
 ### Nền Tảng Kể Chuyện Thiếu Nhi Thông Minh từ Tranh Bé Vẽ
 **Đồ án môn học:** Lập trình Ứng dụng Trí tuệ Nhân tạo (*AI Based Programming*) — **Trường Đại học Phú Xuân**  
 **Giảng viên hướng dẫn:** Bộ môn Công nghệ Thông tin, Đại học Phú Xuân  
-**Công nghệ cốt lõi:** React 18, TypeScript (Strict), Vite, Tailwind CSS, Supabase (Postgres, Auth, Storage, Edge Functions), Google Gemini 2.5 Flash, Web Speech API.
+**Repository GitHub:** [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)  
+**Công nghệ cốt lõi:** React 18, TypeScript (Strict Mode), Vite, Tailwind CSS, Supabase (Postgres, Auth, Storage, Edge Functions), Google Gemini 2.5 Flash, Web Speech API, Web Audio API.
 
 ---
 
@@ -11,12 +12,24 @@
 **DrawToStory** là một ứng dụng web cao cấp biến những bức tranh vẽ ngây ngô của trẻ em (từ 2 đến 12 tuổi) thành những cuốn **sách tranh cổ tích 4-5 trang sống động, có giọng đọc truyền cảm, lật trang chân thực (react-pageflip) và hiệu ứng lia máy hoạt hình (Ken Burns effect)**.
 
 Ứng dụng được thiết kế theo triết lý **Modern Storybook** và **Responsible AI**:
-1. **Thiết kế Modern Storybook**: Nền kem ấm áp có nhiễu giấy siêu nhẹ (`3.5%`), không có tấm đế be dày, tranh của bé luôn là nhân vật chính đặt trong khung polaroid mềm mại, phông chữ `Baloo 2` chuẩn tiếng Việt và hệ thống màu sắc đạt chuẩn WCAG 2.1 AA.
+1. **Thiết kế Modern Storybook**: Nền kem ấm áp có nhiễu giấy siêu nhẹ (`3.5%`), loại bỏ hoàn toàn các tấm đế be dày, tranh của bé luôn là nhân vật chính đặt trong khung polaroid mềm mại, phông chữ `Baloo 2` chuẩn tiếng Việt và hệ thống màu sắc đạt chuẩn WCAG 2.1 AA (19/19 token pairs pass).
 2. **AI là trái tim của hệ thống**: Vận hành **Pipeline 3 Lớp chuyên sâu** kết hợp thị giác máy tính, phân loại tranh vẽ nghiêm ngặt (`child_drawing`), bám sát vật thể tranh (`grounded_objects`) và chấm điểm trung thực (`faithfulness_score`).
 3. **An toàn thiếu nhi tuyệt đối**: Tự động từ chối ảnh có mặt người thật, ảnh chụp đời thường, logo đồ họa hoặc ảnh chụp màn hình văn bản với mã lỗi thân thiện `NOT_A_DRAWING`.
-4. **Chế độ Bé cô lập (Kid Mode)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, nút chạm lớn $\ge 72px$, âm thanh vui nhộn (Web Audio API) và cổng phụ huynh bảo mật (giữ 2 giây, đố toán hoặc mã PIN).
+4. **Chế độ Bé cô lập (Kid Mode)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, nút chạm lớn $\ge 72px$, âm thanh vui nhộn (Web Audio API) và cổng phụ huynh bảo mật (giữ 2 giây, đố toán hoặc mã PIN băm SHA-256).
 5. **Trình đọc sách hoàn hảo (Reading View)**: Đọc từng câu với highlight karaoke, sách lật 2 trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ hiển thị `object-fit: contain` không bao giờ bị cắt mất viền, chế độ ru ngủ dịu mắt.
 6. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Moderation Queue với Split View và phím tắt `A`/`R`), bật tắt kiểm tra tranh vẽ nghiêm ngặt, quản lý bộ quy tắc an toàn động và giám sát chi phí token thời gian thực.
+
+---
+
+## 📚 HỆ THỐNG TÀI LIỆU DỰ ÁN (DOCUMENTATION INDEX)
+
+Mọi khía cạnh kỹ thuật, nghiệp vụ và kiểm thử của đồ án được biên soạn chi tiết trong các tệp tài liệu:
+- [01-NGHIEP-VU.md](docs/01-NGHIEP-VU.md): Nghiệp vụ sản phẩm, chân dung người dùng (Personas), ma trận phân quyền RBAC, biểu đồ tuần tự tạo truyện và bộ 10 quy tắc an toàn thiếu nhi.
+- [02-GIAO-DIEN-AI.md](docs/02-GIAO-DIEN-AI.md): Kiến trúc chuyên sâu Pipeline AI 3 lớp (Phân loại ảnh, Visual Grounding, Faithfulness scoring & Judge), danh mục 6 test fixtures.
+- [03-KY-THUAT-FRONTEND.md](docs/03-KY-THUAT-FRONTEND.md): Ngôn ngữ thiết kế Modern Storybook, tokens màu đạt chuẩn WCAG 2.1 AA, thư viện UI Primitives, Focus Routes, thuật toán Canvas kiểm tra ảnh (Laplacian & Luminance), trình đọc sách và Kid Mode.
+- [04-KY-THUAT-ADMIN.md](docs/04-KY-THUAT-ADMIN.md): Cổng điều hành Quản trị viên, hàng đợi kiểm duyệt trực quan (Split View, phím tắt A/R), công tắc Strict Drawing Check, hàm bảo mật Postgres `is_admin()` và RLS.
+- [ASSUMPTIONS.md](docs/ASSUMPTIONS.md): Toàn bộ giả định kỹ thuật, kích thước màn hình mục tiêu (1440px Desktop & 390px Mobile), bảng giá token Gemini, Web Speech API và quyền riêng tư thiếu nhi.
+- [AI-DECLARATION.md](AI-DECLARATION.md): Bản tuyên ngôn sử dụng Trí Tuệ Nhân Tạo theo quy chuẩn học thuật của Trường Đại học Phú Xuân, nhật ký tương tác qua 7 Phase và các can thiệp kỹ thuật then chốt từ con người.
 
 ---
 
@@ -105,9 +118,11 @@ npm install
 ### 3. Cấu Hình Biến Môi Trường (`.env`)
 Tạo file `.env` từ `.env.example`:
 ```env
+# Đặt VITE_USE_MOCK=true để trải nghiệm ngay lập tức với dữ liệu mẫu (Offline/Demo Mode)
+# Đặt VITE_USE_MOCK=false và điền URL/Key Supabase thật để kết nối Cloud
+VITE_USE_MOCK=true
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_USE_MOCK=false
 ```
 > **Lưu ý về Mock Data**: Ứng dụng kết nối trực tiếp với cơ sở dữ liệu Supabase thật. Nếu bật `VITE_USE_MOCK=true`, hệ thống sẽ hiển thị biểu ngữ dính cố định **"DỮ LIỆU DEMO"** trên cùng màn hình theo đúng quy chuẩn nghiệm thu.
 
@@ -116,8 +131,8 @@ VITE_USE_MOCK=false
 | Lệnh | Mục đích |
 | :--- | :--- |
 | `npm run test:pipeline` | Chạy bộ kiểm thử tự động 6 fixtures phân loại tranh vẽ và kiểm tra toggle cài đặt |
-| `npm run typecheck` | Kiểm tra toàn bộ mã nguồn TypeScript Strict (`tsc --noEmit`) |
-| `npm run lint` | Chạy ESLint kiểm tra cú pháp và quy chuẩn mã nguồn |
+| `npm run typecheck` | Kiểm tra toàn bộ mã nguồn TypeScript Strict (`tsc --noEmit`, 0 lỗi) |
+| `npm run lint` | Chạy ESLint kiểm tra cú pháp và quy chuẩn mã nguồn toàn bộ repo (0 warnings) |
 | `npm run build` | Tự động kiểm tra độ tương phản WCAG 2.1 AA (19 cặp màu), typecheck và đóng gói Vite |
 | `npm run dev` | Khởi chạy máy chủ phát triển tại `http://localhost:5173` |
 
@@ -125,3 +140,38 @@ VITE_USE_MOCK=false
 - **Styleguide Tokens & Components**: Truy cập route `/dev/styleguide` để xem toàn bộ tokens màu, nút, thẻ, badge, modal, input, bottom sheet và empty states.
 - **Tài khoản Phụ huynh Demo**: `me@phuhuynh.vn` (Mật khẩu: bất kỳ $\ge 6$ ký tự, PIN mặc định: `1234`).
 - **Tài khoản Quản trị viên (Admin)**: `admin@drawtostory.vn` (Toàn quyền truy cập Cổng Admin `/admin`).
+
+---
+
+## 🚀 HƯỚNG DẪN TRIỂN KHAI CLOUD (VERCEL & SUPABASE)
+
+### 1. Triển khai Frontend lên Vercel
+1. Đẩy mã nguồn lên GitHub repository: `https://github.com/nguyendangha10126-svg/Doan-AIBD.git`.
+2. Truy cập [Vercel Dashboard](https://vercel.com) $\rightarrow$ chọn **Add New Project** $\rightarrow$ chọn repo `Doan-AIBD`.
+3. Cấu hình Build:
+   - **Framework Preset**: `Vite`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Install Command**: `npm install`
+4. Cấu hình Environment Variables trên Vercel:
+   - `VITE_SUPABASE_URL`: URL project Supabase của bạn.
+   - `VITE_SUPABASE_ANON_KEY`: Anon Public Key Supabase của bạn.
+   - `VITE_USE_MOCK`: `false` (hoặc `true` nếu muốn chạy chế độ demo).
+
+### 2. Triển khai Backend lên Supabase
+1. Tạo một Project mới trên [Supabase Dashboard](https://supabase.com).
+2. Vào mục **SQL Editor** và chạy lần lượt các file script trong thư mục `supabase/`:
+   - `supabase/migrations/001_init.sql`: Tạo 13 bảng dữ liệu, Enums, hàm `is_admin()` Security Definer và chính sách RLS.
+   - `supabase/migrations/002_pipeline_ai_fixes.sql`: Cập nhật schema Lớp 1 phân loại tranh, `faithfulness_score`, `grounded_objects`, `strict_drawing_check`.
+   - `supabase/seed.sql`: Khởi tạo dữ liệu mẫu, bộ 10 quy tắc an toàn thiếu nhi, phiên bản prompt hệ thống.
+3. Tạo Storage Bucket `drawings` đặt quyền Private.
+4. Triển khai Supabase Edge Functions:
+   ```bash
+   # Cấu hình Secret Gemini API Key trên Supabase
+   supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
+
+   # Triển khai các hàm xử lý
+   supabase functions deploy generate-story
+   supabase functions deploy admin-test-prompt
+   supabase functions deploy get-shared-story
+   ```

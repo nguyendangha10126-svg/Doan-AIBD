@@ -1,6 +1,7 @@
 # BÁO CÁO KỸ THUẬT QUẢN TRỊ & HỆ THỐNG KIỂM DUYỆT (04-KY-THUAT-ADMIN.md)
 **Dự án: DrawToStory - Hệ thống Kể Chuyện Thiếu Nhi Thông Minh từ Tranh Bé Vẽ**  
-*Môn học: AI Based Programming - Trường Đại học Phú Xuân*
+*Môn học: AI Based Programming - Trường Đại học Phú Xuân*  
+*Repository:* [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)
 
 ---
 
@@ -64,3 +65,12 @@ $$;
 
 ### 4.2. Cơ Chế Row Level Security (RLS) Toàn Diện
 Tất cả 13 bảng trong hệ thống đều kích hoạt RLS (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`). Người dùng thông thường chỉ thao tác trên dữ liệu của chính mình, hoàn toàn không thể tự ý nâng quyền hay duyệt truyện khi chưa qua Admin.
+
+---
+
+## 5. CÁC TÍNH NĂNG ADMIN MỞ RỘNG
+- **Quy Tắc An Toàn (Safety Rules CRUD)**: 10 quy tắc thực tế (Mức độ 1-5, hành vi block/flag/rewrite) với công tắc bật/tắt tức thì.
+- **System Prompt Studio**: Quản lý phiên bản prompt, so sánh diff trực quan và thử nghiệm trên tranh mẫu.
+- **Chi Phí & Nhật Ký AI (Ai Logs)**: Tra cứu chi tiết từng token, độ trễ và xuất báo cáo CSV.
+- **Quản Lý Người Dùng**: Khóa/mở khóa tài khoản, điều chỉnh hạn mức quota theo ngày của từng tài khoản.
+- **Nhật Ký Kiểm Toán (Audit Logs)**: Ghi nhận mọi thay đổi của Admin để phục vụ hậu kiểm.

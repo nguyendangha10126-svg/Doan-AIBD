@@ -1,6 +1,7 @@
 # BÁO CÁO KỸ THUẬT FRONTEND & TRẢI NGHIỆM NGƯỜI DÙNG (03-KY-THUAT-FRONTEND.md)
 **Dự án: DrawToStory - Hệ thống Kể Chuyện Thiếu Nhi Thông Minh từ Tranh Bé Vẽ**  
-*Môn học: AI Based Programming - Trường Đại học Phú Xuân*
+*Môn học: AI Based Programming - Trường Đại học Phú Xuân*  
+*Repository:* [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)
 
 ---
 
@@ -49,6 +50,8 @@ Toàn bộ hệ thống tokens được định nghĩa tập trung trong `tailwi
    - Không lưu trữ hoặc hiển thị PIN dạng văn bản rõ `••••`.
    - Băm mật mã bằng SHA-256 (`fastHashPin`).
    - Giao diện 4 ô số OTP mượt mà, tự động chuyển ô và xác minh khi đổi mã.
+4. **Styleguide Route (`/dev/styleguide`)**:
+   - Màn hình dev tập trung trực quan hóa toàn bộ token bảng màu, biến thể nút, thẻ card, badges, modals, empty states và tabs để duyệt nhanh thiết kế.
 
 ---
 

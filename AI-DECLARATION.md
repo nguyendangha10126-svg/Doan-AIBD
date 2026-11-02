@@ -1,7 +1,8 @@
 # BẢN TUYÊN BỐ SỬ DỤNG TRÍ TUỆ NHÂN TẠO (AI-DECLARATION.md)
 **Dự án: DrawToStory - Nền tảng Kể Chuyện Thiếu Nhi Thông Minh từ Tranh Bé Vẽ**  
 *Đồ án học phần: AI Based Programming (Lập trình ứng dụng Trí tuệ Nhân tạo)*  
-*Đơn vị đào tạo: Trường Đại học Phú Xuân*
+*Đơn vị đào tạo: Trường Đại học Phú Xuân*  
+*Repository:* [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)
 
 ---
 
@@ -26,6 +27,7 @@ Tôi/Nhóm tác giả cam kết:
 | **Phase 4**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Sửa triệt để pipeline AI (phân loại tranh vẽ, visual grounding, faithfulness score), tạo bộ 6 fixtures kiểm thử, kiểm tra ảnh phía client. | `safety.ts`, `generate-story/index.ts`, `tests/fixtures/`, `scripts/test-pipeline.js`, `CreateStoryPage.tsx`. | Cài đặt thuật toán Laplacian variance ($>45$) và Mean luminance ($\ge 65$) trực tiếp trên Canvas client; trả về lỗi thân thiện `NOT_A_DRAWING`. |
 | **Phase 5**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Trình đọc sách lật 2 trang `react-pageflip` (desktop) và swipe (mobile), chống cắt tranh (`object-fit: contain`), TTS karaoke, chế độ bé cô lập. | `StoryReadingPage.tsx`, `KidModePage.tsx`, `soundEffects` (Web Audio API). | Giới hạn Ken Burns zoom tối đa 1.35x và kẹp an toàn tọa độ tâm; bẫy lịch sử duyệt web `popstate` và khóa cổng phụ huynh 2 giây. |
 | **Phase 6**<br/>20/10/2026 | Puppeteer Headless | Node.js Automation | Nâng cấp trang Quản trị kiểm duyệt (Split View, phím tắt A/R, toggle strict drawing check), chụp 18 ảnh "SAU", cập nhật toàn bộ tài liệu. | `ModerationQueuePage.tsx`, `ModerationSettingsPage.tsx`, 18 ảnh trong `docs/screenshots/after/`, bộ docs. | Kiểm tra toàn bộ quy trình build (`check-contrast` + `typecheck` + `vite build`), đảm bảo 0 lỗi TypeScript và 0 `any`. |
+| **Phase 7**<br/>31/10 - 02/11/2026 | Antigravity Agent | Gemini 2.5 Pro | Khắc phục triệt để các cảnh báo VS Code: giải quyết cảnh báo `baseUrl` deprecated trong TS 5.8+, chuẩn hóa ESLint trên toàn bộ thư mục scripts và đẩy mã nguồn lên GitHub. | `tsconfig.json`, `eslint.config.js`, `scripts/test-pipeline.js`, GitHub repository setup. | Tinh chỉnh `paths` trong tsconfig không cần `baseUrl`, cấu hình Node.js environment globals trong ESLint Flat config, bảo đảm 100% không còn gạch đỏ trong IDE. |
 
 ---
 
@@ -41,6 +43,8 @@ Trong quá trình đồng hành cùng AI Agent, lập trình viên đã phát hi
    - Phát hiện mã PIN phụ huynh ban đầu được lưu và hiển thị dưới dạng văn bản rõ `••••`, lập trình viên đã thay thế bằng hàm băm mật mã SHA-256 đồng bộ và thiết kế modal nhập 4 ô số OTP riêng biệt.
 4. **Trải Nghiệm Đọc Sách Không Cắt Hình & Chế Độ Bé An Toàn**:
    - Sử dụng thuộc tính `object-fit: contain` trong khung giấy polaroid, kẹp tọa độ tâm và giới hạn Ken Burns zoom ở mức tối đa 1.35x để giữ trọn vẹn từng nét vẽ của trẻ. Thiết lập bẫy lịch sử duyệt web để trẻ không thể tự ý thoát ra ngoài màn hình quản trị của phụ huynh.
+5. **Tiêu Chuẩn Mã Nguồn Tuyệt Đối Sạch (Zero Warnings / Zero Errors)**:
+   - Rà soát toàn bộ cấu hình `eslint.config.js` để bao quát cả mã client (`src/`) và các script tự động hóa (`scripts/`), bảo đảm khi mở bất kỳ tệp tin nào trong IDE đều không xuất hiện cảnh báo hay gạch đỏ.
 
 ---
 
