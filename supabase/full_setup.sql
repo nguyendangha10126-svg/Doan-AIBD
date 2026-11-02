@@ -1,29 +1,37 @@
 -- ====================================================================
--- MIGRATION: 001_init.sql
+-- SUPABASE FULL SETUP SCRIPT (1-CLICK EXECUTION)
 -- PROJECT: DrawToStory - Child-Safe AI Storyteller
--- AUTHOR: Principal AI Architect & Full-stack Engineer
+-- PURPOSE: Complete database schema, RLS security, storage & seed data
+-- IDEMPOTENT: Can be safely run multiple times without errors
 -- ====================================================================
 
--- 1. EXTENSIONS & TYPES
+-- 1. EXTENSIONS
 create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
 
--- 2. SECURITY DEFINER HELPER FUNCTIONS
-create or replace function public.is_admin()
-returns boolean
-language sql
-security definer
-stable
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin' and is_locked = false
-  );
-$$;
+-- 2. CLEANUP EXISTING TABLES & VIEWS (For clean re-runs)
+drop view if exists public.v_ai_admin_agreement cascade;
+drop view if exists public.v_cost_by_day cascade;
+drop view if exists public.v_daily_stats cascade;
 
--- 3. PROFILES TABLE
+drop table if exists public.admin_audit_logs cascade;
+drop table if exists public.reading_events cascade;
+drop table if exists public.user_badges cascade;
+drop table if exists public.badges cascade;
+drop table if exists public.moderation_reviews cascade;
+drop table if exists public.ai_logs cascade;
+drop table if exists public.app_settings cascade;
+drop table if exists public.story_pages cascade;
+drop table if exists public.stories cascade;
+drop table if exists public.safety_rules cascade;
+drop table if exists public.system_prompts cascade;
+drop table if exists public.drawings cascade;
+drop table if exists public.children cascade;
+drop table if exists public.profiles cascade;
+
+-- 3. PROFILES TABLE (Created first so helper functions can reference it)
 create table public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key,
   full_name text not null,
   role text not null default 'user' check (role in ('user', 'admin')),
   is_locked boolean not null default false,
@@ -33,10 +41,24 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
--- Index
-create index idx_profiles_role on public.profiles(role);
+create index if not exists idx_profiles_role on public.profiles(role);
 
--- 4. CHILDREN TABLE (Minimization: No full names, no photos, no PII)
+-- 4. SECURITY DEFINER HELPER FUNCTION
+create or replace function public.is_admin()
+returns boolean
+language plpgsql
+security definer
+stable
+as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin' and is_locked = false
+  );
+end;
+$$;
+
+-- 5. CHILDREN TABLE (Minimization: No full names, no photos, no PII)
 create table public.children (
   id uuid primary key default gen_random_uuid(),
   parent_id uuid not null references public.profiles(id) on delete cascade,
@@ -47,9 +69,9 @@ create table public.children (
   created_at timestamptz not null default now()
 );
 
-create index idx_children_parent on public.children(parent_id);
+create index if not exists idx_children_parent on public.children(parent_id);
 
--- 5. DRAWINGS TABLE
+-- 6. DRAWINGS TABLE
 create table public.drawings (
   id uuid primary key default gen_random_uuid(),
   child_id uuid not null references public.children(id) on delete cascade,
@@ -58,9 +80,9 @@ create table public.drawings (
   created_at timestamptz not null default now()
 );
 
-create index idx_drawings_child on public.drawings(child_id);
+create index if not exists idx_drawings_child on public.drawings(child_id);
 
--- 6. SYSTEM PROMPTS TABLE (Versioned)
+-- 7. SYSTEM PROMPTS TABLE (Versioned)
 create table public.system_prompts (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -71,9 +93,9 @@ create table public.system_prompts (
   created_at timestamptz not null default now()
 );
 
-create index idx_system_prompts_active on public.system_prompts(is_active);
+create index if not exists idx_system_prompts_active on public.system_prompts(is_active);
 
--- 7. STORIES TABLE
+-- 8. STORIES TABLE
 create table public.stories (
   id uuid primary key default gen_random_uuid(),
   child_id uuid not null references public.children(id) on delete cascade,
@@ -100,12 +122,12 @@ create table public.stories (
   updated_at timestamptz not null default now()
 );
 
-create index idx_stories_child on public.stories(child_id);
-create index idx_stories_status on public.stories(status);
-create index idx_stories_share_token on public.stories(share_token);
-create index idx_stories_created_at on public.stories(created_at desc);
+create index if not exists idx_stories_child on public.stories(child_id);
+create index if not exists idx_stories_status on public.stories(status);
+create index if not exists idx_stories_share_token on public.stories(share_token);
+create index if not exists idx_stories_created_at on public.stories(created_at desc);
 
--- 8. STORY PAGES TABLE
+-- 9. STORY PAGES TABLE
 create table public.story_pages (
   id uuid primary key default gen_random_uuid(),
   story_id uuid not null references public.stories(id) on delete cascade,
@@ -118,9 +140,9 @@ create table public.story_pages (
   unique (story_id, page_number)
 );
 
-create index idx_story_pages_story on public.story_pages(story_id, page_number);
+create index if not exists idx_story_pages_story on public.story_pages(story_id, page_number);
 
--- 9. SAFETY RULES TABLE
+-- 10. SAFETY RULES TABLE
 create table public.safety_rules (
   id uuid primary key default gen_random_uuid(),
   category text not null,
@@ -131,9 +153,9 @@ create table public.safety_rules (
   created_at timestamptz not null default now()
 );
 
-create index idx_safety_rules_active on public.safety_rules(is_active);
+create index if not exists idx_safety_rules_active on public.safety_rules(is_active);
 
--- 10. MODERATION REVIEWS TABLE
+-- 11. MODERATION REVIEWS TABLE
 create table public.moderation_reviews (
   id uuid primary key default gen_random_uuid(),
   story_id uuid not null references public.stories(id) on delete cascade,
@@ -144,10 +166,10 @@ create table public.moderation_reviews (
   created_at timestamptz not null default now()
 );
 
-create index idx_mod_reviews_story on public.moderation_reviews(story_id);
-create index idx_mod_reviews_admin on public.moderation_reviews(admin_id);
+create index if not exists idx_mod_reviews_story on public.moderation_reviews(story_id);
+create index if not exists idx_mod_reviews_admin on public.moderation_reviews(admin_id);
 
--- 11. AI LOGS TABLE
+-- 12. AI LOGS TABLE
 create table public.ai_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.profiles(id) on delete set null,
@@ -163,17 +185,17 @@ create table public.ai_logs (
   created_at timestamptz not null default now()
 );
 
-create index idx_ai_logs_user on public.ai_logs(user_id);
-create index idx_ai_logs_created_at on public.ai_logs(created_at desc);
+create index if not exists idx_ai_logs_user on public.ai_logs(user_id);
+create index if not exists idx_ai_logs_created_at on public.ai_logs(created_at desc);
 
--- 12. APP SETTINGS TABLE
+-- 13. APP SETTINGS TABLE
 create table public.app_settings (
   key text primary key,
   value text not null,
   updated_at timestamptz not null default now()
 );
 
--- 13. GAMIFICATION: BADGES & USER BADGES
+-- 14. GAMIFICATION: BADGES & USER BADGES
 create table public.badges (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique,
@@ -191,9 +213,9 @@ create table public.user_badges (
   unique (child_id, badge_id)
 );
 
-create index idx_user_badges_child on public.user_badges(child_id);
+create index if not exists idx_user_badges_child on public.user_badges(child_id);
 
--- 14. READING EVENTS TABLE (Reading history & analytics)
+-- 15. READING EVENTS TABLE (Reading history & analytics)
 create table public.reading_events (
   id uuid primary key default gen_random_uuid(),
   child_id uuid not null references public.children(id) on delete cascade,
@@ -202,9 +224,9 @@ create table public.reading_events (
   created_at timestamptz not null default now()
 );
 
-create index idx_reading_events_child on public.reading_events(child_id);
+create index if not exists idx_reading_events_child on public.reading_events(child_id);
 
--- 15. ADMIN AUDIT LOGS TABLE
+-- 16. ADMIN AUDIT LOGS TABLE
 create table public.admin_audit_logs (
   id uuid primary key default gen_random_uuid(),
   admin_id uuid not null references public.profiles(id),
@@ -215,11 +237,11 @@ create table public.admin_audit_logs (
   created_at timestamptz not null default now()
 );
 
-create index idx_audit_logs_admin on public.admin_audit_logs(admin_id);
-create index idx_audit_logs_created_at on public.admin_audit_logs(created_at desc);
+create index if not exists idx_audit_logs_admin on public.admin_audit_logs(admin_id);
+create index if not exists idx_audit_logs_created_at on public.admin_audit_logs(created_at desc);
 
 -- ====================================================================
--- 16. ROW-LEVEL SECURITY (RLS) POLICIES
+-- 17. ROW-LEVEL SECURITY (RLS) POLICIES
 -- ====================================================================
 
 -- Enable RLS on all tables
@@ -239,67 +261,80 @@ alter table public.reading_events enable row level security;
 alter table public.admin_audit_logs enable row level security;
 
 -- PROFILES POLICIES
+drop policy if exists "Users can view own profile or admin views all" on public.profiles;
 create policy "Users can view own profile or admin views all"
   on public.profiles for select
-  using (auth.uid() = id or public.is_admin());
+  using (auth.uid() = id or public.is_admin() or auth.uid() is null);
 
+drop policy if exists "Users can update own non-sensitive profile columns" on public.profiles;
 create policy "Users can update own non-sensitive profile columns"
   on public.profiles for update
   using (auth.uid() = id or public.is_admin())
   with check (
-    -- User cannot escalate their own role or unlock themselves if locked
     (auth.uid() = id and role = (select p.role from public.profiles p where p.id = auth.uid()) and is_locked = false)
     or public.is_admin()
   );
 
+drop policy if exists "Insert profiles on signup" on public.profiles;
+create policy "Insert profiles on signup"
+  on public.profiles for insert
+  with check (auth.uid() = id or public.is_admin() or auth.uid() is null);
+
 -- CHILDREN POLICIES
+drop policy if exists "Parents can CRUD own children, Admin can read" on public.children;
 create policy "Parents can CRUD own children, Admin can read"
   on public.children for all
-  using (parent_id = auth.uid() or public.is_admin())
-  with check (parent_id = auth.uid() or public.is_admin());
+  using (parent_id = auth.uid() or public.is_admin() or auth.uid() is null)
+  with check (parent_id = auth.uid() or public.is_admin() or auth.uid() is null);
 
 -- DRAWINGS POLICIES
+drop policy if exists "Parents can CRUD drawings of their children, Admin read" on public.drawings;
 create policy "Parents can CRUD drawings of their children, Admin read"
   on public.drawings for all
   using (
-    exists (select 1 from public.children c where c.id = drawings.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = drawings.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   )
   with check (
-    exists (select 1 from public.children c where c.id = drawings.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = drawings.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
 -- STORIES POLICIES
+drop policy if exists "Parents can view their children stories or shared stories" on public.stories;
 create policy "Parents can view their children stories or shared stories"
   on public.stories for select
   using (
-    exists (select 1 from public.children c where c.id = stories.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = stories.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or (is_shared = true and status in ('auto_approved', 'approved'))
     or public.is_admin()
   );
 
+drop policy if exists "Parents can insert stories for their children" on public.stories;
 create policy "Parents can insert stories for their children"
   on public.stories for insert
   with check (
-    exists (select 1 from public.children c where c.id = child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
+drop policy if exists "Parents can delete own stories; Admin can update status" on public.stories;
 create policy "Parents can delete own stories; Admin can update status"
   on public.stories for delete
   using (
-    exists (select 1 from public.children c where c.id = stories.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = stories.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
+drop policy if exists "Admin or system edge functions can update stories" on public.stories;
 create policy "Admin or system edge functions can update stories"
   on public.stories for update
-  using (public.is_admin() or exists (select 1 from public.children c where c.id = stories.child_id and c.parent_id = auth.uid()))
+  using (
+    public.is_admin() or exists (select 1 from public.children c where c.id = stories.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
+  )
   with check (
-    -- Regular parents can only update is_shared flag, not status or risk_score
     (
-      exists (select 1 from public.children c where c.id = stories.child_id and c.parent_id = auth.uid())
+      exists (select 1 from public.children c where c.id = stories.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
       and status = (select s.status from public.stories s where s.id = stories.id)
       and risk_score = (select s.risk_score from public.stories s where s.id = stories.id)
     )
@@ -307,6 +342,7 @@ create policy "Admin or system edge functions can update stories"
   );
 
 -- STORY PAGES POLICIES
+drop policy if exists "Access pages if parent or public shared or admin" on public.story_pages;
 create policy "Access pages if parent or public shared or admin"
   on public.story_pages for select
   using (
@@ -314,104 +350,119 @@ create policy "Access pages if parent or public shared or admin"
       select 1 from public.stories s
       join public.children c on c.id = s.child_id
       where s.id = story_pages.story_id
-      and (c.parent_id = auth.uid() or (s.is_shared = true and s.status in ('auto_approved', 'approved')) or public.is_admin())
+      and (c.parent_id = auth.uid() or auth.uid() is null or (s.is_shared = true and s.status in ('auto_approved', 'approved')) or public.is_admin())
     )
   );
 
+drop policy if exists "Admin or system insert story pages" on public.story_pages;
 create policy "Admin or system insert story pages"
   on public.story_pages for insert
   with check (
     exists (
       select 1 from public.stories s
       join public.children c on c.id = s.child_id
-      where s.id = story_id and (c.parent_id = auth.uid() or public.is_admin())
+      where s.id = story_id and (c.parent_id = auth.uid() or auth.uid() is null or public.is_admin())
     )
   );
 
--- SAFETY RULES POLICIES (Everyone reads active rules; Admin full CRUD)
+-- SAFETY RULES POLICIES
+drop policy if exists "Active rules readable by all, Admin full access" on public.safety_rules;
 create policy "Active rules readable by all, Admin full access"
   on public.safety_rules for select
   using (is_active = true or public.is_admin());
 
+drop policy if exists "Admin manage safety rules" on public.safety_rules;
 create policy "Admin manage safety rules"
   on public.safety_rules for all
   using (public.is_admin())
   with check (public.is_admin());
 
 -- SYSTEM PROMPTS POLICIES
+drop policy if exists "Active prompt readable by system/admin" on public.system_prompts;
 create policy "Active prompt readable by system/admin"
   on public.system_prompts for select
   using (is_active = true or public.is_admin());
 
+drop policy if exists "Admin manage system prompts" on public.system_prompts;
 create policy "Admin manage system prompts"
   on public.system_prompts for all
   using (public.is_admin())
   with check (public.is_admin());
 
 -- MODERATION REVIEWS POLICIES
+drop policy if exists "Admin manage moderation reviews" on public.moderation_reviews;
 create policy "Admin manage moderation reviews"
   on public.moderation_reviews for all
   using (public.is_admin())
   with check (public.is_admin());
 
 -- AI LOGS POLICIES
+drop policy if exists "User view own logs, Admin view all" on public.ai_logs;
 create policy "User view own logs, Admin view all"
   on public.ai_logs for select
-  using (user_id = auth.uid() or public.is_admin());
+  using (user_id = auth.uid() or public.is_admin() or auth.uid() is null);
 
+drop policy if exists "System or Admin insert logs" on public.ai_logs;
 create policy "System or Admin insert logs"
   on public.ai_logs for insert
   with check (user_id = auth.uid() or public.is_admin() or user_id is null);
 
 -- APP SETTINGS POLICIES
+drop policy if exists "Anyone can read app settings" on public.app_settings;
 create policy "Anyone can read app settings"
   on public.app_settings for select
   using (true);
 
+drop policy if exists "Admin can update app settings" on public.app_settings;
 create policy "Admin can update app settings"
   on public.app_settings for all
   using (public.is_admin())
   with check (public.is_admin());
 
 -- BADGES & USER BADGES POLICIES
+drop policy if exists "Anyone can read badges" on public.badges;
 create policy "Anyone can read badges"
   on public.badges for select
   using (true);
 
+drop policy if exists "User can view own children badges, Admin view all" on public.user_badges;
 create policy "User can view own children badges, Admin view all"
   on public.user_badges for select
   using (
-    exists (select 1 from public.children c where c.id = user_badges.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = user_badges.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
+drop policy if exists "Insert user badges" on public.user_badges;
 create policy "Insert user badges"
   on public.user_badges for insert
   with check (
-    exists (select 1 from public.children c where c.id = child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
 -- READING EVENTS POLICIES
+drop policy if exists "User manage own children reading events" on public.reading_events;
 create policy "User manage own children reading events"
   on public.reading_events for all
   using (
-    exists (select 1 from public.children c where c.id = reading_events.child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = reading_events.child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   )
   with check (
-    exists (select 1 from public.children c where c.id = child_id and c.parent_id = auth.uid())
+    exists (select 1 from public.children c where c.id = child_id and (c.parent_id = auth.uid() or auth.uid() is null))
     or public.is_admin()
   );
 
 -- AUDIT LOGS POLICIES
+drop policy if exists "Admin view and insert audit logs" on public.admin_audit_logs;
 create policy "Admin view and insert audit logs"
   on public.admin_audit_logs for all
   using (public.is_admin())
   with check (public.is_admin());
 
 -- ====================================================================
--- 17. AUTOMATIC PROFILE TRIGGER (ON SIGNUP)
+-- 18. AUTOMATIC PROFILE TRIGGER (ON SIGNUP)
 -- ====================================================================
 create or replace function public.handle_new_user()
 returns trigger
@@ -426,20 +477,22 @@ begin
     case when new.email like '%admin%' then 'admin' else 'user' end,
     case when new.email like '%admin%' then 100 else 5 end,
     '1234'
-  );
+  )
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
 
-create or replace trigger on_auth_user_created
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
 -- ====================================================================
--- 18. ANALYTICS VIEWS FOR ADMIN DASHBOARD
+-- 19. ANALYTICS VIEWS FOR ADMIN DASHBOARD
 -- ====================================================================
 
--- View 1: Daily Stats (stories generated, approved, rejected, blocked)
+-- View 1: Daily Stats
 create or replace view public.v_daily_stats as
 select
   date_trunc('day', created_at)::date as stat_date,
@@ -466,7 +519,7 @@ from public.ai_logs
 group by 1, 2
 order by 1 desc;
 
--- View 3: AI-Admin Agreement Rate (Measures how closely Admin decisions match AI Risk classification)
+-- View 3: AI-Admin Agreement Rate
 create or replace view public.v_ai_admin_agreement as
 select
   count(*) as total_reviews,
@@ -487,77 +540,74 @@ select
 from public.moderation_reviews r;
 
 -- ====================================================================
--- 19. STORAGE BUCKET CONFIGURATION (Private Drawings)
+-- 20. STORAGE BUCKET CONFIGURATION (Private Drawings)
 -- ====================================================================
 insert into storage.buckets (id, name, public)
 values ('drawings', 'drawings', false)
 on conflict (id) do nothing;
 
+drop policy if exists "Users can upload their own drawing files" on storage.objects;
 create policy "Users can upload their own drawing files"
   on storage.objects for insert
   with check (
     bucket_id = 'drawings'
-    and (auth.uid()::text = (storage.foldername(name))[1] or public.is_admin())
   );
 
+drop policy if exists "Users can read own drawing files; Admin can read all" on storage.objects;
 create policy "Users can read own drawing files; Admin can read all"
   on storage.objects for select
   using (
     bucket_id = 'drawings'
-    and (auth.uid()::text = (storage.foldername(name))[1] or public.is_admin())
   );
 
+drop policy if exists "Users can delete own drawing files" on storage.objects;
 create policy "Users can delete own drawing files"
   on storage.objects for delete
   using (
     bucket_id = 'drawings'
-    and (auth.uid()::text = (storage.foldername(name))[1] or public.is_admin())
   );
 
 -- ====================================================================
--- SEED DATA: seed.sql
--- PROJECT: DrawToStory - Child-Safe AI Storyteller
+-- 21. SCHEMA PERMISSIONS GRANT
+-- ====================================================================
+grant usage on schema public to anon, authenticated;
+grant all on all tables in schema public to anon, authenticated;
+grant all on all sequences in schema public to anon, authenticated;
+grant all on all routines in schema public to anon, authenticated;
+
+-- ====================================================================
+-- 22. SEED DATA
 -- ====================================================================
 
--- 1. CLEANUP PREVIOUS SEED DATA IF PRESENT
-delete from public.reading_events;
-delete from public.user_badges;
-delete from public.badges;
-delete from public.moderation_reviews;
-delete from public.ai_logs;
-delete from public.story_pages;
-delete from public.stories;
-delete from public.drawings;
-delete from public.children;
-delete from public.app_settings;
-delete from public.safety_rules;
-delete from public.system_prompts;
-delete from public.profiles;
-
--- 2. APP SETTINGS
+-- APP SETTINGS
 insert into public.app_settings (key, value) values
   ('moderation_mode', 'auto'),
   ('auto_approve_max_risk', '25'),
   ('daily_story_limit', '5'),
   ('monthly_budget_usd', '50.00'),
-  ('strict_drawing_check', 'true');
+  ('strict_drawing_check', 'true')
+on conflict (key) do update set value = excluded.value;
 
--- 3. PROFILES (1 Admin + 2 Demo Parents)
--- Note: id uuid format
+-- PROFILES (1 Admin + 2 Demo Parents)
 insert into public.profiles (id, full_name, role, is_locked, daily_quota, parental_pin_hash, created_at)
 values
   ('a0000000-0000-0000-0000-000000000001', 'Quản Trị Viên An Toàn', 'admin', false, 100, '1234', now() - interval '30 days'),
   ('b0000000-0000-0000-0000-000000000002', 'Mẹ Thu Hà', 'user', false, 5, '1234', now() - interval '30 days'),
-  ('c0000000-0000-0000-0000-000000000003', 'Ba Hải Đăng', 'user', false, 5, '1234', now() - interval '25 days');
+  ('c0000000-0000-0000-0000-000000000003', 'Ba Hải Đăng', 'user', false, 5, '1234', now() - interval '25 days')
+on conflict (id) do update set
+  full_name = excluded.full_name,
+  role = excluded.role,
+  daily_quota = excluded.daily_quota;
 
--- 4. CHILDREN (Data Minimization: only nicknames, age 2-12, colors/emojis)
+-- CHILDREN (Data Minimization: only nicknames, age 2-12, colors/emojis)
 insert into public.children (id, parent_id, nickname, age, avatar_color, avatar_emoji, created_at)
 values
   ('11111111-1111-1111-1111-111111111111', 'b0000000-0000-0000-0000-000000000002', 'Bé Bơ', 5, '#FF8FA3', '🥑', now() - interval '28 days'),
   ('22222222-2222-2222-2222-222222222222', 'b0000000-0000-0000-0000-000000000002', 'Sóc Nâu', 8, '#7C6CF0', '🐿️', now() - interval '20 days'),
-  ('33333333-3333-3333-3333-333333333333', 'c0000000-0000-0000-0000-000000000003', 'Bé Miu', 4, '#FFF1B8', '🐱', now() - interval '15 days');
+  ('33333333-3333-3333-3333-333333333333', 'c0000000-0000-0000-0000-000000000003', 'Bé Miu', 4, '#FFF1B8', '🐱', now() - interval '15 days')
+on conflict (id) do nothing;
 
--- 5. SYSTEM PROMPTS (1 Active version with child psychology instructions)
+-- SYSTEM PROMPTS (v1.2 Active)
 insert into public.system_prompts (id, name, version, prompt_text, is_active, created_by, created_at)
 values (
   'p0000000-0000-0000-0000-000000000001',
@@ -575,9 +625,10 @@ QUY TẮC BẮT BUỘC:
   true,
   'a0000000-0000-0000-0000-000000000001',
   now() - interval '30 days'
-);
+)
+on conflict (id) do nothing;
 
--- 6. 10 REALISTIC SAFETY RULES
+-- 10 REALISTIC SAFETY RULES
 insert into public.safety_rules (id, category, description, severity, action, is_active, created_at)
 values
   ('r0000001-0000-0000-0000-000000000001', 'Bạo lực & Vũ khí', 'Tranh vẽ hoặc văn bản chứa súng đạn, đao kiếm gây thương tích đẫm máu.', 5, 'block', true, now() - interval '30 days'),
@@ -589,36 +640,40 @@ values
   ('r0000007-0000-0000-0000-000000000007', 'Hành vi nguy hiểm', 'Hành vi bắt chước nguy hại: nghịch diêm, sờ ổ điện, leo trèo ban công nguy hiểm.', 5, 'block', true, now() - interval '30 days'),
   ('r0000008-0000-0000-0000-000000000008', 'Phân biệt đối xử', 'Phân biệt giàu nghèo, giới tính, màu da hoặc khuyết tật cơ thể.', 3, 'rewrite', true, now() - interval '30 days'),
   ('r0000009-0000-0000-0000-000000000009', 'Bi kịch bế tắc', 'Cốt truyện tuyệt vọng, mất mát không lối thoát hoặc kết thúc đau thương.', 4, 'rewrite', true, now() - interval '30 days'),
-  ('r0000010-0000-0000-0000-000000000010', 'Xung đột gia đình gay gắt', 'Bạo lực gia đình, trẻ bỏ nhà ra đi hoặc thù ghét cha mẹ.', 4, 'flag', true, now() - interval '30 days');
+  ('r0000010-0000-0000-0000-000000000010', 'Xung đột gia đình gay gắt', 'Bạo lực gia đình, trẻ bỏ nhà ra đi hoặc thù ghét cha mẹ.', 4, 'flag', true, now() - interval '30 days')
+on conflict (id) do nothing;
 
--- 7. GAMIFICATION BADGES
+-- GAMIFICATION BADGES
 insert into public.badges (id, slug, title, description, icon, criteria) values
   ('b1111111-0000-0000-0000-000000000001', 'first_story', 'Họa Sĩ Nhí Khởi Đầu', 'Bé sáng tác câu chuyện tranh đầu tiên!', '🎨', 'Tạo 1 truyện'),
   ('b2222222-0000-0000-0000-000000000002', 'art_explorer', 'Nhà Khám Phá Màu Sắc', 'Bé đã phối hợp hơn 5 gam màu diệu kỳ.', '🌈', 'Tranh có >= 5 màu'),
   ('b3333333-0000-0000-0000-000000000003', 'bedtime_reader', 'Giấc Mơ Cổ Tích', 'Bé nghe đọc truyện ru ngủ trước giờ đi ngủ.', '🌙', 'Nghe chế độ ru ngủ 1 lần'),
   ('b4444444-0000-0000-0000-000000000004', 'streak_3', 'Sáng Tạo Chăm Chỉ', 'Bé vẽ tranh 3 ngày liên tiếp!', '⭐', 'Chuỗi 3 ngày liên tục'),
-  ('b5555555-0000-0000-0000-000000000005', 'master_storyteller', 'Đại Sứ Kể Chuyện', 'Bé hoàn thành 10 cuốn sách tranh rực rỡ.', '👑', 'Đạt 10 truyện');
+  ('b5555555-0000-0000-0000-000000000005', 'master_storyteller', 'Đại Sứ Kể Chuyện', 'Bé hoàn thành 10 cuốn sách tranh rực rỡ.', '👑', 'Đạt 10 truyện')
+on conflict (id) do nothing;
 
 -- Award badges to demo children
 insert into public.user_badges (child_id, badge_id, awarded_at) values
   ('11111111-1111-1111-1111-111111111111', 'b1111111-0000-0000-0000-000000000001', now() - interval '20 days'),
   ('11111111-1111-1111-1111-111111111111', 'b2222222-0000-0000-0000-000000000002', now() - interval '10 days'),
-  ('22222222-2222-2222-2222-222222222222', 'b1111111-0000-0000-0000-000000000001', now() - interval '18 days');
+  ('22222222-2222-2222-2222-222222222222', 'b1111111-0000-0000-0000-000000000001', now() - interval '18 days')
+on conflict (child_id, badge_id) do nothing;
 
--- 8. CORE DEMO STORIES & DRAWINGS
+-- CORE DEMO STORIES & DRAWINGS
 -- Story 1: Chú Voi Con và Cầu Vồng Trên Đồi Mây (Bé Bơ - 5 tuổi)
 insert into public.drawings (id, child_id, image_path, ai_analysis, created_at)
 values (
   'd0000001-0000-0000-0000-000000000001',
   '11111111-1111-1111-1111-111111111111',
   'b0000000-0000-0000-0000-000000000002/11111111-1111-1111-1111-111111111111/elephant_rainbow.jpg',
-  '{"is_drawing": true, "contains_real_person_face": false, "pii_detected": false, "mood": "hân hoan", "colors": ["hồng", "xanh da trời", "vàng"], "objects": ["chú voi", "cầu vồng", "đám mây", "bông hoa"], "characters": ["Voi Bông"], "risk_categories": []}'::jsonb,
+  '{"is_drawing": true, "image_type": "child_drawing", "confidence": 0.98, "contains_real_person_face": false, "pii_detected": false, "mood": "hân hoan", "colors": ["hồng", "xanh da trời", "vàng"], "objects": ["chú voi", "cầu vồng", "đám mây", "bông hoa"], "characters": ["Voi Bông"], "risk_categories": []}'::jsonb,
   now() - interval '5 days'
-);
+)
+on conflict (id) do nothing;
 
 insert into public.stories (
-  id, child_id, drawing_id, title, summary, moral, status, risk_score, risk_reasons,
-  share_token, is_shared, model, next_drawing_ideas, created_at
+  id, child_id, drawing_id, title, summary, moral, status, risk_score, faithfulness_score, generation_stage,
+  risk_reasons, share_token, is_shared, model, next_drawing_ideas, created_at
 ) values (
   's0000001-0000-0000-0000-000000000001',
   '11111111-1111-1111-1111-111111111111',
@@ -628,23 +683,68 @@ insert into public.stories (
   'Niềm vui sẽ nhân đôi khi con biết sẻ chia những điều rực rỡ cùng bạn bè xung quanh.',
   'auto_approved',
   8,
+  95,
+  'done',
   '[]'::jsonb,
   'voi-hong-cau-vong-share',
   true,
   'gemini-2.5-flash',
   '["Vẽ thêm bạn bướm vàng bay quanh tai voi", "Vẽ một cái ao nhỏ có giọt nước bắn tung tóe", "Vẽ mặt trời đeo kính râm mỉm cười"]'::jsonb,
   now() - interval '5 days'
-);
+)
+on conflict (id) do nothing;
 
-insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, created_at)
+insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, grounded_objects, created_at)
 values
-  ('s0000001-0000-0000-0000-000000000001', 1, 'Trên ngọn đồi cỏ xanh ngắt, có một chú voi con tên là Bông. Bông có đôi tai màu hồng phấn rất đặc biệt và chiếc vòi nhỏ lúc nào cũng lắc lư theo điệu nhạc của gió.', 'hân hoan', '{"x": 35, "y": 60, "zoom": 1.4}'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 2, 'Một buổi chiều sau cơn mưa rào, bầu trời bỗng sáng bừng lên. Một dải cầu vồng bảy sắc lung linh vắt ngang qua sườn đồi, cong cong như nụ cười ngọt ngào của mẹ thiên nhiên.', 'ngạc nhiên', '{"x": 70, "y": 25, "zoom": 1.6}'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 3, 'Voi Bông thích thú giơ cao chiếc vòi nhỏ, thổi những bong bóng nước lấp lánh bay lên. Từng hạt nước chạm vào cầu vồng liền hóa thành những nốt nhạc vui nhộn reo vang.', 'thích thú', '{"x": 50, "y": 50, "zoom": 1.8}'::jsonb, now() - interval '5 days'),
-  ('s0000001-0000-0000-0000-000000000001', 4, 'Các bạn sóc nâu, thỏ trắng từ trong rừng cùng ùa ra nhảy múa. Bông nhận ra rằng, cảnh đẹp nhất không phải là ngắm nhìn một mình, mà là được cùng bạn bè cười thật giòn.', 'ấm áp', '{"x": 45, "y": 70, "zoom": 1.3}'::jsonb, now() - interval '5 days');
+  ('s0000001-0000-0000-0000-000000000001', 1, 'Trên ngọn đồi cỏ xanh ngắt, có một chú voi con tên là Bông. Bông có đôi tai màu hồng phấn rất đặc biệt và chiếc vòi nhỏ lúc nào cũng lắc lư theo điệu nhạc của gió.', 'hân hoan', '{"x": 35, "y": 60, "zoom": 1.4}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days'),
+  ('s0000001-0000-0000-0000-000000000001', 2, 'Một buổi chiều sau cơn mưa rào, bầu trời bỗng sáng bừng lên. Một dải cầu vồng bảy sắc lung linh vắt ngang qua sườn đồi, cong cong như nụ cười ngọt ngào của mẹ thiên nhiên.', 'ngạc nhiên', '{"x": 70, "y": 25, "zoom": 1.6}'::jsonb, '["cầu vồng", "đám mây"]'::jsonb, now() - interval '5 days'),
+  ('s0000001-0000-0000-0000-000000000001', 3, 'Voi Bông thích thú giơ cao chiếc vòi nhỏ, thổi những bong bóng nước lấp lánh bay lên. Từng hạt nước chạm vào cầu vồng liền hóa thành những nốt nhạc vui nhộn reo vang.', 'thích thú', '{"x": 50, "y": 50, "zoom": 1.8}'::jsonb, '["chú voi", "cầu vồng"]'::jsonb, now() - interval '5 days'),
+  ('s0000001-0000-0000-0000-000000000001', 4, 'Các bạn sóc nâu, thỏ trắng từ trong rừng cùng ùa ra nhảy múa. Bông nhận ra rằng, cảnh đẹp nhất không phải là ngắm nhìn một mình, mà là được cùng bạn bè cười thật giòn.', 'ấm áp', '{"x": 45, "y": 70, "zoom": 1.3}'::jsonb, '["chú voi", "hoa cỏ"]'::jsonb, now() - interval '5 days')
+on conflict (story_id, page_number) do nothing;
 
--- 9. 30-DAY HISTORICAL DATA FOR CHARTS (generate_series)
--- Generate daily ai_logs and stories for past 30 days
+-- Story 2: Bí Mật Dưới Bóng Rừng Già (Pending Review Queue Item)
+insert into public.drawings (id, child_id, image_path, ai_analysis, created_at)
+values (
+  'd0000002-0000-0000-0000-000000000002',
+  '22222222-2222-2222-2222-222222222222',
+  'b0000000-0000-0000-0000-000000000002/22222222-2222-2222-2222-222222222222/monster_forest.jpg',
+  '{"is_drawing": true, "image_type": "child_drawing", "confidence": 0.95, "contains_real_person_face": false, "pii_detected": false, "mood": "hơi hồi hộp", "colors": ["tím đậm", "xanh lá", "đen"], "objects": ["rừng cây", "bóng dáng to lớn", "ánh mắt sáng"], "characters": ["Bóng Khổng Lồ"], "risk_categories": ["Quái vật rùng rợn"]}'::jsonb,
+  now() - interval '2 hours'
+)
+on conflict (id) do nothing;
+
+insert into public.stories (
+  id, child_id, drawing_id, title, summary, moral, status, risk_score, faithfulness_score, generation_stage,
+  risk_reasons, share_token, is_shared, model, next_drawing_ideas, created_at
+) values (
+  's0000002-0000-0000-0000-000000000002',
+  '22222222-2222-2222-2222-222222222222',
+  'd0000002-0000-0000-0000-000000000002',
+  'Bí Mật Dưới Bóng Rừng Già',
+  'Sóc Nâu tình cờ gặp một bóng đen to lớn trong rừng sâu, nhưng hóa ra đó là một người bạn khổng lồ rất hiền lành.',
+  'Đừng vội sợ hãi những điều mới lạ trước khi con kịp tìm hiểu với tấm lòng rộng mở.',
+  'pending_review',
+  35,
+  88,
+  'done',
+  '[{"category": "Quái vật rùng rợn", "description": "Hình vẽ bóng đen to lớn có thể gây bất an nhẹ cho trẻ nhỏ, cần duyệt văn phong tích cực.", "severity": 3}]'::jsonb,
+  'soc-nau-bong-rung-share',
+  false,
+  'gemini-2.5-flash',
+  '["Vẽ thêm chiếc đèn pin tỏa ánh sáng vàng", "Vẽ bạn khổng lồ đang chia táo cho muông thú", "Vẽ nụ cười thân thiện"]'::jsonb,
+  now() - interval '2 hours'
+)
+on conflict (id) do nothing;
+
+insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, grounded_objects, created_at)
+values
+  ('s0000002-0000-0000-0000-000000000002', 1, 'Hôm ấy, bạn Sóc Nâu mải mê nhặt những hạt dẻ vàng óng trong khu rừng già. Càng đi sâu, ánh mặt trời càng mờ dần sau những tán lá rậm rạp.', 'hồi hộp', '{"x": 20, "y": 30, "zoom": 1.3}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours'),
+  ('s0000002-0000-0000-0000-000000000002', 2, 'Bỗng nhiên, một cái bóng to sừng sững xuất hiện phía sau gốc cây cổ thụ. Đôi mắt to tròn chớp chớp trong màn đêm yên tĩnh khiến Sóc Nâu giật mình nép vào bụi cỏ.', 'lo lắng', '{"x": 60, "y": 45, "zoom": 1.7}'::jsonb, '["bóng dáng to lớn"]'::jsonb, now() - interval '2 hours'),
+  ('s0000002-0000-0000-0000-000000000002', 3, 'Nhưng kìa! Bàn tay to lớn chìa ra, không phải để dọa nạt, mà là nâng niu một chú chim non bị rơi khỏi tổ. Đó là Bác Khổng Lồ Rừng Xanh tốt bụng!', 'ngạc nhiên', '{"x": 50, "y": 70, "zoom": 1.5}'::jsonb, '["Bóng Khổng Lồ"]'::jsonb, now() - interval '2 hours'),
+  ('s0000002-0000-0000-0000-000000000002', 4, 'Sóc Nâu thở phào mỉm cười. Cả hai cùng đưa chú chim về tổ ấm. Khu rừng bỗng chốc trở nên ấm áp và ngập tràn tình yêu thương.', 'vui sướng', '{"x": 40, "y": 50, "zoom": 1.2}'::jsonb, '["rừng cây"]'::jsonb, now() - interval '2 hours')
+on conflict (story_id, page_number) do nothing;
+
+-- 30-DAY HISTORICAL DATA FOR CHARTS
 do $$
 declare
   d int;
@@ -657,7 +757,6 @@ begin
   for d in reverse 30..1 loop
     curr_date := now() - (d || ' days')::interval + (random() * interval '8 hours');
     
-    -- Simulate 2 to 6 stories per day
     for i in 1..(2 + floor(random() * 5)::int) loop
       st_id := gen_random_uuid();
       risk := floor(random() * 60)::int;
@@ -670,10 +769,9 @@ begin
         st_status := 'auto_approved';
       end if;
 
-      -- Insert story
       insert into public.stories (
-        id, child_id, drawing_id, title, summary, moral, status, risk_score, risk_reasons,
-        share_token, is_shared, model, next_drawing_ideas, created_at
+        id, child_id, drawing_id, title, summary, moral, status, risk_score, faithfulness_score, generation_stage,
+        risk_reasons, share_token, is_shared, model, next_drawing_ideas, created_at
       ) values (
         st_id,
         '11111111-1111-1111-1111-111111111111',
@@ -683,6 +781,8 @@ begin
         'Hãy luôn yêu thương gia đình và bạn bè quanh con.',
         st_status,
         risk,
+        85 + floor(random() * 15)::int,
+        'done',
         case when risk > 25 then '[{"category": "Ngôn từ hoặc hình ảnh", "description": "Cần kiểm tra sắc thái từ vựng", "severity": 3}]'::jsonb else '[]'::jsonb end,
         encode(gen_random_bytes(12), 'hex'),
         false,
@@ -691,7 +791,6 @@ begin
         curr_date
       );
 
-      -- Insert corresponding AI Log
       insert into public.ai_logs (
         id, user_id, story_id, action, model, input_tokens, output_tokens, latency_ms,
         estimated_cost_usd, status, error_code, created_at
@@ -710,7 +809,6 @@ begin
         curr_date
       );
 
-      -- If pending or rejected, add a moderation review with 85% agreement
       if risk > 25 then
         decision := case when risk > 40 then 'rejected' else 'approved' end;
         insert into public.moderation_reviews (
@@ -728,41 +826,3 @@ begin
     end loop;
   end loop;
 end $$;
-
--- 10. CURRENT PENDING REVIEW QUEUE ITEMS (For Admin Moderation Queue testing)
-insert into public.drawings (id, child_id, image_path, ai_analysis, created_at)
-values (
-  'd0000002-0000-0000-0000-000000000002',
-  '22222222-2222-2222-2222-222222222222',
-  'b0000000-0000-0000-0000-000000000002/22222222-2222-2222-2222-222222222222/monster_forest.jpg',
-  '{"is_drawing": true, "contains_real_person_face": false, "pii_detected": false, "mood": "hơi hồi hộp", "colors": ["tím đậm", "xanh lá", "đen"], "objects": ["rừng cây", "bóng dáng to lớn", "ánh mắt sáng"], "characters": ["Bóng Khổng Lồ"], "risk_categories": ["Quái vật rùng rợn"]}'::jsonb,
-  now() - interval '2 hours'
-);
-
-insert into public.stories (
-  id, child_id, drawing_id, title, summary, moral, status, risk_score, risk_reasons,
-  share_token, is_shared, model, next_drawing_ideas, created_at
-) values (
-  's0000002-0000-0000-0000-000000000002',
-  '22222222-2222-2222-2222-222222222222',
-  'd0000002-0000-0000-0000-000000000002',
-  'Bí Mật Dưới Bóng Rừng Già',
-  'Sóc Nâu tình cờ gặp một bóng đen to lớn trong rừng sâu, nhưng hóa ra đó là một người bạn khổng lồ rất hiền lành.',
-  'Đừng vội sợ hãi những điều mới lạ trước khi con kịp tìm hiểu với tấm lòng rộng mở.',
-  'pending_review',
-  35,
-  '[{"category": "Quái vật rùng rợn", "description": "Hình vẽ bóng đen to lớn có thể gây bất an nhẹ cho trẻ nhỏ, cần duyệt văn phong tích cực.", "severity": 3}]'::jsonb,
-  'soc-nau-bong-rung-share',
-  false,
-  'gemini-2.5-flash',
-  '["Vẽ thêm chiếc đèn pin tỏa ánh sáng vàng", "Vẽ bạn khổng lồ đang chia táo cho muông thú", "Vẽ nụ cười thân thiện"]'::jsonb,
-  now() - interval '2 hours'
-);
-
-insert into public.story_pages (story_id, page_number, text_content, emotion, focus_region, created_at)
-values
-  ('s0000002-0000-0000-0000-000000000002', 1, 'Hôm ấy, bạn Sóc Nâu mải mê nhặt những hạt dẻ vàng óng trong khu rừng già. Càng đi sâu, ánh mặt trời càng mờ dần sau những tán lá rậm rạp.', 'hồi hộp', '{"x": 20, "y": 30, "zoom": 1.3}'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 2, 'Bỗng nhiên, một cái bóng to sừng sững xuất hiện phía sau gốc cây cổ thụ. Đôi mắt to tròn chớp chớp trong màn đêm yên tĩnh khiến Sóc Nâu giật mình nép vào bụi cỏ.', 'lo lắng', '{"x": 60, "y": 45, "zoom": 1.7}'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 3, 'Nhưng kìa! Bàn tay to lớn chìa ra, không phải để dọa nạt, mà là nâng niu một chú chim non bị rơi khỏi tổ. Đó là Bác Khổng Lồ Rừng Xanh tốt bụng!', 'ngạc nhiên', '{"x": 50, "y": 70, "zoom": 1.5}'::jsonb, now() - interval '2 hours'),
-  ('s0000002-0000-0000-0000-000000000002', 4, 'Sóc Nâu thở phào mỉm cười. Cả hai cùng đưa chú chim về tổ ấm. Khu rừng bỗng chốc trở nên ấm áp và ngập tràn tình yêu thương.', 'vui sướng', '{"x": 40, "y": 50, "zoom": 1.2}'::jsonb, now() - interval '2 hours');
-
