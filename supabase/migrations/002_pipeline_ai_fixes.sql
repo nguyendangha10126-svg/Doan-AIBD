@@ -18,3 +18,4 @@ alter table public.story_pages
 insert into public.app_settings (key, value)
 values ('strict_drawing_check', 'true')
 on conflict (key) do nothing;
+
