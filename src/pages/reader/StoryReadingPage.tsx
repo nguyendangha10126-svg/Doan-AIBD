@@ -122,6 +122,7 @@ export const StoryReadingPage: React.FC = () => {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState<number | null>(null);
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [vietnameseVoices, setVietnameseVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [hasVietnameseVoice, setHasVietnameseVoice] = useState(true);
 
   // Modals & User Feedback
@@ -150,21 +151,42 @@ export const StoryReadingPage: React.FC = () => {
     };
   }, [story, logReadingEvent]);
 
-  // Load voices for Web Speech API
+  // Load voices for Web Speech API with Vietnamese voice prioritization
   useEffect(() => {
     const updateVoices = () => {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices();
-        const viVoice = voices.find(
-          (v) => v.lang.includes('vi') || v.lang.includes('VI') || v.name.toLowerCase().includes('vietnam')
+        const viVoices = voices.filter(
+          (v) =>
+            v.lang.toLowerCase().startsWith('vi') ||
+            v.lang.toLowerCase().includes('vie') ||
+            v.name.toLowerCase().includes('vietnam') ||
+            v.name.toLowerCase().includes('tiếng việt') ||
+            v.name.includes('HoaiMy') ||
+            v.name.includes('NamMinh') ||
+            v.name.includes('Linh')
         );
 
-        if (viVoice) {
-          setSelectedVoice(viVoice);
+        setVietnameseVoices(viVoices);
+
+        if (viVoices.length > 0) {
+          // Select high quality natural voice first
+          const bestVoice =
+            viVoices.find(
+              (v) =>
+                v.name.includes('Natural') ||
+                v.name.includes('Google') ||
+                v.name.includes('HoaiMy') ||
+                v.name.includes('NamMinh')
+            ) || viVoices[0];
+
+          setSelectedVoice((curr) => curr || bestVoice);
           setHasVietnameseVoice(true);
         } else {
           setHasVietnameseVoice(false);
-          if (voices.length > 0) setSelectedVoice(voices[0]);
+          if (voices.length > 0) {
+            setSelectedVoice((curr) => curr || voices[0]);
+          }
         }
       }
     };
@@ -194,6 +216,7 @@ export const StoryReadingPage: React.FC = () => {
   useEffect(() => {
     if (currentPageIndex === totalPages) {
       soundEffects.playSuccess();
+      soundEffects.playSparkle();
       confetti({
         particleCount: 90,
         spread: 80,
@@ -232,9 +255,12 @@ export const StoryReadingPage: React.FC = () => {
     }
   };
 
-  // Turn page safely in FlipBook or Mobile
+  // Turn page safely in FlipBook or Mobile with sound
   const goToPage = (pageIdx: number) => {
     const clamped = Math.max(0, Math.min(totalPages, pageIdx));
+    if (clamped !== currentPageIndex) {
+      soundEffects.playPageTurn();
+    }
     setCurrentPageIndex(clamped);
     if (!isMobile && bookRef.current) {
       try {
@@ -252,7 +278,7 @@ export const StoryReadingPage: React.FC = () => {
   // Flip callback from react-pageflip
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onFlip = (e: any) => {
-    soundEffects.playMagic();
+    soundEffects.playPageTurn();
     const flipbookPage = e.data;
     const storyIdx = Math.floor(flipbookPage / 2);
     setCurrentPageIndex(Math.min(totalPages, storyIdx));
@@ -298,6 +324,7 @@ export const StoryReadingPage: React.FC = () => {
       setCurrentSentenceIndex(idx);
       const textToSpeak = sentences[idx];
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.lang = 'vi-VN';
 
       if (selectedVoice) {
         utterance.voice = selectedVoice;
@@ -976,6 +1003,42 @@ export const StoryReadingPage: React.FC = () => {
           {/* Center / Right: Big 56px TTS Play/Pause & Voice Settings */}
           <div className="flex items-center gap-3">
             
+            {/* Vietnamese Voice Selector */}
+            {vietnameseVoices.length > 1 && (
+              <select
+                value={selectedVoice?.voiceURI || ''}
+                onChange={(e) => {
+                  const v = vietnameseVoices.find((vox) => vox.voiceURI === e.target.value);
+                  if (v) {
+                    setSelectedVoice(v);
+                    if (isPlayingVoice) stopVoice();
+                    toast.info(`Đã đổi giọng đọc: ${v.name.split(' ')[0]}`);
+                  }
+                }}
+                className={`text-[11px] font-bold px-2 py-1 rounded-full border border-ink/10 cursor-pointer focus:outline-none transition-colors ${
+                  isBedtimeMode
+                    ? 'bg-[#231e38] text-[#F3EFE6] border-[#3d3257]'
+                    : 'bg-surface-2 text-ink'
+                }`}
+                aria-label="Chọn giọng đọc tiếng Việt"
+              >
+                {vietnameseVoices.map((v) => {
+                  let label = 'Tiếng Việt';
+                  if (v.name.includes('HoaiMy')) label = 'Hoài My (Nữ)';
+                  else if (v.name.includes('NamMinh')) label = 'Nam Minh (Nam)';
+                  else if (v.name.includes('An')) label = 'An (Thiếu nhi)';
+                  else if (v.name.includes('Google')) label = 'Google Tiếng Việt';
+                  else if (v.name.includes('Linh')) label = 'Linh (Nữ)';
+                  else label = v.name.replace(/Microsoft|Online|\(Natural\)|\(Vietnam\)/gi, '').trim() || v.name;
+                  return (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      🎙️ {label}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+
             {/* Speed Selector */}
             <div className="flex items-center gap-1 text-xs font-bold text-ink-soft">
               <Volume2 className="w-3.5 h-3.5 hidden sm:inline" />

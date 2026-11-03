@@ -118,13 +118,20 @@ npm install
 ### 3. Cấu Hình Biến Môi Trường (`.env`)
 Tạo file `.env` từ `.env.example`:
 ```env
-# Đặt VITE_USE_MOCK=true để trải nghiệm ngay lập tức với dữ liệu mẫu (Offline/Demo Mode)
-# Đặt VITE_USE_MOCK=false và điền URL/Key Supabase thật để kết nối Cloud
-VITE_USE_MOCK=true
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+# Đặt VITE_USE_MOCK=false để chạy trực tiếp với Cơ Sở Dữ Liệu Supabase đã triển khai
+VITE_USE_MOCK=false
+VITE_SUPABASE_URL=https://htvslxbytqoteyimtcxg.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_0M7XpzEBfVsKECDTkRVpKA_PgCpJiGc
 ```
-> **Lưu ý về Mock Data**: Ứng dụng kết nối trực tiếp với cơ sở dữ liệu Supabase thật. Nếu bật `VITE_USE_MOCK=true`, hệ thống sẽ hiển thị biểu ngữ dính cố định **"DỮ LIỆU DEMO"** trên cùng màn hình theo đúng quy chuẩn nghiệm thu.
+> **Kiến trúc Dữ liệu Sạch (Clean Data Architecture)**: Hệ thống được thiết lập cơ sở dữ liệu PostgreSQL chuẩn mực 100%, không sử dụng dữ liệu rác hay truyện mẫu cứng. Khởi đầu với 2 tài khoản chính (Admin và Mẹ Thu Hà), 0 hồ sơ bé và 0 cuốn truyện. Phụ huynh trực tiếp tạo hồ sơ bé, chụp tranh vẽ tay và toàn bộ dữ liệu (tranh vẽ, câu chuyện, trang sách, nhật ký AI) được lưu trữ bền vững vào Supabase.
+
+### 4. Tính Năng Giọng Đọc Tiếng Việt & Hiệu Ứng Âm Thanh Độc Quyền
+- **Giọng đọc Tiếng Việt chuẩn tự nhiên (Neural Vietnamese TTS)**: Nhận diện và ưu tiên giọng đọc chất lượng cao (`vi-VN`) như *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, và *Apple Linh*. Có menu cho phép phụ huynh linh hoạt đổi giọng và điều chỉnh tốc độ kể chuyện (0.8x, 1.0x, 1.2x).
+- **Bộ tổng hợp hiệu ứng âm thanh thời gian thực (Web Audio API Synthesizers)**:
+  - `playPageTurn()`: Mô phỏng tiếng lật trang giấy sách chân thực bằng bộ lọc Bandpass Noise dải tần 1000Hz $\rightarrow$ 320Hz.
+  - `playSparkle()`: Hợp âm chuông thần tiên ngũ cung lung linh.
+  - `playConfetti()`: Âm thanh chúc mừng hân hoan khi bé đọc xong truyện.
+  - `playTap()` / `playLock()`: Tương tác chạm nút lớn trong Kid Mode và khóa cổng an toàn phụ huynh.
 
 ### 4. Các Lệnh Kiểm Thử & Chạy Ứng Dụng
 

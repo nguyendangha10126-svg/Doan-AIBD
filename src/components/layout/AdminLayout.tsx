@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,14 +16,20 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useAdminStore } from '@/store/adminStore';
 import { vi } from '@/lib/i18n/vi';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 
 export const AdminLayout: React.FC = () => {
   const { profile, logout } = useAuthStore();
+  const { kpis, fetchAdminData } = useAdminStore();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    fetchAdminData();
+  }, [fetchAdminData]);
 
   const handleLogout = async () => {
     await logout();
@@ -32,7 +38,7 @@ export const AdminLayout: React.FC = () => {
 
   const navLinks = [
     { to: '/admin', end: true, label: vi.admin.tabs.overview, icon: LayoutDashboard },
-    { to: '/admin/queue', label: vi.admin.tabs.queue, icon: ClipboardCheck, badge: '3' },
+    { to: '/admin/queue', label: vi.admin.tabs.queue, icon: ClipboardCheck, badge: kpis.pendingQueueCount > 0 ? String(kpis.pendingQueueCount) : undefined },
     { to: '/admin/rules', label: vi.admin.tabs.rules, icon: ShieldAlert },
     { to: '/admin/prompts', label: vi.admin.tabs.prompts, icon: Terminal },
     { to: '/admin/costs', label: vi.admin.tabs.costs, icon: DollarSign },

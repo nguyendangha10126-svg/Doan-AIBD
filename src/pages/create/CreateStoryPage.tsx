@@ -28,7 +28,7 @@ import { StoryGenerationService } from '@/features/ai/services/storyGenerationSe
 
 export const CreateStoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { childrenList, selectedChildId, setSelectedChildId } = useAuthStore();
+  const { childrenList, selectedChildId, setSelectedChildId, addChild } = useAuthStore();
   const { addStory } = useStoryStore();
 
   // Child selection: auto-skip step 1 if only 1 child
@@ -39,8 +39,51 @@ export const CreateStoryPage: React.FC = () => {
 
   const [selectedChild, setSelectedChild] = useState(initialChild);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(
-    childrenList.length > 1 ? 1 : 2
+    childrenList.length === 1 ? 2 : 1
   );
+
+  // Quick Child Creation State
+  const [isAddingChild, setIsAddingChild] = useState(childrenList.length === 0);
+  const [newNickname, setNewNickname] = useState('');
+  const [newAge, setNewAge] = useState(5);
+  const [newColor, setNewColor] = useState('#FF6B6B');
+  const [newEmoji, setNewEmoji] = useState('🐻');
+  const [isSubmittingChild, setIsSubmittingChild] = useState(false);
+
+  // Sync selectedChild if childrenList updates
+  useEffect(() => {
+    if (!selectedChild && childrenList.length > 0) {
+      setSelectedChild(childrenList[0]);
+      setSelectedChildId(childrenList[0].id);
+    }
+  }, [childrenList, selectedChild, setSelectedChildId]);
+
+  const handleCreateChild = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newNickname.trim()) {
+      toast.error('Mẹ hãy nhập tên thân mật của bé nhé!');
+      return;
+    }
+    setIsSubmittingChild(true);
+    try {
+      const created = await addChild({
+        nickname: newNickname.trim(),
+        age: newAge,
+        avatar_color: newColor,
+        avatar_emoji: newEmoji,
+      });
+      setSelectedChild(created);
+      setSelectedChildId(created.id);
+      setIsAddingChild(false);
+      setNewNickname('');
+      toast.success(`Đã thêm bé ${created.nickname}! Chuẩn bị bước vào bàn vẽ.`);
+      setCurrentStep(2);
+    } catch {
+      toast.error('Có lỗi xảy ra khi tạo hồ sơ cho bé.');
+    } finally {
+      setIsSubmittingChild(false);
+    }
+  };
 
   // Step 2 State: Image & Camera
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -356,76 +399,203 @@ export const CreateStoryPage: React.FC = () => {
         <div className="w-10" />
       </header>
 
-      {/* 2. STEP 1: CHỌN HỒ SƠ BÉ */}
+      {/* 2. STEP 1: CHỌN HOẶC TẠO HỒ SƠ BÉ */}
       {currentStep === 1 && (
         <main className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full space-y-6">
           <div className="text-center space-y-1">
             <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink tracking-tight">
-              Bé nào sẽ là nhân vật chính hôm nay?
+              {childrenList.length === 0 ? 'Chào mừng Mẹ và Bé!' : 'Bé nào sẽ là nhân vật chính hôm nay?'}
             </h1>
             <p className="text-xs sm:text-sm text-ink-soft">
-              Chọn hồ sơ bé để AI điều chỉnh độ tuổi và ngôn ngữ câu chuyện thích hợp nhất.
+              {childrenList.length === 0
+                ? 'Hãy thêm hồ sơ của bé để AI cá nhân hóa câu chuyện theo độ tuổi và sở thích.'
+                : 'Chọn hồ sơ bé để AI điều chỉnh độ tuổi và ngôn ngữ câu chuyện thích hợp nhất.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {childrenList.map((kid) => {
-              const isSelected = selectedChild?.id === kid.id;
-
-              return (
-                <div
-                  key={kid.id}
-                  onClick={() => {
-                    setSelectedChild(kid);
-                    setSelectedChildId(kid.id);
-                  }}
-                  className={`p-5 rounded-[24px] border-2 cursor-pointer transition-all flex items-center gap-4 ${
-                    isSelected
-                      ? 'bg-surface border-brand-600 shadow-card ring-2 ring-brand-100 scale-102'
-                      : 'bg-surface border-ink/10 hover:border-ink/25 shadow-xs'
-                  }`}
-                >
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-xs shrink-0"
-                    style={{ backgroundColor: kid.avatar_color + '35' }}
-                  >
-                    {kid.avatar_emoji}
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <span className="font-heading font-extrabold text-base text-ink block truncate">
-                      {kid.nickname}
-                    </span>
-                    <span className="text-xs text-brand-600 font-bold block mt-0.5">
-                      {kid.age} tuổi
-                    </span>
-                    <span className="text-[11px] text-ink-faint block mt-0.5">
-                      {kid.age <= 5 ? 'Ngôn từ vui nhộn, lặp âm' : 'Cốt truyện phiêu lưu giàu cảm xúc'}
-                    </span>
-                  </div>
-                  {isSelected && (
-                    <div className="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-btn-primary">
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="pt-4 flex items-center justify-between border-t border-ink/10">
-            <span className="text-xs text-ink-soft">
-              Đang chọn: <strong className="text-brand-600">{selectedChild?.nickname}</strong>
-            </span>
-            <Button
-              variant="primary"
-              size="md"
-              disabled={!selectedChild}
-              onClick={() => setCurrentStep(2)}
-              rightIcon={<ChevronRight className="w-4 h-4" />}
+          {/* If no children or user clicked "+ Thêm bé mới", show creation form */}
+          {childrenList.length === 0 || isAddingChild ? (
+            <form
+              onSubmit={handleCreateChild}
+              className="p-6 bg-surface rounded-[28px] border border-ink/10 shadow-card space-y-5"
             >
-              Tiếp tục
-            </Button>
-          </div>
+              <div className="flex items-center justify-between border-b border-ink/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-brand-600" />
+                  <h2 className="font-heading font-extrabold text-base text-ink">
+                    {childrenList.length === 0 ? 'Tạo hồ sơ đầu tiên cho bé' : 'Thêm hồ sơ bé mới'}
+                  </h2>
+                </div>
+                {childrenList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingChild(false)}
+                    className="text-xs text-ink-soft hover:text-ink font-bold"
+                  >
+                    Hủy bỏ
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-ink-soft mb-1.5">
+                  Tên thân mật của bé *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Bống, Nhím, Tít, Sóc, Tin Tin..."
+                  value={newNickname}
+                  onChange={(e) => setNewNickname(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-ink/15 focus:outline-none focus:border-brand-600 font-bold text-sm bg-surface-2 text-ink transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-ink-soft mb-1.5">
+                  Độ tuổi của bé: <span className="text-brand-600 font-extrabold">{newAge} tuổi</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((age) => (
+                    <button
+                      key={age}
+                      type="button"
+                      onClick={() => setNewAge(age)}
+                      className={`w-9 h-9 rounded-xl text-xs font-heading font-bold transition-all ${
+                        newAge === age
+                          ? 'bg-brand-600 text-white shadow-btn-primary scale-105'
+                          : 'bg-surface-2 text-ink-soft hover:bg-surface-3'
+                      }`}
+                    >
+                      {age}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft mb-1.5">Emoji yêu thích</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['🐻', '🐰', '🦁', '🐱', '🦄', '🚀', '🌟', '🎨'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setNewEmoji(emoji)}
+                        className={`w-10 h-10 rounded-2xl text-xl flex items-center justify-center transition-all ${
+                          newEmoji === emoji ? 'bg-brand-100 ring-2 ring-brand-600 scale-105 shadow-xs' : 'bg-surface-2'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-ink-soft mb-1.5">Màu đại diện</label>
+                  <div className="flex items-center gap-2.5 pt-1">
+                    {['#FF6B6B', '#4D96FF', '#6BCB77', '#FFD93D', '#9D4EDD', '#FF8E53'].map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewColor(color)}
+                        className={`w-8 h-8 rounded-full transition-all ${
+                          newColor === color ? 'ring-3 ring-brand-600 ring-offset-2 scale-110' : 'hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-ink/10">
+                <Button
+                  variant="primary"
+                  size="md"
+                  type="submit"
+                  isLoading={isSubmittingChild}
+                  className="w-full"
+                  rightIcon={<ChevronRight className="w-4 h-4" />}
+                >
+                  Lưu hồ sơ bé & Bắt đầu sáng tạo tranh
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {childrenList.map((kid) => {
+                  const isSelected = selectedChild?.id === kid.id;
+
+                  return (
+                    <div
+                      key={kid.id}
+                      onClick={() => {
+                        setSelectedChild(kid);
+                        setSelectedChildId(kid.id);
+                      }}
+                      className={`p-5 rounded-[24px] border-2 cursor-pointer transition-all flex items-center gap-4 ${
+                        isSelected
+                          ? 'bg-surface border-brand-600 shadow-card ring-2 ring-brand-100 scale-102'
+                          : 'bg-surface border-ink/10 hover:border-ink/25 shadow-xs'
+                      }`}
+                    >
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-xs shrink-0"
+                        style={{ backgroundColor: kid.avatar_color + '35' }}
+                      >
+                        {kid.avatar_emoji}
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <span className="font-heading font-extrabold text-base text-ink block truncate">
+                          {kid.nickname}
+                        </span>
+                        <span className="text-xs text-brand-600 font-bold block mt-0.5">
+                          {kid.age} tuổi
+                        </span>
+                        <span className="text-[11px] text-ink-faint block mt-0.5">
+                          {kid.age <= 5 ? 'Ngôn từ vui nhộn, lặp âm' : 'Cốt truyện phiêu lưu giàu cảm xúc'}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <div className="w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-btn-primary">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingChild(true)}
+                  className="px-4 py-2 rounded-full border border-dashed border-ink/20 text-xs font-bold text-ink-soft hover:text-brand-600 hover:border-brand-600 transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-brand-600" />
+                  + Thêm hồ sơ bé khác
+                </button>
+              </div>
+
+              <div className="pt-4 flex items-center justify-between border-t border-ink/10">
+                <span className="text-xs text-ink-soft">
+                  Đang chọn: <strong className="text-brand-600">{selectedChild?.nickname || 'Chưa chọn'}</strong>
+                </span>
+                <Button
+                  variant="primary"
+                  size="md"
+                  disabled={!selectedChild}
+                  onClick={() => setCurrentStep(2)}
+                  rightIcon={<ChevronRight className="w-4 h-4" />}
+                >
+                  Tiếp tục vào bàn vẽ
+                </Button>
+              </div>
+            </>
+          )}
         </main>
       )}
 

@@ -25,9 +25,9 @@ export interface AuthState {
   verifyPin: (pin: string) => boolean;
 }
 
-// Demo data for instant testing
-const DEMO_ADMIN_PROFILE: Profile = {
-  id: 'admin-0000-0000-0000-000000000001',
+// Default system profiles (Admin + Mom)
+export const DEFAULT_ADMIN_PROFILE: Profile = {
+  id: 'a0000000-0000-0000-0000-000000000001',
   full_name: 'Quản Trị Viên An Toàn',
   role: 'admin',
   is_locked: false,
@@ -37,8 +37,8 @@ const DEMO_ADMIN_PROFILE: Profile = {
   updated_at: new Date().toISOString(),
 };
 
-const DEMO_USER_PROFILE: Profile = {
-  id: 'user-0000-0000-0000-000000000002',
+export const DEFAULT_USER_PROFILE: Profile = {
+  id: 'b0000000-0000-0000-0000-000000000002',
   full_name: 'Mẹ Thu Hà',
   role: 'user',
   is_locked: false,
@@ -48,38 +48,19 @@ const DEMO_USER_PROFILE: Profile = {
   updated_at: new Date().toISOString(),
 };
 
-const DEMO_CHILDREN: Child[] = [
-  {
-    id: 'child-0001',
-    parent_id: 'user-0000-0000-0000-000000000002',
-    nickname: 'Bé Bơ',
-    age: 5,
-    avatar_color: '#FF8FA3',
-    avatar_emoji: '🥑',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'child-0002',
-    parent_id: 'user-0000-0000-0000-000000000002',
-    nickname: 'Sóc Nâu',
-    age: 8,
-    avatar_color: '#7C6CF0',
-    avatar_emoji: '🐿️',
-    created_at: new Date().toISOString(),
-  },
-];
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      profile: DEMO_USER_PROFILE,
-      childrenList: DEMO_CHILDREN,
-      selectedChildId: DEMO_CHILDREN[0].id,
+      profile: DEFAULT_USER_PROFILE,
+      childrenList: [],
+      selectedChildId: null,
       isLoading: false,
       error: null,
 
       initialize: async () => {
         try {
+          let activeProfile = get().profile || DEFAULT_USER_PROFILE;
+
           if (!isDemoMode) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
@@ -90,23 +71,35 @@ export const useAuthStore = create<AuthState>()(
                 .single();
 
               if (profile) {
-                set({ profile: profile as Profile });
-                const { data: kids } = await supabase
-                  .from('children')
-                  .select('*')
-                  .eq('parent_id', profile.id);
-                if (kids && kids.length > 0) {
-                  set({ childrenList: kids as Child[], selectedChildId: kids[0].id });
-                }
+                activeProfile = profile as Profile;
+                set({ profile: activeProfile });
               }
+            } else {
+              // Ensure default mom profile exists in local state
+              set({ profile: DEFAULT_USER_PROFILE });
+              activeProfile = DEFAULT_USER_PROFILE;
+            }
+
+            // Fetch live children from Supabase for active parent
+            const { data: kids, error: kidsError } = await supabase
+              .from('children')
+              .select('*')
+              .eq('parent_id', activeProfile.id)
+              .order('created_at', { ascending: true });
+
+            if (!kidsError && kids) {
+              set({
+                childrenList: kids as Child[],
+                selectedChildId: kids.length > 0 ? (get().selectedChildId && kids.some((k) => k.id === get().selectedChildId) ? get().selectedChildId : kids[0].id) : null,
+              });
             }
           } else {
-            // Default to demo user if not logged in
+            // Demo mode without children initially
             if (!get().profile) {
               set({
-                profile: DEMO_USER_PROFILE,
-                childrenList: DEMO_CHILDREN,
-                selectedChildId: DEMO_CHILDREN[0].id,
+                profile: DEFAULT_USER_PROFILE,
+                childrenList: [],
+                selectedChildId: null,
               });
             }
           }
@@ -121,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
           // Check for admin login
           if (email.toLowerCase().includes('admin')) {
             set({
-              profile: DEMO_ADMIN_PROFILE,
+              profile: DEFAULT_ADMIN_PROFILE,
               childrenList: [],
               selectedChildId: null,
               isLoading: false,
@@ -133,11 +126,11 @@ export const useAuthStore = create<AuthState>()(
             // Demo user mode
             set({
               profile: {
-                ...DEMO_USER_PROFILE,
+                ...DEFAULT_USER_PROFILE,
                 full_name: email.split('@')[0] || 'Phụ Huynh',
               },
-              childrenList: DEMO_CHILDREN,
-              selectedChildId: DEMO_CHILDREN[0].id,
+              childrenList: [],
+              selectedChildId: null,
               isLoading: false,
             });
             return true;
@@ -193,8 +186,8 @@ export const useAuthStore = create<AuthState>()(
             };
             set({
               profile: newProfile,
-              childrenList: DEMO_CHILDREN,
-              selectedChildId: DEMO_CHILDREN[0].id,
+              childrenList: [],
+              selectedChildId: null,
               isLoading: false,
             });
             return true;
