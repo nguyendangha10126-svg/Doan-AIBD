@@ -23,17 +23,18 @@ import { toast } from 'sonner';
 
 export const DashboardPage: React.FC = () => {
   const { profile, childrenList, selectedChildId, setSelectedChildId } = useAuthStore();
-  const { stories, badges, userBadges, creativeStreak, readingEvents, deleteStory } = useStoryStore();
+  const { stories, badges, userBadges, creativeStreak, readingEvents, deleteStory, fetchStories } = useStoryStore();
   const navigate = useNavigate();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    fetchStories();
     const hasSeen = localStorage.getItem('has_seen_onboarding');
     if (!hasSeen) {
       setShowOnboarding(true);
     }
-  }, []);
+  }, [fetchStories]);
 
   const currentChild = childrenList.find((c) => c.id === selectedChildId) || childrenList[0];
 

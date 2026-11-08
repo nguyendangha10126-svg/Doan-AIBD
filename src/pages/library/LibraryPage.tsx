@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -20,8 +20,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 export const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { stories, deleteStory } = useStoryStore();
+  const { stories, deleteStory, fetchStories } = useStoryStore();
   const { childrenList } = useAuthStore();
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChildFilter, setSelectedChildFilter] = useState<string>('all');

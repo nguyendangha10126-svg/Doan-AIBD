@@ -3,15 +3,18 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { router } from '@/app/router';
 import { useAuthStore } from '@/store/authStore';
+import { useStoryStore } from '@/store/storyStore';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { SystemBanner } from '@/components/layout/SystemBanner';
 
 export const App: React.FC = () => {
   const initialize = useAuthStore((state) => state.initialize);
+  const fetchStories = useStoryStore((state) => state.fetchStories);
 
   useEffect(() => {
     initialize();
-  }, [initialize]);
+    fetchStories();
+  }, [initialize, fetchStories]);
 
   return (
     <ErrorBoundary>
