@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Sparkles, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
+import { supabase, isDemoMode } from '@/lib/supabase';
+import { Story } from '@/types/database';
 import { vi } from '@/lib/i18n/vi';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -9,8 +11,32 @@ import { Badge } from '@/components/ui/Badge';
 export const SharedStoryPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const { stories } = useStoryStore();
+  const [dbStory, setDbStory] = useState<Story | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const story = stories.find((s) => s.share_token === token || s.is_shared) || stories[0];
+  useEffect(() => {
+    async function loadSharedStory() {
+      if (!isDemoMode && token) {
+        try {
+          const { data } = await supabase
+            .from('stories')
+            .select('*, pages:story_pages(*), drawing:drawings(*), child:children(*)')
+            .eq('share_token', token)
+            .single();
+
+          if (data) {
+            setDbStory(data as Story);
+          }
+        } catch (err) {
+          console.error('Error fetching shared story:', err);
+        }
+      }
+      setIsLoading(false);
+    }
+    loadSharedStory();
+  }, [token]);
+
+  const story = dbStory || stories.find((s) => s.share_token === token || s.is_shared) || (stories.length > 0 && stories[0].is_shared ? stories[0] : null);
   const pages = story?.pages || [];
   const [pageIndex, setPageIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -25,11 +51,24 @@ export const SharedStoryPage: React.FC = () => {
     } else {
       setIsPlaying(true);
       const utterance = new SpeechSynthesisUtterance(currentPage?.text_content || '');
+      utterance.lang = 'vi-VN';
+      utterance.rate = 0.9;
       utterance.onend = () => setIsPlaying(false);
       utterance.onerror = () => setIsPlaying(false);
       window.speechSynthesis.speak(utterance);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center p-6 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <Sparkles className="w-8 h-8 text-brand-600 animate-spin" />
+          <p className="text-sm font-heading font-bold text-ink-soft">Đang mở trang sách cổ tích...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!story) {
     return (

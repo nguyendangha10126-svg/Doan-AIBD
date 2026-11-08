@@ -87,3 +87,8 @@ Tại route `/kid`:
 - Hiệu ứng âm thanh vui nhộn chạy qua Web Audio API không phụ thuộc file mp3 ngoài (`src/lib/sound.ts`).
 - Bìa sách cỡ lớn lướt ngang với nút bấm chạm $\ge 72px$.
 - Cổng phụ huynh 3 cơ chế mở khóa: giữ nút góc 2 giây (có thanh tiến độ trực quan), giải phép nhân ngẫu nhiên, hoặc nhập mã PIN.
+
+### 5.4. Kỷ Luật Responsive & Triệt Tiêu Tràn Viền (Zero Overflow Guarantee)
+- **Tương thích từ 320px đến 1440px**: Mọi khối giao diện (Thanh điều hướng di động, bộ chọn màu bé, thanh điều khiển giọng đọc tiếng Việt, bảng biểu quản trị) đều tích hợp `flex-wrap`, `truncate` và `overflow-x-auto` để đảm bảo 0% phần tử bị tràn hoặc che khuất trên màn hình hẹp (320px–375px).
+- **Hồ sơ bé linh hoạt (Inline Child Onboarding)**: Nút quay lại Bước 2 trong `CreateStoryPage.tsx` luôn hiển thị ("Hồ sơ bé" hoặc "Chọn lại bé"), cho phép mẹ quay lại chỉnh sửa hoặc thêm hồ sơ bé mới bất kỳ lúc nào mà không bị kẹt giao diện.
+- **Trạng thái bảng rỗng rõ ràng (Empty State Rows)**: Mọi bảng dữ liệu Admin và Tủ sách đều trang bị hàng thông báo rỗng (`<tr><td colSpan={...}>` hoặc component `EmptyState`), mang lại cảm giác thiết kế có chủ đích và chuyên nghiệp.

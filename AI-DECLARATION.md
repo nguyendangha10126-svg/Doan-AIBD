@@ -28,6 +28,8 @@ Tôi/Nhóm tác giả cam kết:
 | **Phase 5**<br/>20/10/2026 | Antigravity Agent | Gemini 2.5 Pro | Trình đọc sách lật 2 trang `react-pageflip` (desktop) và swipe (mobile), chống cắt tranh (`object-fit: contain`), TTS karaoke, chế độ bé cô lập. | `StoryReadingPage.tsx`, `KidModePage.tsx`, `soundEffects` (Web Audio API). | Giới hạn Ken Burns zoom tối đa 1.35x và kẹp an toàn tọa độ tâm; bẫy lịch sử duyệt web `popstate` và khóa cổng phụ huynh 2 giây. |
 | **Phase 6**<br/>20/10/2026 | Puppeteer Headless | Node.js Automation | Nâng cấp trang Quản trị kiểm duyệt (Split View, phím tắt A/R, toggle strict drawing check), chụp 18 ảnh "SAU", cập nhật toàn bộ tài liệu. | `ModerationQueuePage.tsx`, `ModerationSettingsPage.tsx`, 18 ảnh trong `docs/screenshots/after/`, bộ docs. | Kiểm tra toàn bộ quy trình build (`check-contrast` + `typecheck` + `vite build`), đảm bảo 0 lỗi TypeScript và 0 `any`. |
 | **Phase 7**<br/>31/10 - 02/11/2026 | Antigravity Agent | Gemini 2.5 Pro | Khắc phục triệt để các cảnh báo VS Code: giải quyết cảnh báo `baseUrl` deprecated trong TS 5.8+, chuẩn hóa ESLint trên toàn bộ thư mục scripts và đẩy mã nguồn lên GitHub. | `tsconfig.json`, `eslint.config.js`, `scripts/test-pipeline.js`, GitHub repository setup. | Tinh chỉnh `paths` trong tsconfig không cần `baseUrl`, cấu hình Node.js environment globals trong ESLint Flat config, bảo đảm 100% không còn gạch đỏ trong IDE. |
+| **Phase 8**<br/>04/11 - 07/11/2026 | Antigravity Agent | Gemini 2.5 Pro | Kết nối Supabase Cloud thực tế (`htvslxbytqoteyimtcxg`), chuyển đổi kiến trúc Dữ liệu Sạch (Clean Database-First Architecture), tích hợp giọng đọc Tiếng Việt tự nhiên & bộ tổng hợp âm thanh Web Audio API. | `supabase/full_setup.sql`, `src/lib/supabase.ts`, `StoryReadingPage.tsx`, `CreateStoryPage.tsx`, `authStore.ts`. | Xóa bỏ toàn bộ mock data cũ, nạp schema idempotent trên Postgres, bổ sung bộ chọn giọng đọc Tiếng Việt (`vi-VN`) và tạo hồ sơ bé tức thì ngay tại Bước 1 tạo truyện. |
+| **Phase 9**<br/>08/11/2026 | Antigravity Agent | Gemini 2.5 Pro | Rà soát toàn diện logic tương tác, phân quyền RBAC thống nhất (`auto_approved`, `approved`, `parent_approved`), triệt tiêu tràn viền di động 320px-1440px và sửa lỗi chia sẻ công khai Supabase. | `database.ts`, `adminStore.ts`, `authStore.ts`, `BookCover.tsx`, `SharedStoryPage.tsx`, các trang Admin & User. | Thay thế UUID giả định `'admin-1'` bằng UUID chuẩn Postgres, đồng bộ hóa hàm `isStoryApproved()`, xử lý đăng xuất an toàn trong Cài đặt, thêm empty states cho bảng Admin và truy vấn Supabase cho trang chia sẻ công khai. |
 
 ---
 
@@ -41,10 +43,12 @@ Trong quá trình đồng hành cùng AI Agent, lập trình viên đã phát hi
    - Tự động hóa kiểm tra độ tương phản 19 cặp token màu ngay trong lệnh `npm run build`. Khi màu xanh lá `#1F8A5B` trên nền `#DDF6E9` cho tỷ lệ 3.80:1 (chưa đạt 4.5:1), kịch bản tự động dừng build. Lập trình viên đã tinh chỉnh sang `#166E48` (5.49:1) để bảo đảm khả năng tiếp cận hoàn hảo.
 3. **Bảo Mật Mã PIN Phụ Huynh Bằng Băm SHA-256**:
    - Phát hiện mã PIN phụ huynh ban đầu được lưu và hiển thị dưới dạng văn bản rõ `••••`, lập trình viên đã thay thế bằng hàm băm mật mã SHA-256 đồng bộ và thiết kế modal nhập 4 ô số OTP riêng biệt.
-4. **Trải Nghiệm Đọc Sách Không Cắt Hình & Chế Độ Bé An Toàn**:
-   - Sử dụng thuộc tính `object-fit: contain` trong khung giấy polaroid, kẹp tọa độ tâm và giới hạn Ken Burns zoom ở mức tối đa 1.35x để giữ trọn vẹn từng nét vẽ của trẻ. Thiết lập bẫy lịch sử duyệt web để trẻ không thể tự ý thoát ra ngoài màn hình quản trị của phụ huynh.
-5. **Tiêu Chuẩn Mã Nguồn Tuyệt Đối Sạch (Zero Warnings / Zero Errors)**:
-   - Rà soát toàn bộ cấu hình `eslint.config.js` để bao quát cả mã client (`src/`) và các script tự động hóa (`scripts/`), bảo đảm khi mở bất kỳ tệp tin nào trong IDE đều không xuất hiện cảnh báo hay gạch đỏ.
+4. **Kiến Trúc Dữ Liệu Sạch & Kết Nối Supabase Thực Tế**:
+   - Chấm dứt việc sử dụng mảng dữ liệu mẫu cục bộ, kết nối trực tiếp với Supabase PostgreSQL (`htvslxbytqoteyimtcxg.supabase.co`). Hệ thống khởi tạo trạng thái sạch với 2 tài khoản chính (Admin và Mẹ Thu Hà), cho phép phụ huynh tự tay thêm hồ sơ bé và lưu trữ bền vững tranh vẽ và câu chuyện.
+5. **Thống Nhất Phân Quyền & Kiểm Duyệt Khóa Ngoại PostgreSQL**:
+   - Chuẩn hóa hàm kiểm tra `isStoryApproved()` bao quát mọi trạng thái duyệt (`auto_approved`, `approved`, `parent_approved`). Sửa lỗi khóa ngoại UUID `'admin-1'` thành UUID hợp lệ tham chiếu `public.profiles(id)` khi Admin phê duyệt hàng đợi an toàn.
+6. **Triệt Tiêu Tràn Viền (Zero Overflow) & Trải Nghiệm Chia Sẻ Công Khai**:
+   - Khắc phục các phần tử tràn khung trên màn hình nhỏ (320px–375px) bằng `flex-wrap` và `truncate`. Cập nhật trang `/shared/:token` tự động nạp truyện trực tiếp từ Supabase cho người thân xem trên bất kỳ thiết bị nào mà không cần đăng nhập.
 
 ---
 

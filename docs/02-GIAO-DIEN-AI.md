@@ -101,3 +101,16 @@ Chạy kiểm thử bất kỳ lúc nào bằng lệnh:
 npm run test:pipeline
 ```
 Kịch bản đồng thời kiểm tra chức năng công tắc `strict_drawing_check` (true: chặn nghiêm ngặt; false: cho phép ở chế độ demo).
+
+---
+
+## 4. GIỌNG ĐỌC TIẾNG VIỆT & TỔNG HỢP ÂM THANH SƯ PHẠM (AUDIO & TTS ENGINE)
+1. **Bộ tổng hợp giọng đọc Tiếng Việt (Neural Vietnamese TTS)**:
+   - Tự động nhận dạng và chọn lọc các giọng đọc tiếng Việt mượt mà của hệ thống: *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, *Apple Linh*, *An (Thiếu nhi)*.
+   - Hỗ trợ đổi giọng trực tiếp trong menu góc đọc và tùy chỉnh tốc độ kể chuyện 0.8x (ru ngủ / chậm rãi), 1.0x (tiêu chuẩn), 1.2x (sôi nổi).
+   - Tự động tách câu theo dấu ngắt và highlight chữ theo hiệu ứng Karaoke đồng bộ với giọng đọc.
+2. **Bộ tạo hiệu ứng âm thanh thời gian thực (Web Audio API Synthesizers)**:
+   - Tạo trực tiếp qua bộ tạo dao động âm thanh (Oscillator & BiquadFilter) trong `src/lib/sound.ts`, không tốn băng thông tải file mp3:
+     - `playPageFlip()`: Âm thanh lật giấy sách chân thực bằng tiếng ồn hồng qua bộ lọc thông dải (Bandpass noise sweep 1000Hz $\rightarrow$ 320Hz).
+     - `playSparkle()`: Hợp âm ngũ cung lung linh khi chuyển trang hoặc hoàn thành sáng tác.
+     - `playLock()` / `playTap()`: Phản hồi âm thanh xúc giác trong Chế độ bé và Cổng bảo vệ phụ huynh.

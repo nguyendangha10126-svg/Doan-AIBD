@@ -16,8 +16,11 @@
 2. **AI là trái tim của hệ thống**: Vận hành **Pipeline 3 Lớp chuyên sâu** kết hợp thị giác máy tính, phân loại tranh vẽ nghiêm ngặt (`child_drawing`), bám sát vật thể tranh (`grounded_objects`) và chấm điểm trung thực (`faithfulness_score`).
 3. **An toàn thiếu nhi tuyệt đối**: Tự động từ chối ảnh có mặt người thật, ảnh chụp đời thường, logo đồ họa hoặc ảnh chụp màn hình văn bản với mã lỗi thân thiện `NOT_A_DRAWING`.
 4. **Chế độ Bé cô lập (Kid Mode)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, nút chạm lớn $\ge 72px$, âm thanh vui nhộn (Web Audio API) và cổng phụ huynh bảo mật (giữ 2 giây, đố toán hoặc mã PIN băm SHA-256).
-5. **Trình đọc sách hoàn hảo (Reading View)**: Đọc từng câu với highlight karaoke, sách lật 2 trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ hiển thị `object-fit: contain` không bao giờ bị cắt mất viền, chế độ ru ngủ dịu mắt.
+5. **Trình đọc sách hoàn hảo (Reading View)**: Đọc từng câu với highlight karaoke, tích hợp giọng đọc Tiếng Việt chuẩn tự nhiên (Hoài My, Nam Minh, An, Linh, Google) kèm menu đổi giọng và điều chỉnh tốc độ, sách lật 2 trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ hiển thị `object-fit: contain` không bao giờ bị cắt mất viền, chế độ ru ngủ dịu mắt.
 6. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Moderation Queue với Split View và phím tắt `A`/`R`), bật tắt kiểm tra tranh vẽ nghiêm ngặt, quản lý bộ quy tắc an toàn động và giám sát chi phí token thời gian thực.
+7. **Kiến trúc Dữ liệu Sạch (Clean Database-First)**: Không sử dụng dữ liệu rác hay truyện mẫu cứng; kết nối trực tiếp với Supabase PostgreSQL (`htvslxbytqoteyimtcxg.supabase.co`). Khởi tạo với Admin và Mẹ Thu Hà, phụ huynh tự tay thêm hồ sơ bé và lưu trữ bền vững.
+8. **Phân quyền RBAC Thống nhất & Chia sẻ Công khai**: Chuẩn hóa logic kiểm tra duyệt truyện `isStoryApproved` (`auto_approved`, `approved`, `parent_approved`). Route chia sẻ `/shared/:token` tự động nạp từ Supabase cho người thân xem trên bất kỳ thiết bị nào.
+9. **Chống tràn viền 100% (Zero Overflow Guarantee)**: Kiểm thử toàn diện trên dải kích thước từ màn hình siêu hẹp (320px–375px) đến màn hình lớn (1440px), đảm bảo mọi nút bấm, bảng biểu và thanh điều khiển luôn nằm trọn vẹn trong khung nhìn.
 
 ---
 

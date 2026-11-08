@@ -12,6 +12,7 @@
    - Có kiểm thử tương thích cho Tablet (768px $\times$ 1024px) và màn hình nhỏ xuống tới 360px không bị tràn thanh cuộn ngang.
 3. **Môi trường Backend**: Supabase cung cấp Auth, PostgreSQL Database, Storage và Deno-based Edge Functions.
 4. **Cơ chế Dự phòng (Offline / Demo Mode)**: Để tạo điều kiện thuận lợi nhất cho giảng viên và hội đồng chấm đồ án khi chạy mã nguồn mà chưa kịp cấu hình Supabase Cloud Project hoặc Gemini API Key, ứng dụng tích hợp sẵn chế độ Mock/Demo thông minh: nếu phát hiện biến môi trường trống hoặc đặt `VITE_USE_MOCK=true`, hệ thống tự động sử dụng kho dữ liệu mẫu chuẩn hóa (với banner "DỮ LIỆU DEMO" cố định) để toàn bộ các luồng (đăng nhập, duyệt truyện, đọc sách lật trang, xem biểu đồ admin) vẫn chạy trơn tru 100%.
+5. **Kiến trúc Dữ liệu Sạch (Clean Database-First)**: Mặc định ứng dụng kết nối trực tiếp với dự án Supabase PostgreSQL đang chạy thực tế (`htvslxbytqoteyimtcxg.supabase.co`). Cơ sở dữ liệu khởi đầu sạch với 2 tài khoản chính (Admin và Mẹ Thu Hà), không có dữ liệu rác hay truyện mẫu cứng. Mọi hồ sơ bé và ấn bản sách tranh do người dùng tự tay tạo lập và lưu trữ bền vững.
 
 ---
 
@@ -31,9 +32,9 @@
 
 ## 3. GIẢ ĐỊNH VỀ GIỌNG ĐỌC & ĐA PHƯƠNG TIỆN (TTS & AUDIO)
 1. **Web Speech API**: Sử dụng trực tiếp API `window.speechSynthesis` sẵn có trên trình duyệt của người dùng. Không phụ thuộc vào dịch vụ TTS đám mây bên thứ ba có phí để đảm bảo tính sẵn sàng cao, hoàn toàn miễn phí và không có độ trễ truyền tải.
-2. **Ưu tiên Giọng Tiếng Việt**: Hệ thống tự động quét danh sách giọng đọc của thiết bị và ưu tiên các mã ngôn ngữ `vi-VN` hoặc `vi`. Nếu thiết bị không có giọng tiếng Việt (ví dụ một số bản Linux hoặc máy ảo đặc thù), ứng dụng sẽ hiển thị thông báo nhẹ nhàng và sử dụng giọng mặc định.
+2. **Bộ Giọng Tiếng Việt Tự Nhiên Đa Dạng**: Hệ thống tự động quét danh sách giọng đọc của thiết bị và cung cấp menu trực quan chọn giọng đọc chuẩn (*Hoài My (Nữ)*, *Nam Minh (Nam)*, *Google Tiếng Việt*, *An (Thiếu nhi)*, *Linh*). Hỗ trợ điều chỉnh tốc độ kể chuyện 0.8x, 1.0x, 1.2x phù hợp với từng tâm trạng của bé.
 3. **Đồng bộ Câu đọc (Sentence Highlighting)**: Văn bản của trang truyện được tách câu theo dấu câu (`.`, `!`, `?`); khi phát âm thanh đến từng câu, câu tương ứng sẽ được bôi đậm nổi bật trên trang sách theo phong cách Karaoke.
-4. **Hiệu ứng Âm thanh Chế độ Trẻ Em (Sound Effects)**: Chạy trên Web Audio API thuần túy trong `src/lib/sound.ts`, không cần file mp3 tĩnh, giúp tạo âm thanh chạm (tap), phép thuật (magic), thành công (success) và khóa (lock) nhẹ nhàng và mượt mà.
+4. **Hiệu ứng Âm thanh Chế độ Trẻ Em & Lật Sách (Web Audio API Synthesizers)**: Chạy trên Web Audio API thuần túy trong `src/lib/sound.ts`, không cần file mp3 tĩnh: tạo tiếng lật giấy sách `playPageFlip()` bằng bộ lọc quét dải tần tiếng ồn hồng (Bandpass sweep), âm thanh thần tiên `playSparkle()`, âm thanh chạm `playTap()`, và âm thanh khóa cổng an toàn `playLock()`.
 
 ---
 

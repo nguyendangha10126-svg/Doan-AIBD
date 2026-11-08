@@ -27,7 +27,7 @@ Trong một sản phẩm ứng dụng Trí Tuệ Nhân Tạo phục vụ trẻ n
 
 ### 2.2. Phím Tắt Phê Duyệt Nhanh (Keyboard Shortcuts)
 Quản trị viên có thể kiểm duyệt tốc độ cao:
-- Bấm phím <kbd>A</kbd>: Phê duyệt tức thì (`approved`).
+- Bấm phím <kbd>A</kbd>: Phê duyệt tức thì (`approved`), gắn khóa ngoại UUID chuẩn xác của Quản trị viên (`a0000000-0000-0000-0000-000000000001`), cập nhật trạng thái `stories` và tự động ghi nhật ký vào `moderation_reviews` và `admin_audit_logs`.
 - Bấm phím <kbd>R</kbd>: Mở modal từ chối (`rejected`), cung cấp 4 lý do mẫu mang tính sư phạm tích cực hoặc nhập lý do tùy chỉnh để gửi phản hồi nhẹ nhàng cho cha mẹ.
 - Hỗ trợ chọn nhiều checkbox để duyệt hàng loạt (Batch Approve).
 

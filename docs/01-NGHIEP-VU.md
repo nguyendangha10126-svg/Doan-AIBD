@@ -124,3 +124,15 @@ Hệ thống thiết lập 10 quy tắc phòng hộ thực tế được quản 
 8. **Phân biệt đối xử (Mức 3 - Rewrite)**: Loại bỏ các định kiến ngoại hình, màu da, giới tính.
 9. **Bi kịch bế tắc (Mức 4 - Rewrite)**: Đảm bảo câu chuyện luôn có lối thoát tươi sáng và hy vọng.
 10. **Xung đột gia đình gay gắt (Mức 4 - Flag)**: Đưa vào hàng chờ để kiểm duyệt viên kiểm tra yếu tố tình cảm gia đình ấm áp.
+
+---
+
+## 6. KIẾN TRÚC DỮ LIỆU SẠCH & ĐỒNG BỘ THỜI GIAN THỰC (CLEAN DATA ARCHITECTURE)
+Hệ thống chuyển đổi toàn diện sang kiến trúc Database-First:
+1. **Dữ liệu thật 100%**: Loại bỏ toàn bộ mảng dữ liệu mẫu giả định (mock data). Dữ liệu khởi tạo bao gồm tài khoản Quản trị viên (`admin@drawtostory.vn`) và Mẹ Thu Hà (`me@phuhuynh.vn`). Phụ huynh tự tay tạo hồ sơ cho bé (biệt danh, tuổi, màu sắc, emoji) và lưu trữ bền vững vào bảng `children`.
+2. **Chuẩn hóa trạng thái duyệt truyện**:
+   - `auto_approved`: AI Lớp 3 thẩm định an toàn vượt ngưỡng.
+   - `approved` / `parent_approved`: Quản trị viên hoặc phụ huynh kiểm duyệt chấp thuận.
+   - `pending_review`: Chờ thẩm định bởi Admin khi có nghi vấn an toàn.
+   - `rejected`: Từ chối do vi phạm quy tắc an toàn hoặc không phải tranh vẽ trẻ em.
+3. **Đồng bộ tự động khi khởi động ứng dụng**: App tự động nạp danh sách truyện (`fetchStories`) và hồ sơ bé từ Supabase khi mở ứng dụng, vào Tủ sách, Chế độ bé hoặc Bảng điều khiển. Mọi chỉ số (thời gian nghe đọc, số lượng truyện, tỷ lệ duyệt an toàn) đều phản ánh 100% số liệu thực tế từ cơ sở dữ liệu.
