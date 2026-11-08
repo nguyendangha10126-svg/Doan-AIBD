@@ -1015,7 +1015,7 @@ export const StoryReadingPage: React.FC = () => {
                     toast.info(`Đã đổi giọng đọc: ${v.name.split(' ')[0]}`);
                   }
                 }}
-                className={`text-[11px] font-bold px-2 py-1 rounded-full border border-ink/10 cursor-pointer focus:outline-none transition-colors ${
+                className={`text-[11px] font-bold px-2 py-1 rounded-full border border-ink/10 cursor-pointer focus:outline-none transition-colors max-w-[125px] sm:max-w-none truncate ${
                   isBedtimeMode
                     ? 'bg-[#231e38] text-[#F3EFE6] border-[#3d3257]'
                     : 'bg-surface-2 text-ink'

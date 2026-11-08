@@ -257,7 +257,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div>
               <span className="text-2xl font-heading font-extrabold text-ink block leading-none">
-                {totalListeningMinutes + 18} phút
+                {totalListeningMinutes} phút
               </span>
               <span className="text-xs text-ink-soft mt-1 block">Thời gian nghe kể chuyện</span>
             </div>

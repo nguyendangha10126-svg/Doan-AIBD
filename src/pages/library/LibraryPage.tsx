@@ -17,6 +17,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { BookCover } from '@/components/ui/BookCover';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { isStoryApproved } from '@/types/database';
 
 export const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,7 +41,7 @@ export const LibraryPage: React.FC = () => {
     }
     // Status filter
     if (selectedStatusFilter !== 'all') {
-      if (selectedStatusFilter === 'approved' && !['auto_approved', 'approved'].includes(story.status)) {
+      if (selectedStatusFilter === 'approved' && !isStoryApproved(story.status)) {
         return false;
       }
       if (selectedStatusFilter === 'pending' && story.status !== 'pending_review') {

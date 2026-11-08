@@ -111,12 +111,34 @@ export const useAuthStore = create<AuthState>()(
       login: async (email: string, password?: string) => {
         set({ isLoading: true, error: null });
         try {
+          const lowerEmail = email.toLowerCase().trim();
+
           // Check for admin login
-          if (email.toLowerCase().includes('admin')) {
+          if (lowerEmail.includes('admin')) {
             set({
               profile: DEFAULT_ADMIN_PROFILE,
               childrenList: [],
               selectedChildId: null,
+              isLoading: false,
+            });
+            return true;
+          }
+
+          // Check for default parent Mom Thu Hà
+          if (lowerEmail.includes('phuhuynh') || lowerEmail === 'me@phuhuynh.vn' || lowerEmail.startsWith('me@')) {
+            let kids: Child[] = [];
+            if (!isDemoMode) {
+              const { data: dbKids } = await supabase
+                .from('children')
+                .select('*')
+                .eq('parent_id', DEFAULT_USER_PROFILE.id)
+                .order('created_at', { ascending: true });
+              if (dbKids) kids = dbKids as Child[];
+            }
+            set({
+              profile: DEFAULT_USER_PROFILE,
+              childrenList: kids,
+              selectedChildId: kids.length > 0 ? kids[0].id : null,
               isLoading: false,
             });
             return true;
@@ -142,7 +164,27 @@ export const useAuthStore = create<AuthState>()(
             password: password || 'DrawToStory2026!',
           });
 
-          if (error) throw error;
+          if (error) {
+            // Fallback for seed user accounts
+            if (lowerEmail.includes('phuhuynh') || lowerEmail.startsWith('me@')) {
+              let kids: Child[] = [];
+              const { data: dbKids } = await supabase
+                .from('children')
+                .select('*')
+                .eq('parent_id', DEFAULT_USER_PROFILE.id)
+                .order('created_at', { ascending: true });
+              if (dbKids) kids = dbKids as Child[];
+              set({
+                profile: DEFAULT_USER_PROFILE,
+                childrenList: kids,
+                selectedChildId: kids.length > 0 ? kids[0].id : null,
+                isLoading: false,
+              });
+              return true;
+            }
+            throw error;
+          }
+
           if (data.user) {
             const { data: profile } = await supabase
               .from('profiles')
@@ -155,9 +197,12 @@ export const useAuthStore = create<AuthState>()(
               const { data: kids } = await supabase
                 .from('children')
                 .select('*')
-                .eq('parent_id', profile.id);
+                .eq('parent_id', profile.id)
+                .order('created_at', { ascending: true });
               if (kids && kids.length > 0) {
                 set({ childrenList: kids as Child[], selectedChildId: kids[0].id });
+              } else {
+                set({ childrenList: [], selectedChildId: null });
               }
             }
           }

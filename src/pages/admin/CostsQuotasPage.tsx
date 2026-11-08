@@ -170,33 +170,41 @@ export const CostsQuotasPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-peach/30">
-              {filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-cream-100/60 transition-colors">
-                  <td className="p-3.5 text-main-muted whitespace-nowrap">
-                    {formatDate(log.created_at)}
-                  </td>
-                  <td className="p-3.5 font-bold text-main">
-                    {log.action}
-                  </td>
-                  <td className="p-3.5 font-mono text-accent">
-                    {log.model}
-                  </td>
-                  <td className="p-3.5 text-center font-mono">
-                    {log.input_tokens} / {log.output_tokens}
-                  </td>
-                  <td className="p-3.5 text-center font-mono">
-                    {log.latency_ms}ms
-                  </td>
-                  <td className="p-3.5 text-right font-mono font-bold text-emerald-700">
-                    {formatCurrencyUSD(log.estimated_cost_usd)}
-                  </td>
-                  <td className="p-3.5 text-center">
-                    <Badge variant={log.status === 'success' ? 'mint' : 'danger'} size="sm">
-                      {log.status}
-                    </Badge>
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-xs text-main-muted font-bold">
+                    Chưa có dữ liệu gọi AI trong hệ thống.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-cream-100/60 transition-colors">
+                    <td className="p-3.5 text-main-muted whitespace-nowrap">
+                      {formatDate(log.created_at)}
+                    </td>
+                    <td className="p-3.5 font-bold text-main">
+                      {log.action}
+                    </td>
+                    <td className="p-3.5 font-mono text-accent">
+                      {log.model}
+                    </td>
+                    <td className="p-3.5 text-center font-mono">
+                      {log.input_tokens} / {log.output_tokens}
+                    </td>
+                    <td className="p-3.5 text-center font-mono">
+                      {log.latency_ms}ms
+                    </td>
+                    <td className="p-3.5 text-right font-mono font-bold text-emerald-700">
+                      {formatCurrencyUSD(log.estimated_cost_usd)}
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <Badge variant={log.status === 'success' ? 'mint' : 'danger'} size="sm">
+                        {log.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

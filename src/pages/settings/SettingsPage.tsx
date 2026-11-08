@@ -24,7 +24,7 @@ import { OtpPinInput } from '@/components/ui/OtpPinInput';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export const SettingsPage: React.FC = () => {
-  const { profile, childrenList, addChild, updateChild, deleteChild, updatePin } = useAuthStore();
+  const { profile, childrenList, addChild, updateChild, deleteChild, updatePin, logout } = useAuthStore();
   const { stories, exportUserDataJson, clearAllUserData } = useStoryStore();
 
   // Child modal state (Add & Edit)
@@ -139,8 +139,9 @@ export const SettingsPage: React.FC = () => {
     toast.success('Đã tải xuống toàn bộ dữ liệu gia đình dạng JSON!');
   };
 
-  const handleDeleteAccountConfirmed = () => {
+  const handleDeleteAccountConfirmed = async () => {
     clearAllUserData();
+    await logout();
     toast.success('Đã xóa vĩnh viễn toàn bộ dữ liệu tài khoản');
     setIsDeleteAccountOpen(false);
     window.location.href = '/login';

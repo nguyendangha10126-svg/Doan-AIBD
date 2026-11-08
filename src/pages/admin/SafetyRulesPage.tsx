@@ -89,57 +89,65 @@ export const SafetyRulesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-peach/30">
-              {safetyRules.map((rule) => (
-                <tr key={rule.id} className="hover:bg-cream-100/60 transition-colors">
-                  <td className="p-4 font-heading font-bold text-main whitespace-nowrap">
-                    {rule.category}
-                  </td>
-                  <td className="p-4 text-main-muted max-w-xs md:max-w-md">
-                    {rule.description}
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className="font-heading font-black text-xs px-2.5 py-1 rounded-full bg-cream-300 border border-peach/50">
-                      Mức {rule.severity}/5
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <Badge variant={getActionBadgeVariant(rule.action)} size="sm">
-                      {rule.action.toUpperCase()}
-                    </Badge>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => {
-                        toggleSafetyRule(rule.id);
-                        toast.success(vi.admin.rules.toggleSuccess);
-                      }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        rule.is_active ? 'bg-emerald-500' : 'bg-gray-300'
-                      }`}
-                      aria-label="Bật tắt quy tắc"
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          rule.is_active ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button
-                      onClick={() => {
-                        deleteSafetyRule(rule.id);
-                        toast.info('Đã xóa quy tắc.');
-                      }}
-                      className="p-2 text-main-muted hover:text-rose-500 transition-colors"
-                      title="Xóa quy tắc"
-                      aria-label="Xóa quy tắc"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              {safetyRules.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-sm text-main-muted font-bold">
+                    Chưa có quy tắc an toàn nào. Bấm &quot;Thêm quy tắc mới&quot; để thiết lập.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                safetyRules.map((rule) => (
+                  <tr key={rule.id} className="hover:bg-cream-100/60 transition-colors">
+                    <td className="p-4 font-heading font-bold text-main whitespace-nowrap">
+                      {rule.category}
+                    </td>
+                    <td className="p-4 text-main-muted max-w-xs md:max-w-md">
+                      {rule.description}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className="font-heading font-black text-xs px-2.5 py-1 rounded-full bg-cream-300 border border-peach/50">
+                        Mức {rule.severity}/5
+                      </span>
+                    </td>
+                    <td className="p-4 text-center">
+                      <Badge variant={getActionBadgeVariant(rule.action)} size="sm">
+                        {rule.action.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => {
+                          toggleSafetyRule(rule.id);
+                          toast.success(vi.admin.rules.toggleSuccess);
+                        }}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          rule.is_active ? 'bg-emerald-500' : 'bg-gray-300'
+                        }`}
+                        aria-label="Bật tắt quy tắc"
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            rule.is_active ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => {
+                          deleteSafetyRule(rule.id);
+                          toast.info('Đã xóa quy tắc.');
+                        }}
+                        className="p-2 text-main-muted hover:text-rose-500 transition-colors"
+                        title="Xóa quy tắc"
+                        aria-label="Xóa quy tắc"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

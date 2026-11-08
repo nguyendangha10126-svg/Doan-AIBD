@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
 import { supabase, isDemoMode } from '@/lib/supabase';
+import { isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -16,10 +17,10 @@ export const TrustPage: React.FC = () => {
   const { stories } = useStoryStore();
 
   const [stats, setStats] = useState({
-    approvalRate: 96,
+    approvalRate: 100,
     avgReviewTime: '1.8s',
-    blockedCount: 14,
-    totalStories: 28,
+    blockedCount: 0,
+    totalStories: 0,
   });
 
   useEffect(() => {
@@ -33,12 +34,12 @@ export const TrustPage: React.FC = () => {
           const { count: approvedCount } = await supabase
             .from('stories')
             .select('*', { count: 'exact', head: true })
-            .in('status', ['auto_approved', 'approved']);
+            .in('status', ['auto_approved', 'approved', 'parent_approved']);
 
           const { count: blockedCount } = await supabase
-            .from('ai_logs')
+            .from('stories')
             .select('*', { count: 'exact', head: true })
-            .eq('status', 'error');
+            .eq('status', 'rejected');
 
           const { data: latencyLogs } = await supabase
             .from('ai_logs')
@@ -52,13 +53,14 @@ export const TrustPage: React.FC = () => {
           }
 
           const total = totalCount || stories.length;
-          const approved = approvedCount || stories.filter(s => ['auto_approved', 'approved'].includes(s.status)).length;
-          const rate = total > 0 ? Math.round((approved / total) * 100) : 96;
+          const approved = approvedCount ?? stories.filter(s => isStoryApproved(s.status)).length;
+          const rejected = blockedCount ?? stories.filter(s => s.status === 'rejected').length;
+          const rate = total > 0 ? Math.round((approved / total) * 100) : 100;
 
           setStats({
             approvalRate: rate,
             avgReviewTime: `${(avgLatency / 1000).toFixed(1)}s`,
-            blockedCount: blockedCount || 14,
+            blockedCount: rejected,
             totalStories: total,
           });
         } catch {
@@ -72,14 +74,14 @@ export const TrustPage: React.FC = () => {
 
     function computeFromStore() {
       const total = stories.length;
-      const approved = stories.filter(s => ['auto_approved', 'approved'].includes(s.status)).length;
+      const approved = stories.filter(s => isStoryApproved(s.status)).length;
       const rejected = stories.filter(s => s.status === 'rejected').length;
-      const rate = total > 0 ? Math.round((approved / total) * 100) : 95;
+      const rate = total > 0 ? Math.round((approved / total) * 100) : 100;
 
       setStats({
         approvalRate: rate,
         avgReviewTime: '1.6s',
-        blockedCount: rejected + 12,
+        blockedCount: rejected,
         totalStories: total,
       });
     }

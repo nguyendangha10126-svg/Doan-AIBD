@@ -73,8 +73,8 @@ export const AdminOverviewPage: React.FC = () => {
             <span className="text-2xl sm:text-3xl font-heading font-extrabold text-ink">
               {kpis.storiesToday}
             </span>
-            <span className="text-[11px] text-success font-bold block mt-0.5">
-              +14% so với hôm qua
+            <span className="text-[11px] text-ink-soft font-bold block mt-0.5">
+              {kpis.storiesToday > 0 ? 'Phát sinh trong ngày' : 'Chưa có phát sinh'}
             </span>
           </div>
         </Card>

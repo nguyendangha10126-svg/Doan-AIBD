@@ -10,8 +10,13 @@ export type StoryStatus =
   | 'auto_approved'
   | 'pending_review'
   | 'approved'
+  | 'parent_approved'
   | 'rejected'
   | 'failed';
+
+export const isStoryApproved = (status?: string | null): boolean => {
+  return Boolean(status && ['auto_approved', 'approved', 'parent_approved'].includes(status));
+};
 
 export type SafetyAction = 'block' | 'flag' | 'rewrite';
 

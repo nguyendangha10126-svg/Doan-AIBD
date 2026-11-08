@@ -10,8 +10,9 @@ import {
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { useAdminStore } from '@/store/adminStore';
+import { DEFAULT_ADMIN_PROFILE } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
-import { Story } from '@/types/database';
+import { Story, isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -40,7 +41,7 @@ export const ModerationQueuePage: React.FC = () => {
   // Filter stories
   const filteredStories = stories.filter((s) => {
     if (activeFilter === 'pending') return s.status === 'pending_review';
-    if (activeFilter === 'approved') return ['auto_approved', 'approved'].includes(s.status);
+    if (activeFilter === 'approved') return isStoryApproved(s.status);
     if (activeFilter === 'rejected') return s.status === 'rejected';
     return true;
   });
@@ -56,14 +57,14 @@ export const ModerationQueuePage: React.FC = () => {
 
   const handleApprove = async (story: Story) => {
     await updateStoryStatus(story.id, 'approved');
-    approveStoryModeration(story.id, 'admin-1', 'Đã kiểm duyệt đạt chuẩn an toàn trẻ em');
+    approveStoryModeration(story.id, DEFAULT_ADMIN_PROFILE.id, 'Đã kiểm duyệt đạt chuẩn an toàn trẻ em');
     toast.success(`Đã phê duyệt câu chuyện "${story.title}"`);
   };
 
   const handleConfirmReject = async () => {
     if (!selectedStory || !rejectReason.trim()) return;
     await updateStoryStatus(selectedStory.id, 'rejected', rejectReason.trim());
-    rejectStoryModeration(selectedStory.id, 'admin-1', rejectReason.trim());
+    rejectStoryModeration(selectedStory.id, DEFAULT_ADMIN_PROFILE.id, rejectReason.trim());
     setIsRejectModalOpen(false);
     setRejectReason('');
     toast.info(`Đã từ chối câu chuyện "${selectedStory.title}"`);

@@ -76,70 +76,78 @@ export const UserManagementPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-peach/30">
-              {filteredUsers.map((u) => (
-                <tr key={u.id} className="hover:bg-cream-100/60 transition-colors">
-                  <td className="p-4">
-                    <span className="font-heading font-bold text-main block">
-                      {u.full_name}
-                    </span>
-                    <span className="text-[11px] text-main-muted font-mono block">
-                      ID: {u.id.substring(0, 8)}...
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <Badge variant={u.role === 'admin' ? 'accent' : 'mint'} size="sm">
-                      {u.role.toUpperCase()}
-                    </Badge>
-                  </td>
-                  <td className="p-4 text-center font-bold">
-                    {u.daily_quota} truyện
-                  </td>
-                  <td className="p-4">
-                    {u.is_locked ? (
-                      <Badge variant="danger" size="sm">
-                        Đang bị khóa
-                      </Badge>
-                    ) : (
-                      <Badge variant="mint" size="sm">
-                        Hoạt động
-                      </Badge>
-                    )}
-                  </td>
-                  <td className="p-4 text-main-muted text-xs whitespace-nowrap">
-                    {formatDate(u.created_at)}
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button
-                      onClick={() => handleOpenQuotaModal(u)}
-                      className="p-2 text-main-muted hover:text-accent hover:bg-peach/30 rounded-xl transition-colors"
-                      title={vi.admin.users.customQuota}
-                      aria-label={vi.admin.users.customQuota}
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        toggleUserLock(u.id);
-                        toast.info(
-                          u.is_locked
-                            ? `Đã mở khóa cho ${u.full_name}`
-                            : `Đã khóa tài khoản ${u.full_name}`
-                        );
-                      }}
-                      className={`p-2 rounded-xl transition-colors ${
-                        u.is_locked
-                          ? 'text-emerald-600 hover:bg-emerald-50'
-                          : 'text-rose-500 hover:bg-rose-50'
-                      }`}
-                      title={u.is_locked ? vi.admin.users.unlockUser : vi.admin.users.lockUser}
-                      aria-label={u.is_locked ? vi.admin.users.unlockUser : vi.admin.users.lockUser}
-                    >
-                      {u.is_locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                    </button>
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-8 text-center text-sm text-main-muted font-bold">
+                    Không tìm thấy người dùng phù hợp.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-cream-100/60 transition-colors">
+                    <td className="p-4">
+                      <span className="font-heading font-bold text-main block">
+                        {u.full_name}
+                      </span>
+                      <span className="text-[11px] text-main-muted font-mono block">
+                        ID: {u.id.substring(0, 8)}...
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <Badge variant={u.role === 'admin' ? 'accent' : 'mint'} size="sm">
+                        {u.role.toUpperCase()}
+                      </Badge>
+                    </td>
+                    <td className="p-4 text-center font-bold">
+                      {u.daily_quota} truyện
+                    </td>
+                    <td className="p-4">
+                      {u.is_locked ? (
+                        <Badge variant="danger" size="sm">
+                          Đang bị khóa
+                        </Badge>
+                      ) : (
+                        <Badge variant="mint" size="sm">
+                          Hoạt động
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="p-4 text-main-muted text-xs whitespace-nowrap">
+                      {formatDate(u.created_at)}
+                    </td>
+                    <td className="p-4 text-right space-x-2">
+                      <button
+                        onClick={() => handleOpenQuotaModal(u)}
+                        className="p-2 text-main-muted hover:text-accent hover:bg-peach/30 rounded-xl transition-colors"
+                        title={vi.admin.users.customQuota}
+                        aria-label={vi.admin.users.customQuota}
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toggleUserLock(u.id);
+                          toast.info(
+                            u.is_locked
+                              ? `Đã mở khóa cho ${u.full_name}`
+                              : `Đã khóa tài khoản ${u.full_name}`
+                          );
+                        }}
+                        className={`p-2 rounded-xl transition-colors ${
+                          u.is_locked
+                            ? 'text-emerald-600 hover:bg-emerald-50'
+                            : 'text-rose-500 hover:bg-rose-50'
+                        }`}
+                        title={u.is_locked ? vi.admin.users.unlockUser : vi.admin.users.lockUser}
+                        aria-label={u.is_locked ? vi.admin.users.unlockUser : vi.admin.users.lockUser}
+                      >
+                        {u.is_locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

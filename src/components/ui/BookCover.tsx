@@ -8,7 +8,7 @@ import {
   AlertTriangle,
   Clock
 } from 'lucide-react';
-import { Story } from '@/types/database';
+import { Story, isStoryApproved } from '@/types/database';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -43,7 +43,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const isApproved = ['auto_approved', 'approved'].includes(story.status);
+  const isApproved = isStoryApproved(story.status);
   const isPending = story.status === 'pending_review';
   const isRejected = story.status === 'rejected';
 

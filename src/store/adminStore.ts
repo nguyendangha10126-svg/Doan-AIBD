@@ -353,7 +353,7 @@ export const useAdminStore = create<AdminState>()(
             ai_risk_score_at_review: 20,
           });
           await supabase.from('stories').update({
-            status: 'parent_approved',
+            status: 'approved',
             reviewed_by: adminId,
             reviewed_at: new Date().toISOString(),
           }).eq('id', storyId);
@@ -421,7 +421,7 @@ export const useAdminStore = create<AdminState>()(
               ai_risk_score_at_review: decision === 'approved' ? 15 : 60,
             });
             await supabase.from('stories').update({
-              status: decision === 'approved' ? 'parent_approved' : 'rejected',
+              status: decision === 'approved' ? 'approved' : 'rejected',
               rejection_reason: decision === 'rejected' ? reason : null,
               reviewed_by: 'a0000000-0000-0000-0000-000000000001',
               reviewed_at: new Date().toISOString(),

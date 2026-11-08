@@ -494,7 +494,7 @@ export const CreateStoryPage: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-ink-soft mb-1.5">Màu đại diện</label>
-                  <div className="flex items-center gap-2.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
                     {['#FF6B6B', '#4D96FF', '#6BCB77', '#FFD93D', '#9D4EDD', '#FF8E53'].map((color) => (
                       <button
                         key={color}
@@ -758,18 +758,14 @@ export const CreateStoryPage: React.FC = () => {
 
           {/* Step 2 Bottom Action Bar */}
           <div className="pt-4 flex items-center justify-between border-t border-ink/10">
-            {childrenList.length > 1 ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={<ArrowLeft className="w-4 h-4" />}
-                onClick={() => setCurrentStep(1)}
-              >
-                Chọn lại bé
-              </Button>
-            ) : (
-              <div />
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<ArrowLeft className="w-4 h-4" />}
+              onClick={() => setCurrentStep(1)}
+            >
+              {childrenList.length > 1 ? 'Chọn lại bé' : 'Hồ sơ bé'}
+            </Button>
 
             <Button
               variant="magic"

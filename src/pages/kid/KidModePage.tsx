@@ -5,6 +5,7 @@ import { Lock, Check, Sparkles, BookOpen } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
 import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
+import { isStoryApproved } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
@@ -12,8 +13,12 @@ import { soundEffects } from '@/lib/sound';
 
 export const KidModePage: React.FC = () => {
   const navigate = useNavigate();
-  const { stories } = useStoryStore();
+  const { stories, fetchStories } = useStoryStore();
   const { verifyPin } = useAuthStore();
+
+  useEffect(() => {
+    fetchStories();
+  }, [fetchStories]);
 
   // Parental Gate Modal
   const [isGateOpen, setIsGateOpen] = useState(false);
@@ -29,9 +34,7 @@ export const KidModePage: React.FC = () => {
   const holdStartTimeRef = useRef<number | null>(null);
 
   // Kid mode only shows approved stories
-  const approvedStories = stories.filter((s) =>
-    ['auto_approved', 'approved'].includes(s.status)
-  );
+  const approvedStories = stories.filter((s) => isStoryApproved(s.status));
 
   // Request fullscreen on mount or first interaction
   const requestFullscreen = useCallback(async () => {

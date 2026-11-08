@@ -41,27 +41,35 @@ export const AuditLogsPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-peach/30">
-              {auditLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-cream-100/60 transition-colors">
-                  <td className="p-4 text-main-muted whitespace-nowrap font-mono text-xs">
-                    {formatDate(log.created_at)}
-                  </td>
-                  <td className="p-4 font-bold text-main whitespace-nowrap">
-                    Admin
-                  </td>
-                  <td className="p-4">
-                    <Badge variant={getActionBadgeVariant(log.action)} size="sm">
-                      {log.action}
-                    </Badge>
-                  </td>
-                  <td className="p-4 font-mono text-xs text-accent">
-                    {log.target_type} ({log.target_id.substring(0, 10)}...)
-                  </td>
-                  <td className="p-4 text-xs font-mono text-main-muted max-w-xs md:max-w-md truncate">
-                    {JSON.stringify(log.details)}
+              {auditLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-sm text-main-muted font-bold">
+                    Chưa có nhật ký hoạt động nào. Hệ thống sẵn sàng ghi nhận lịch sử kiểm duyệt.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-cream-100/60 transition-colors">
+                    <td className="p-4 text-main-muted whitespace-nowrap font-mono text-xs">
+                      {formatDate(log.created_at)}
+                    </td>
+                    <td className="p-4 font-bold text-main whitespace-nowrap">
+                      Admin
+                    </td>
+                    <td className="p-4">
+                      <Badge variant={getActionBadgeVariant(log.action)} size="sm">
+                        {log.action}
+                      </Badge>
+                    </td>
+                    <td className="p-4 font-mono text-xs text-accent">
+                      {log.target_type} ({log.target_id.substring(0, 10)}...)
+                    </td>
+                    <td className="p-4 text-xs font-mono text-main-muted max-w-xs md:max-w-md truncate">
+                      {JSON.stringify(log.details)}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
