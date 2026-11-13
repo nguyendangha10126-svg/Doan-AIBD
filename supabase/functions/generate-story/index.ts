@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { getSupabaseAdmin } from '../_shared/supabase-admin.ts';
 import { callGeminiStructured, GeminiError } from '../_shared/gemini.ts';
@@ -15,7 +14,12 @@ import {
 } from '../_shared/schemas.ts';
 import { evaluateInputSafety, SafetyRuleRow } from '../_shared/safety.ts';
 
-serve(async (req: Request) => {
+interface AppSettingRow {
+  key: string;
+  value: string;
+}
+
+Deno.serve(async (req: Request) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
@@ -47,7 +51,7 @@ serve(async (req: Request) => {
 
     // 2. Parse & Validate Payload
     const body = await req.json();
-    const { drawingPath, childId } = body;
+    const { drawingPath, childId } = body as { drawingPath?: string; childId?: string };
 
     if (!drawingPath || !childId) {
       return new Response(JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'Thiếu drawingPath hoặc childId' } }), {
@@ -71,7 +75,23 @@ serve(async (req: Request) => {
       });
     }
 
-    // 4. Check Account Lock & Daily Story Limit
+    // 4. Fetch Active Safety Rules & App Settings
+    const { data: rulesData } = await supabase
+      .from('safety_rules')
+      .select('*')
+      .eq('is_active', true);
+    const activeRules: SafetyRuleRow[] = (rulesData as SafetyRuleRow[]) || [];
+
+    const { data: settingsRows } = await supabase.from('app_settings').select('key, value');
+    const settingsList = (settingsRows as AppSettingRow[] | null) || [];
+    const settingsMap = new Map<string, string>(settingsList.map((s: AppSettingRow) => [s.key, s.value]));
+    const strictDrawingCheck = (settingsMap.get('strict_drawing_check') ?? 'true') === 'true';
+    const moderationMode = settingsMap.get('moderation_mode') || 'auto';
+    const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10);
+    const globalDailyLimit = Math.max(1, parseInt(settingsMap.get('daily_story_limit') || '5', 10));
+    const dbGeminiKey = settingsMap.get('gemini_api_key') || '';
+
+    // 5. Check Account Lock & Family Daily Story Limit
     const { data: profile } = await supabase
       .from('profiles')
       .select('daily_quota, is_locked')
@@ -90,29 +110,35 @@ serve(async (req: Request) => {
       );
     }
 
-    const dailyQuota = profile?.daily_quota ?? 5;
+    const effectiveDailyQuota = Math.min(profile?.daily_quota ?? 5, globalDailyLimit);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+
+    const { data: familyChildren } = await supabase
+      .from('children')
+      .select('id')
+      .eq('parent_id', currentUserId);
+    const familyChildIds = ((familyChildren as Array<{ id: string }> | null) || []).map((c) => c.id);
 
     const { count: storiesCountToday } = await supabase
       .from('stories')
       .select('*', { count: 'exact', head: true })
-      .eq('child_id', childId)
+      .in('child_id', familyChildIds.length > 0 ? familyChildIds : [childId])
       .gte('created_at', todayStart.toISOString());
 
-    if ((storiesCountToday ?? 0) >= dailyQuota) {
+    if ((storiesCountToday ?? 0) >= effectiveDailyQuota) {
       return new Response(
         JSON.stringify({
           error: {
             code: 'QUOTA_EXCEEDED',
-            message: `Bé đã đạt giới hạn ${dailyQuota} truyện trong ngày. Hãy quay lại vào ngày mai nhé!`,
+            message: `Gia đình đã đạt giới hạn ${effectiveDailyQuota} truyện trong ngày. Hãy quay lại vào ngày mai nhé!`,
           },
         }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 5. Download Drawing from Private Storage
+    // 6. Download Drawing from Storage
     const { data: fileData, error: fileError } = await supabase.storage
       .from('drawings')
       .download(drawingPath);
@@ -125,23 +151,13 @@ serve(async (req: Request) => {
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
-    const base64Image = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    const bytes = new Uint8Array(arrayBuffer);
+    let binaryStr = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binaryStr += String.fromCharCode(bytes[i]);
+    }
+    const base64Image = btoa(binaryStr);
     const mimeType = fileData.type || 'image/jpeg';
-
-    // 6. Fetch Active Safety Rules & App Settings
-    const { data: rulesData } = await supabase
-      .from('safety_rules')
-      .select('*')
-      .eq('is_active', true);
-    const activeRules: SafetyRuleRow[] = (rulesData as SafetyRuleRow[]) || [];
-
-    const { data: settingsRows } = await supabase.from('app_settings').select('*');
-    const settingsMap = new Map((settingsRows || []).map((s) => [s.key, s.value]));
-    const strictDrawingCheck = (settingsMap.get('strict_drawing_check') ?? 'true') === 'true';
-    const moderationMode = settingsMap.get('moderation_mode') || 'auto';
-    const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10);
 
     // ========================================================
     // LAYER 1: MULTIMODAL INPUT SAFETY & DRAWING UNDERSTANDING
@@ -165,6 +181,7 @@ serve(async (req: Request) => {
 10. risk_categories: danh mục nhạy cảm nếu có (bạo lực, rùng rợn).`;
 
     const layer1Result = await callGeminiStructured<Layer1Inspection>({
+      apiKeyOverride: dbGeminiKey,
       contents: [
         {
           role: 'user',
@@ -180,22 +197,12 @@ serve(async (req: Request) => {
 
     const validatedInspection = Layer1InspectionSchema.parse(layer1Result.data);
 
-    // Save drawing with full ai_analysis
-    const { data: newDrawing } = await supabase
-      .from('drawings')
-      .insert({
-        child_id: childId,
-        image_path: drawingPath,
-        ai_analysis: validatedInspection,
-      })
-      .select()
-      .single();
-
-    const drawingId = newDrawing?.id;
-
-    // Safety Check on Input with strict drawing setting
+    // Safety Check on Input with strict drawing setting BEFORE persisting drawing record
     const inputSafety = evaluateInputSafety(validatedInspection, activeRules, strictDrawingCheck);
     if (!inputSafety.isSafe) {
+      // Remove blocked/PII image from Storage immediately
+      await supabase.storage.from('drawings').remove([drawingPath]);
+
       await supabase.from('ai_logs').insert({
         user_id: currentUserId,
         story_id: null,
@@ -220,6 +227,22 @@ serve(async (req: Request) => {
       );
     }
 
+    const { data: publicUrlData } = supabase.storage.from('drawings').getPublicUrl(drawingPath);
+    const storedImageUrl = publicUrlData?.publicUrl || drawingPath;
+
+    // Save verified safe drawing with full ai_analysis
+    const { data: newDrawing } = await supabase
+      .from('drawings')
+      .insert({
+        child_id: childId,
+        image_path: storedImageUrl,
+        ai_analysis: validatedInspection,
+      })
+      .select()
+      .single();
+
+    const drawingId = newDrawing?.id;
+
     // ========================================================
     // LAYER 2: CREATIVE AGE-ADAPTIVE GROUNDED STORYTELLING
     // ========================================================
@@ -227,13 +250,15 @@ serve(async (req: Request) => {
       .from('system_prompts')
       .select('*')
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    const systemPromptText = activePromptRow?.prompt_text || 'Bạn là tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương.';
+    const systemPromptText =
+      activePromptRow?.prompt_text ||
+      'Bạn là tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương.';
     const promptVersionId = activePromptRow?.id || null;
 
     const rulesContext = activeRules
-      .map((r) => `- [${r.action.toUpperCase()}] ${r.category}: ${r.description}`)
+      .map((r: SafetyRuleRow) => `- [${r.action.toUpperCase()}] ${r.category}: ${r.description}`)
       .join('\n');
 
     const layer2UserPrompt = `Thông tin bé yêu:
@@ -258,6 +283,7 @@ YÊU CẦU SÁNG TÁC BẮT BUỘC:
 6. Kết thúc có hậu với bài học đạo đức 'moral' và đúng 3 gợi ý 'next_drawing_ideas'.`;
 
     let storyGenerationResult = await callGeminiStructured<Layer2Story>({
+      apiKeyOverride: dbGeminiKey,
       systemInstruction: systemPromptText,
       contents: [{ role: 'user', parts: [{ text: layer2UserPrompt }] }],
       responseSchema: Layer2JsonSchema,
@@ -276,7 +302,12 @@ Tiêu đề: "${storyCandidate.title}"
 Tóm tắt: "${storyCandidate.summary}"
 Bài học: "${storyCandidate.moral}"
 Nội dung các trang:
-${storyCandidate.pages.map((p) => `Trang ${p.page_number} (${p.grounded_objects?.join(', ')}): ${p.text_content}`).join('\n')}
+${storyCandidate.pages
+  .map(
+    (p: Layer2Story['pages'][number]) =>
+      `Trang ${p.page_number} (${p.grounded_objects?.join(', ')}): ${p.text_content}`
+  )
+  .join('\n')}
 
 Danh sách đồ vật/nhân vật thật trong nét vẽ của bé:
 ${validatedInspection.objects.join(', ')} | ${validatedInspection.characters.join(', ')}
@@ -292,6 +323,7 @@ Yêu cầu chấm điểm:
 5. pedagogical_feedback: nhận xét ngắn gọn mang tính xây dựng.`;
 
     let judgeResult = await callGeminiStructured<Layer3Judge>({
+      apiKeyOverride: dbGeminiKey,
       contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
       responseSchema: Layer3JsonSchema,
       temperature: 0.1,
@@ -301,10 +333,12 @@ Yêu cầu chấm điểm:
 
     // If faithfulness score < 60, regenerate once with Judge feedback
     if (judgment.faithfulness_score < 60) {
-      console.log(`Low faithfulness (${judgment.faithfulness_score}), regenerating once with Judge feedback...`);
-      const retryPrompt = layer2UserPrompt + `\n\nLƯU Ý ĐẶC BIỆT TỪ GIÁM ĐỊNH VIÊN: Câu chuyện vừa viết chưa bám sát các chi tiết thật trong tranh vẽ (Điểm bám sát chỉ đạt ${judgment.faithfulness_score}/100). Góp ý: ${judgment.pedagogical_feedback}. Hãy viết lại câu chuyện mới bám thật sát các đồ vật: ${validatedInspection.objects.join(', ')}.`;
+      const retryPrompt =
+        layer2UserPrompt +
+        `\n\nLƯU Ý ĐẶC BIỆT TỪ GIÁM ĐỊNH VIÊN: Câu chuyện vừa viết chưa bám sát các chi tiết thật trong tranh vẽ (Điểm bám sát chỉ đạt ${judgment.faithfulness_score}/100). Góp ý: ${judgment.pedagogical_feedback}. Hãy viết lại câu chuyện mới bám thật sát các đồ vật: ${validatedInspection.objects.join(', ')}.`;
 
       storyGenerationResult = await callGeminiStructured<Layer2Story>({
+        apiKeyOverride: dbGeminiKey,
         systemInstruction: systemPromptText,
         contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
         responseSchema: Layer2JsonSchema,
@@ -312,8 +346,8 @@ Yêu cầu chấm điểm:
       });
       generatedStory = Layer2StorySchema.parse(storyGenerationResult.data);
 
-      // Re-evaluate Judge against the newly regenerated story
       judgeResult = await callGeminiStructured<Layer3Judge>({
+        apiKeyOverride: dbGeminiKey,
         contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
         responseSchema: Layer3JsonSchema,
         temperature: 0.1,
@@ -337,7 +371,6 @@ Yêu cầu chấm điểm:
       finalStatus = 'auto_approved';
     }
 
-    // Rejection reason or low faithfulness reason
     let rejectionReason: string | null = null;
     if (finalStatus === 'rejected') {
       rejectionReason = judgment.pedagogical_feedback;
@@ -358,6 +391,7 @@ Yêu cầu chấm điểm:
         risk_score: judgment.risk_score,
         faithfulness_score: judgment.faithfulness_score,
         generation_stage: 'done',
+        grounded_objects: validatedInspection.objects,
         risk_reasons: judgment.violation_reasons,
         rejection_reason: rejectionReason,
         prompt_version_id: promptVersionId,
@@ -373,7 +407,7 @@ Yêu cầu chấm điểm:
     currentStoryId = insertedStory.id;
 
     // 8. Insert Story Pages
-    const pagesToInsert = generatedStory.pages.map((p) => ({
+    const pagesToInsert = generatedStory.pages.map((p: Layer2Story['pages'][number]) => ({
       story_id: currentStoryId,
       page_number: p.page_number,
       text_content: p.text_content,
@@ -382,12 +416,20 @@ Yêu cầu chấm điểm:
       grounded_objects: p.grounded_objects,
     }));
 
-    await supabase.from('story_pages').insert(pagesToInsert);
+    const { data: persistedPages } = await supabase
+      .from('story_pages')
+      .insert(pagesToInsert)
+      .select();
 
     // 9. Log Metrics to ai_logs
-    const totalInputTokens = layer1Result.inputTokens + storyGenerationResult.inputTokens + judgeResult.inputTokens;
-    const totalOutputTokens = layer1Result.outputTokens + storyGenerationResult.outputTokens + judgeResult.outputTokens;
-    const totalCostUsd = layer1Result.estimatedCostUsd + storyGenerationResult.estimatedCostUsd + judgeResult.estimatedCostUsd;
+    const totalInputTokens =
+      layer1Result.inputTokens + storyGenerationResult.inputTokens + judgeResult.inputTokens;
+    const totalOutputTokens =
+      layer1Result.outputTokens + storyGenerationResult.outputTokens + judgeResult.outputTokens;
+    const totalCostUsd =
+      layer1Result.estimatedCostUsd +
+      storyGenerationResult.estimatedCostUsd +
+      judgeResult.estimatedCostUsd;
     const totalLatencyMs = Date.now() - startTime;
 
     await supabase.from('ai_logs').insert({
@@ -407,7 +449,7 @@ Yêu cầu chấm điểm:
       JSON.stringify({
         data: {
           ...insertedStory,
-          pages: generatedStory.pages,
+          pages: persistedPages || generatedStory.pages,
           drawing: newDrawing,
         },
       }),
@@ -418,7 +460,6 @@ Yêu cầu chấm điểm:
     const code = (err as GeminiError)?.code || 'INTERNAL_ERROR';
     const status = (err as GeminiError)?.status || 500;
 
-    // Log failure
     try {
       const supabase = getSupabaseAdmin();
       await supabase.from('ai_logs').insert({

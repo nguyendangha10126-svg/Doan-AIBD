@@ -30,12 +30,13 @@ async function capture() {
       const adminState = {
         state: {
           profile: {
-            id: 'admin-0000-0000-0000-000000000001',
+            id: 'a0000000-0000-0000-0000-000000000001',
+            email: 'admin@drawtostory.vn',
             full_name: 'Quản Trị Viên An Toàn',
             role: 'admin',
             is_locked: false,
             daily_quota: 100,
-            parental_pin_hash: '1234',
+            parental_pin_hash: '001627dbf308f962',
           },
           childrenList: [],
           selectedChildId: null,

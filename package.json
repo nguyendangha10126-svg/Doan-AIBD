@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-contrast.js && tsc --noEmit && vite build",
+    "build": "node scripts/check-contrast.js && tsc --noEmit && tsc --noEmit -p supabase/functions/tsconfig.json && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p supabase/functions/tsconfig.json",
     "check:contrast": "node scripts/check-contrast.js",
     "test:pipeline": "node scripts/test-pipeline.js"
   },

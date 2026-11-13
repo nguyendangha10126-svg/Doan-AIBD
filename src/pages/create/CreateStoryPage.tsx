@@ -1033,7 +1033,7 @@ export const CreateStoryPage: React.FC = () => {
 
               {/* Guide Overlay Rectangle */}
               <div className="absolute inset-8 sm:inset-16 border-2 border-dashed border-white/80 rounded-2xl pointer-events-none flex items-center justify-center">
-                <span className="text-xs font-heading font-bold text-white/70 bg-black/40 px-3 py-1 rounded-full backdrop-blur-xs">
+                <span className="text-xs font-heading font-bold text-white/70 bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
                   Khung viền trang giấy vẽ
                 </span>
               </div>

@@ -1,8 +1,7 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { getSupabaseAdmin } from '../_shared/supabase-admin.ts';
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
@@ -46,7 +45,7 @@ serve(async (req: Request) => {
     }
 
     // Only approved and shared stories are readable publicly
-    if (!story.is_shared || !['auto_approved', 'approved'].includes(story.status)) {
+    if (!story.is_shared || !['auto_approved', 'approved', 'parent_approved'].includes(story.status)) {
       return new Response(
         JSON.stringify({ error: { code: 'FORBIDDEN', message: 'Câu chuyện này chưa được cấp phép chia sẻ công khai' } }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -60,14 +59,18 @@ serve(async (req: Request) => {
       .eq('story_id', story.id)
       .order('page_number', { ascending: true });
 
-    // Generate short-lived signed URL (60 mins) for drawing image
+    // Resolve image URL cleanly (supports both full public URLs and relative storage paths)
     let signedImageUrl: string | null = null;
     const drawingPath = (story.drawing as { image_path?: string } | null)?.image_path;
     if (drawingPath) {
-      const { data: signedData } = await supabase.storage
-        .from('drawings')
-        .createSignedUrl(drawingPath, 3600);
-      signedImageUrl = signedData?.signedUrl || null;
+      if (drawingPath.startsWith('http://') || drawingPath.startsWith('https://')) {
+        signedImageUrl = drawingPath;
+      } else {
+        const { data: signedData } = await supabase.storage
+          .from('drawings')
+          .createSignedUrl(drawingPath, 3600);
+        signedImageUrl = signedData?.signedUrl || null;
+      }
     }
 
     return new Response(
@@ -88,4 +91,3 @@ serve(async (req: Request) => {
     );
   }
 });
-

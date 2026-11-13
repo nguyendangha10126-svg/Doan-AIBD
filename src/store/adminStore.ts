@@ -606,7 +606,7 @@ export const useAdminStore = create<AdminState>()(
           }
         }
 
-        await useStoryStore.getState().updateStoryStatus(storyId, 'approved');
+        await useStoryStore.getState().updateStoryStatus(storyId, 'approved', undefined, true);
 
         set((state) => ({
           moderationReviews: [createdReview, ...state.moderationReviews],
@@ -670,7 +670,7 @@ export const useAdminStore = create<AdminState>()(
           }
         }
 
-        await useStoryStore.getState().updateStoryStatus(storyId, 'rejected', reason);
+        await useStoryStore.getState().updateStoryStatus(storyId, 'rejected', reason, true);
 
         set((state) => ({
           moderationReviews: [createdReview, ...state.moderationReviews],
@@ -721,7 +721,12 @@ export const useAdminStore = create<AdminState>()(
 
           await useStoryStore
             .getState()
-            .updateStoryStatus(sId, decision === 'approved' ? 'approved' : 'rejected', decision === 'rejected' ? reason : undefined);
+            .updateStoryStatus(
+              sId,
+              decision === 'approved' ? 'approved' : 'rejected',
+              decision === 'rejected' ? reason : undefined,
+              true
+            );
 
           newReviews.push({
             id: 'rev-' + Math.random().toString(36).substring(2, 9),

@@ -9,12 +9,13 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, helperText, id, rows = 3, ...props }, ref) => {
-    const textareaId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+    const generatedId = React.useId();
+    const textareaId = id || generatedId;
 
     return (
       <div className="w-full space-y-1.5 text-left">
         {label && (
-          <label htmlFor={textareaId} className="block text-sm font-heading font-bold text-main">
+          <label htmlFor={textareaId} className="block text-sm font-heading font-bold text-ink">
             {label}
           </label>
         )}
@@ -22,19 +23,22 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={textareaId}
           ref={ref}
           rows={rows}
+          aria-invalid={error ? true : undefined}
           className={cn(
-            'w-full rounded-2xl border-2 border-peach/50 bg-white/90 px-4 py-3 text-main placeholder:text-main-subtle transition-all duration-200',
-            'focus:border-primary focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/20',
-            'disabled:bg-cream-200 disabled:cursor-not-allowed resize-y',
-            error && 'border-rose-400 focus:border-rose-500 focus:ring-rose-200',
+            'w-full rounded-2xl border border-ink/15 bg-surface px-4 py-3 text-sm sm:text-base text-ink placeholder:text-ink-faint transition-all duration-200',
+            'focus:border-brand-600 focus:bg-surface focus:outline-none focus:ring-4 focus:ring-brand-100',
+            'disabled:bg-ink/5 disabled:text-ink-faint disabled:cursor-not-allowed resize-y',
+            error && 'border-[#B42343] focus:border-[#B42343] focus:ring-[#FFE3EA]',
             className
           )}
           {...props}
         />
         {error ? (
-          <p className="text-xs font-semibold text-rose-500 animate-fadeIn">{error}</p>
+          <p role="alert" className="text-xs font-semibold text-[#B42343]">
+            {error}
+          </p>
         ) : helperText ? (
-          <p className="text-xs text-main-muted">{helperText}</p>
+          <p className="text-xs text-ink-soft leading-relaxed">{helperText}</p>
         ) : null}
       </div>
     );
@@ -42,4 +46,3 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 
 Textarea.displayName = 'Textarea';
-

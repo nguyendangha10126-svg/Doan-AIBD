@@ -20,7 +20,12 @@ export interface StoryState {
   fetchStoryById: (storyId: string) => Promise<Story | null>;
   addStory: (story: Story) => Promise<void>;
   deleteStory: (storyId: string) => Promise<boolean>;
-  updateStoryStatus: (storyId: string, status: Story['status'], rejectionReason?: string) => Promise<boolean>;
+  updateStoryStatus: (
+    storyId: string,
+    status: Story['status'],
+    rejectionReason?: string,
+    skipRemoteUpdate?: boolean
+  ) => Promise<boolean>;
   toggleStoryShare: (storyId: string, isShared: boolean) => Promise<boolean>;
   reportStory: (storyId: string, reason: string) => Promise<boolean>;
   logReadingEvent: (childId: string, storyId: string, seconds: number) => Promise<void>;
@@ -307,10 +312,15 @@ export const useStoryStore = create<StoryState>()(
         }
       },
 
-      updateStoryStatus: async (storyId: string, status: Story['status'], rejectionReason?: string) => {
+      updateStoryStatus: async (
+        storyId: string,
+        status: Story['status'],
+        rejectionReason?: string,
+        skipRemoteUpdate = false
+      ) => {
         try {
           const reviewedAt = new Date().toISOString();
-          if (!isDemoMode) {
+          if (!isDemoMode && !skipRemoteUpdate) {
             const { error } = await supabase
               .from('stories')
               .update({
@@ -370,6 +380,7 @@ export const useStoryStore = create<StoryState>()(
               .from('stories')
               .update({
                 status: 'pending_review',
+                is_shared: false,
                 rejection_reason: formattedReason,
                 updated_at: new Date().toISOString(),
               })
@@ -385,6 +396,7 @@ export const useStoryStore = create<StoryState>()(
                 ? {
                     ...s,
                     status: 'pending_review',
+                    is_shared: false,
                     rejection_reason: formattedReason,
                   }
                 : s

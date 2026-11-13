@@ -334,6 +334,16 @@ as $$
   );
 $$;
 
+create or replace function public.get_story_status(target_story_id uuid)
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select status from public.stories where id = target_story_id;
+$$;
+
 -- PROFILES POLICIES
 create policy "Users can view own profile or admin views all"
   on public.profiles for select
@@ -427,7 +437,7 @@ create policy "Parents toggle share or report own stories; Admin moderates all"
     (
       exists (select 1 from public.children c where c.id = stories.child_id and c.parent_id = auth.uid())
       and public.is_active_user()
-      and status in ('auto_approved', 'approved', 'parent_approved', 'pending_review')
+      and (status = public.get_story_status(id) or status = 'pending_review')
     )
     or public.is_admin()
   );
@@ -669,6 +679,22 @@ declare
   v_admin_id uuid := 'a0000000-0000-0000-0000-000000000001';
   v_mom_id   uuid := 'b0000000-0000-0000-0000-000000000002';
   v_has_provider_id boolean;
+  v_id_type text;
+  v_col text;
+  v_str_cols text[] := array[
+    'confirmation_token',
+    'recovery_token',
+    'email_change_token_new',
+    'email_change',
+    'email_change_token_current',
+    'phone_change',
+    'phone_change_token',
+    'reauthentication_token'
+  ];
+  v_bool_cols text[] := array[
+    'is_sso_user',
+    'is_anonymous'
+  ];
 begin
   -- Remove any pre-existing default accounts to recreate cleanly
   delete from auth.identities
@@ -679,7 +705,7 @@ begin
   where id in (v_admin_id, v_mom_id)
      or email in ('admin@drawtostory.vn', 'me@phuhuynh.vn');
 
-  -- Insert real GoTrue users (with non-null token strings required by GoTrue v2)
+  -- Insert real GoTrue users
   insert into auth.users (
     instance_id,
     id,
@@ -732,58 +758,121 @@ begin
     ''
   );
 
-  -- Check if auth.identities has provider_id column (GoTrue v2+)
+  -- Ensure all GoTrue v2 string token columns are non-NULL empty strings (prevents HTTP 500 on signInWithPassword)
+  foreach v_col in array v_str_cols loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'auth' and table_name = 'users' and column_name = v_col
+    ) then
+      execute format(
+        'update auth.users set %I = coalesce(%I, '''') where id in ($1, $2)',
+        v_col, v_col
+      ) using v_admin_id, v_mom_id;
+    end if;
+  end loop;
+
+  -- Ensure GoTrue v2 boolean flags are non-NULL false
+  foreach v_col in array v_bool_cols loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'auth' and table_name = 'users' and column_name = v_col
+    ) then
+      execute format(
+        'update auth.users set %I = coalesce(%I, false) where id in ($1, $2)',
+        v_col, v_col
+      ) using v_admin_id, v_mom_id;
+    end if;
+  end loop;
+
+  -- Inspect auth.identities schema dynamically to avoid static type mismatch across GoTrue versions
   select exists (
     select 1 from information_schema.columns
     where table_schema = 'auth' and table_name = 'identities' and column_name = 'provider_id'
   ) into v_has_provider_id;
 
+  select data_type
+  from information_schema.columns
+  where table_schema = 'auth' and table_name = 'identities' and column_name = 'id'
+  into v_id_type;
+
   if v_has_provider_id then
-    insert into auth.identities (
-      id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-    ) values
-    (
-      gen_random_uuid(),
-      v_admin_id,
-      v_admin_id::text,
-      jsonb_build_object('sub', v_admin_id::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
-      'email',
-      now(),
-      now() - interval '30 days',
-      now()
-    ),
-    (
-      gen_random_uuid(),
-      v_mom_id,
-      v_mom_id::text,
-      jsonb_build_object('sub', v_mom_id::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
-      'email',
-      now(),
-      now() - interval '30 days',
-      now()
-    );
+    if v_id_type = 'uuid' then
+      execute $sql$
+        insert into auth.identities (
+          id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+        ) values
+        (
+          gen_random_uuid(),
+          $1,
+          $1::text,
+          jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
+          'email',
+          now(),
+          now() - interval '30 days',
+          now()
+        ),
+        (
+          gen_random_uuid(),
+          $2,
+          $2::text,
+          jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
+          'email',
+          now(),
+          now() - interval '30 days',
+          now()
+        )
+      $sql$ using v_admin_id, v_mom_id;
+    else
+      execute $sql$
+        insert into auth.identities (
+          id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+        ) values
+        (
+          gen_random_uuid()::text,
+          $1,
+          $1::text,
+          jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
+          'email',
+          now(),
+          now() - interval '30 days',
+          now()
+        ),
+        (
+          gen_random_uuid()::text,
+          $2,
+          $2::text,
+          jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
+          'email',
+          now(),
+          now() - interval '30 days',
+          now()
+        )
+      $sql$ using v_admin_id, v_mom_id;
+    end if;
   else
-    insert into auth.identities (
-      id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-    ) values
-    (
-      v_admin_id::text,
-      v_admin_id,
-      jsonb_build_object('sub', v_admin_id::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
-      'email',
-      now(),
-      now() - interval '30 days',
-      now()
-    ),
-    (
-      v_mom_id::text,
-      v_mom_id,
-      jsonb_build_object('sub', v_mom_id::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
-      'email',
-      now(),
-      now() - interval '30 days',
-      now()
-    );
+    execute $sql$
+      insert into auth.identities (
+        id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+      ) values
+      (
+        $1::text,
+        $1,
+        jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
+        'email',
+        now(),
+        now() - interval '30 days',
+        now()
+      ),
+      (
+        $2::text,
+        $2,
+        jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
+        'email',
+        now(),
+        now() - interval '30 days',
+        now()
+      )
+    $sql$ using v_admin_id, v_mom_id;
   end if;
 end $$;
 

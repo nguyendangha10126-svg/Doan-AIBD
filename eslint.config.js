@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default [
   {
-    ignores: ['dist', 'node_modules', 'supabase/functions/**', 'docs/screenshots/**'],
+    ignores: ['dist', 'node_modules', 'docs/screenshots/**'],
   },
   js.configs.recommended,
   // 1. Frontend React/TypeScript configuration
@@ -48,14 +48,50 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
-      'no-undef': 'off', // TypeScript handles undefined variables
+      'no-undef': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
-  // 2. Node.js automation scripts & tooling configuration
+  // 2. Supabase Edge Functions (Deno / TypeScript) configuration
+  {
+    files: ['supabase/functions/**/*.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+      globals: {
+        Deno: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        Headers: 'readonly',
+        URL: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        btoa: 'readonly',
+        atob: 'readonly',
+        fetch: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tseslint,
+    },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+      'no-undef': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+  // 3. Node.js automation scripts & tooling configuration
   {
     files: ['scripts/**/*.js', 'vite.config.ts', 'tailwind.config.js', 'postcss.config.js'],
     languageOptions: {

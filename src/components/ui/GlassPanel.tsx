@@ -20,7 +20,7 @@ export const GlassPanel: React.FC<GlassPanelProps> = ({
   return (
     <div
       className={cn(
-        'rounded-3xl border shadow-soft transition-all',
+        'rounded-[28px] border shadow-card transition-all',
         intensityClasses[intensity],
         className
       )}

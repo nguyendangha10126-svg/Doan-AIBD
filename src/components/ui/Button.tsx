@@ -54,7 +54,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     else activeVariant = variant;
 
     // Minimum touch area is always 44px
-    const baseStyles = 'relative inline-flex items-center justify-center font-heading font-bold rounded-full transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-400 focus-visible:ring-offset-2 select-none cursor-pointer';
+    const baseStyles = 'relative inline-flex items-center justify-center font-heading font-bold rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 select-none cursor-pointer';
 
     const variants = {
       primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-btn-primary',

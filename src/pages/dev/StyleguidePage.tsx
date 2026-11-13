@@ -129,9 +129,9 @@ export const StyleguidePage: React.FC = () => {
             <div className="p-5 rounded-[28px] bg-surface border border-ink/10 space-y-3 shadow-card">
               <h3 className="font-heading font-bold text-sm text-ink">Trạng Thái (Nền / Chữ)</h3>
               <div className="space-y-2 text-xs">
-                <div className="p-2.5 rounded-2xl bg-[#DDF6E9] text-[#1F8A5B] font-bold flex justify-between">
+                <div className="p-2.5 rounded-2xl bg-[#DDF6E9] text-[#166E48] font-bold flex justify-between">
                   <span>Success</span>
-                  <span>#DDF6E9 / #1F8A5B</span>
+                  <span>#DDF6E9 / #166E48</span>
                 </div>
                 <div className="p-2.5 rounded-2xl bg-[#FFF1B8] text-[#8A5A00] font-bold flex justify-between">
                   <span>Warning</span>

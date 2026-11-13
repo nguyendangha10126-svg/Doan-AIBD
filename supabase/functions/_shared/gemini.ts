@@ -1,4 +1,5 @@
 export interface GeminiCallParams {
+  apiKeyOverride?: string;
   systemInstruction?: string;
   contents: Array<{
     role: 'user' | 'model';
@@ -42,11 +43,15 @@ export function calculateCostUsd(inputTokens: number, outputTokens: number): num
 export async function callGeminiStructured<T>(
   params: GeminiCallParams
 ): Promise<GeminiCallResult<T>> {
-  const apiKey = Deno.env.get('GEMINI_API_KEY');
+  const apiKey = (Deno.env.get('GEMINI_API_KEY') || params.apiKeyOverride || '').trim();
   const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
 
   if (!apiKey) {
-    throw new GeminiError('Chưa cấu hình GEMINI_API_KEY trong Supabase secrets', 'CONFIG_ERROR', 500);
+    throw new GeminiError(
+      'Chưa cấu hình GEMINI_API_KEY trong Supabase secrets hoặc bảng app_settings',
+      'MISSING_AI_KEY',
+      500
+    );
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;

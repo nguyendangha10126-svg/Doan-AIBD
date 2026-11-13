@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Sparkles, ChevronLeft, ChevronRight, Play, Pause, BookOpen, Heart } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { Story, isStoryApproved } from '@/types/database';
 import { vi } from '@/lib/i18n/vi';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +40,26 @@ export const SharedStoryPage: React.FC = () => {
               ? [...raw.pages].sort((a, b) => a.page_number - b.page_number)
               : [];
             setDbStory({ ...raw, pages: sortedPages });
+          } else if (mounted && supabaseUrl) {
+            const fnRes = await fetch(
+              `${supabaseUrl}/functions/v1/get-shared-story?token=${encodeURIComponent(token)}`
+            );
+            if (fnRes.ok) {
+              const fnJson = await fnRes.json();
+              if (fnJson?.data && isStoryApproved(fnJson.data.status)) {
+                const raw = fnJson.data as Story & { signedImageUrl?: string };
+                const resolvedDrawing = raw.drawing
+                  ? {
+                      ...raw.drawing,
+                      image_path: raw.signedImageUrl || raw.drawing.image_path,
+                    }
+                  : undefined;
+                setDbStory({
+                  ...raw,
+                  drawing: resolvedDrawing,
+                });
+              }
+            }
           }
         } catch (err) {
           console.error('Error fetching shared story:', err);

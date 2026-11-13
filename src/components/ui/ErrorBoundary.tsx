@@ -38,13 +38,13 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-6 bg-cream">
-          <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-soft-lg border-2 border-peach">
+        <div className="min-h-screen flex items-center justify-center p-6 bg-bg">
+          <div className="max-w-md w-full bg-surface rounded-[28px] p-8 text-center shadow-pop border border-ink/10">
             <div className="text-5xl mb-4">🧸</div>
-            <h2 className="text-2xl font-heading font-bold text-main mb-2">
+            <h2 className="text-2xl font-heading font-extrabold text-ink mb-2">
               Úi, có một chút trục trặc nhỏ!
             </h2>
-            <p className="text-sm text-main-muted mb-6">
+            <p className="text-sm text-ink-soft mb-6 leading-relaxed">
               Bức tranh phép thuật đang cần nghỉ ngơi một chút. Hãy thử tải lại trang hoặc quay lại sau nhé!
             </p>
             <Button

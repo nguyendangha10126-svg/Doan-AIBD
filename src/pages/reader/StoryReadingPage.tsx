@@ -27,7 +27,7 @@ import {
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { vi } from '@/lib/i18n/vi';
-import { Story, StoryPage } from '@/types/database';
+import { Story, StoryPage, isStoryApproved } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
@@ -476,11 +476,15 @@ export const StoryReadingPage: React.FC = () => {
     );
   }
 
-  if (!story) {
+  if (!story || (isKidReaderMode && !isStoryApproved(story.status))) {
     return (
       <div className="min-h-screen flex items-center justify-center p-8 text-center bg-bg">
         <div className="space-y-4">
-          <p className="text-ink-soft font-heading font-bold">Không tìm thấy câu chuyện này.</p>
+          <p className="text-ink-soft font-heading font-bold">
+            {isKidReaderMode && story
+              ? 'Câu chuyện này đang chờ phụ huynh hoặc Ban Kiểm duyệt xem xét.'
+              : 'Không tìm thấy câu chuyện này.'}
+          </p>
           <Button variant="primary" onClick={() => navigate(isKidReaderMode ? '/kid' : '/library')}>
             {isKidReaderMode ? 'Quay lại Góc Bé' : vi.reader.backToLibrary}
           </Button>
@@ -499,7 +503,7 @@ export const StoryReadingPage: React.FC = () => {
     >
       {/* 1. TOP MINIMALIST HEADER */}
       <header
-        className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 lg:px-8 py-3 transition-colors ${
+        className={`sticky top-0 z-40 backdrop-blur-md border-b px-4 lg:px-8 py-3 transition-colors print:hidden ${
           isBedtimeMode
             ? 'bg-[#181424]/90 border-[#322947] text-[#F3EFE6]'
             : 'bg-surface/90 border-ink/10 text-ink'
@@ -525,7 +529,7 @@ export const StoryReadingPage: React.FC = () => {
               <h1 className="font-heading font-extrabold text-sm sm:text-base truncate max-w-[200px] sm:max-w-sm md:max-w-md">
                 {story.title}
               </h1>
-              <p className="text-xs text-ink-soft font-semibold truncate">
+              <p className={`text-xs font-semibold truncate ${isBedtimeMode ? 'text-[#C8B6FF]' : 'text-ink-soft'}`}>
                 {currentPageIndex >= totalPages ? 'Trang kết' : `Trang ${currentPageIndex + 1} / ${totalPages}`} · Bé {story.child?.nickname || 'Bé'}
               </p>
             </div>
@@ -603,8 +607,8 @@ export const StoryReadingPage: React.FC = () => {
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
-            {/* Share (hidden in Kid Mode) */}
-            {!isKidReaderMode && (
+            {/* Share (hidden in Kid Mode and only enabled for approved stories) */}
+            {!isKidReaderMode && isStoryApproved(story.status) && (
               <button
                 onClick={() => setIsShareModalOpen(true)}
                 className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
@@ -654,9 +658,24 @@ export const StoryReadingPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Parent Moderation Status Notice Banner */}
+      {!isKidReaderMode && !isStoryApproved(story.status) && (
+        <div
+          className={`px-4 py-2 text-xs font-heading font-bold text-center border-b print:hidden ${
+            story.status === 'rejected'
+              ? 'bg-danger-bg text-danger-text border-danger-text/20'
+              : 'bg-warning-bg text-warning-text border-warning-text/20'
+          }`}
+        >
+          {story.status === 'rejected'
+            ? `Truyện đã bị từ chối kiểm duyệt${story.rejection_reason ? `: ${story.rejection_reason}` : '.'}`
+            : 'Truyện đang nằm trong Hàng chờ kiểm duyệt (ẩn khỏi Góc Bé cho đến khi được duyệt).'}
+        </div>
+      )}
+
       {/* Bedtime Active Indicator Banner */}
       {isBedtimeMode && (
-        <div className="bg-[#241c3b] border-b border-[#3d2f61] px-4 py-2 text-xs text-[#E3D9FF] flex flex-wrap items-center justify-center gap-4">
+        <div className="bg-[#241c3b] border-b border-[#3d2f61] px-4 py-2 text-xs text-[#E3D9FF] flex flex-wrap items-center justify-center gap-4 print:hidden">
           <div className="flex items-center gap-1.5 font-bold">
             <Moon className="w-3.5 h-3.5 text-butter animate-pulse" />
             <span>Chế độ ru ngủ đang bật: ánh sáng dịu, giọng kể chậm rãi</span>
@@ -680,7 +699,7 @@ export const StoryReadingPage: React.FC = () => {
       )}
 
       {/* 2. MAIN READING STAGE */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 md:py-10 flex flex-col justify-center items-center">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 md:py-10 flex flex-col justify-center items-center print:hidden">
         
         {/* DESKTOP / TABLET: 2-PAGE SPREAD WITH REACT-PAGEFLIP */}
         {!isMobile ? (
@@ -775,9 +794,9 @@ export const StoryReadingPage: React.FC = () => {
 
                       {/* "Bé đã vẽ, AI thấy gì" Grounded Object Chips */}
                       {groundedObjects.length > 0 && (
-                        <div className="pt-3 border-t border-ink/10 space-y-1.5">
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-soft">
-                            <Sparkles className="w-3 h-3 text-magic-600" />
+                        <div className={`pt-3 border-t space-y-1.5 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                          <div className={`flex items-center gap-1.5 text-[11px] font-bold ${isBedtimeMode ? 'text-[#E3D9FF]' : 'text-ink-soft'}`}>
+                            <Sparkles className={`w-3 h-3 ${isBedtimeMode ? 'text-butter' : 'text-magic-600'}`} />
                             <span>Bé đã vẽ, AI thấy gì:</span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -786,7 +805,7 @@ export const StoryReadingPage: React.FC = () => {
                                 key={oIdx}
                                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                                   isBedtimeMode
-                                    ? 'bg-[#32274d] text-lavender border-[#4a3a70]'
+                                    ? 'bg-[#32274d] text-[#F3EFE6] border-[#4a3a70]'
                                     : 'bg-surface-2 text-ink-soft border-ink/10'
                                 }`}
                               >
@@ -802,8 +821,12 @@ export const StoryReadingPage: React.FC = () => {
                     <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
                       <div className="space-y-6">
                         {/* Top Header of Right Page */}
-                        <div className="flex items-center justify-between text-xs font-bold text-ink-soft border-b border-ink/10 pb-3">
-                          <span className="font-heading tracking-wider uppercase text-[11px] text-brand-600">
+                        <div className={`flex items-center justify-between text-xs font-bold border-b pb-3 ${
+                          isBedtimeMode ? 'text-[#C8B6FF] border-white/10' : 'text-ink-soft border-ink/10'
+                        }`}>
+                          <span className={`font-heading tracking-wider uppercase text-[11px] truncate max-w-[240px] ${
+                            isBedtimeMode ? 'text-butter' : 'text-brand-600'
+                          }`}>
                             {story.title}
                           </span>
                           <span>Trang {pg.page_number} / {totalPages}</span>
@@ -832,7 +855,9 @@ export const StoryReadingPage: React.FC = () => {
                       </div>
 
                       {/* Page Footer Decor */}
-                      <div className="pt-4 border-t border-ink/10 flex items-center justify-between text-xs text-ink-faint font-heading">
+                      <div className={`pt-4 border-t flex items-center justify-between text-xs font-heading ${
+                        isBedtimeMode ? 'border-white/10 text-[#C8B6FF]/70' : 'border-ink/10 text-ink-faint'
+                      }`}>
                         <span>DrawToStory</span>
                         <span>· {pg.page_number} ·</span>
                       </div>
@@ -847,17 +872,22 @@ export const StoryReadingPage: React.FC = () => {
                       🎉
                     </div>
                     <div className="space-y-2">
-                      <h2 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink">
+                      <h2 className={`text-2xl sm:text-3xl font-heading font-extrabold ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
                         {vi.reader.congratsTitle}
                       </h2>
-                      <p className="text-sm font-semibold text-success leading-relaxed max-w-sm mx-auto">
-                        💡 {vi.reader.moralTitle} <strong className="text-ink">{story.moral}</strong>
+                      <p className={`text-sm font-semibold leading-relaxed max-w-sm mx-auto ${isBedtimeMode ? 'text-[#C9F0DD]' : 'text-success'}`}>
+                        💡 {vi.reader.moralTitle}{' '}
+                        <strong className={isBedtimeMode ? 'text-white' : 'text-ink'}>{story.moral}</strong>
                       </p>
                     </div>
 
                     {/* Kid Emotion Feedback Buttons */}
-                    <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 space-y-2 max-w-xs mx-auto">
-                      <p className="text-xs font-bold text-ink-soft">Bé thấy câu chuyện hôm nay thế nào?</p>
+                    <div className={`p-4 rounded-2xl border space-y-2 max-w-xs mx-auto ${
+                      isBedtimeMode ? 'bg-[#2c2445] border-white/10' : 'bg-surface-2 border-ink/10'
+                    }`}>
+                      <p className={`text-xs font-bold ${isBedtimeMode ? 'text-[#E3D9FF]' : 'text-ink-soft'}`}>
+                        Bé thấy câu chuyện hôm nay thế nào?
+                      </p>
                       <div className="flex justify-center gap-3">
                         {[
                           { key: 'love', emoji: '😍', label: 'Rất thích' },
@@ -874,6 +904,8 @@ export const StoryReadingPage: React.FC = () => {
                             className={`p-2.5 rounded-2xl text-2xl transition-all transform ${
                               kidReaction === rx.key
                                 ? 'bg-brand-600 scale-125 shadow-btn-primary'
+                                : isBedtimeMode
+                                ? 'bg-[#382e57] hover:scale-110 shadow-sm border border-white/10'
                                 : 'bg-surface hover:scale-110 shadow-sm border border-ink/10'
                             }`}
                             title={rx.label}
@@ -885,20 +917,20 @@ export const StoryReadingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-center text-xs text-ink-faint">
+                  <div className={`text-center text-xs ${isBedtimeMode ? 'text-[#C8B6FF]/70' : 'text-ink-faint'}`}>
                     Bé hãy tiếp tục khám phá thêm các bức vẽ mới nhé!
                   </div>
                 </FlipPage>
 
                 <FlipPage key="final-right" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
                   <div className="space-y-5">
-                    <div className="flex items-center gap-2 border-b border-ink/10 pb-3">
-                      <Sparkles className="w-5 h-5 text-magic-600" />
-                      <h3 className="font-heading font-black text-lg text-ink">
+                    <div className={`flex items-center gap-2 border-b pb-3 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                      <Sparkles className={`w-5 h-5 ${isBedtimeMode ? 'text-butter' : 'text-magic-600'}`} />
+                      <h3 className={`font-heading font-black text-lg ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
                         {vi.reader.nextDrawingIdeasTitle}
                       </h3>
                     </div>
-                    <p className="text-xs text-ink-soft">
+                    <p className={`text-xs ${isBedtimeMode ? 'text-[#C8B6FF]' : 'text-ink-soft'}`}>
                       {vi.reader.nextDrawingSubtitle}
                     </p>
 
@@ -907,7 +939,11 @@ export const StoryReadingPage: React.FC = () => {
                       {story.next_drawing_ideas?.map((idea, idx) => (
                         <div
                           key={idx}
-                          className="p-3.5 rounded-2xl bg-surface border border-ink/10 shadow-card flex items-center gap-3 text-xs font-bold text-ink group hover:border-brand-600 transition-colors"
+                          className={`p-3.5 rounded-2xl border shadow-card flex items-center gap-3 text-xs font-bold group transition-colors ${
+                            isBedtimeMode
+                              ? 'bg-[#2c2445] border-white/10 text-[#F3EFE6] hover:border-butter'
+                              : 'bg-surface border-ink/10 text-ink hover:border-brand-600'
+                          }`}
                         >
                           <span className="w-6 h-6 rounded-full bg-peach flex items-center justify-center text-ink shrink-0 font-extrabold text-[11px]">
                             {idx + 1}
@@ -919,7 +955,7 @@ export const StoryReadingPage: React.FC = () => {
                   </div>
 
                   {/* Actions: Print & Read Again */}
-                  <div className="pt-4 border-t border-ink/10 flex items-center justify-between gap-3">
+                  <div className={`pt-4 border-t flex items-center justify-between gap-3 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -1008,11 +1044,15 @@ export const StoryReadingPage: React.FC = () => {
 
                   {/* Mobile Grounded Objects Tags */}
                   {groundedObjects.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-ink/10 flex flex-wrap gap-1.5">
+                    <div className={`mt-4 pt-3 border-t flex flex-wrap gap-1.5 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
                       {groundedObjects.slice(0, 3).map((obj: string, oIdx: number) => (
                         <span
                           key={oIdx}
-                          className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-2 text-ink-soft border border-ink/10"
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            isBedtimeMode
+                              ? 'bg-[#32274d] text-[#F3EFE6] border-[#4a3a70]'
+                              : 'bg-surface-2 text-ink-soft border-ink/10'
+                          }`}
                         >
                           ✨ {obj}
                         </span>
@@ -1023,11 +1063,16 @@ export const StoryReadingPage: React.FC = () => {
               </>
             ) : (
               /* Mobile Ending Page */
-              <div className="p-6 rounded-[28px] bg-surface border border-ink/10 shadow-card text-center space-y-5">
+              <div className={`p-6 rounded-[28px] border shadow-card text-center space-y-5 ${
+                isBedtimeMode ? 'bg-[#231e38] border-white/10 text-[#F3EFE6]' : 'bg-surface border-ink/10 text-ink'
+              }`}>
                 <div className="text-5xl">🎉</div>
-                <h2 className="text-2xl font-heading font-black text-ink">{vi.reader.congratsTitle}</h2>
-                <p className="text-sm font-semibold text-success">
-                  💡 {vi.reader.moralTitle} <strong className="text-ink">{story.moral}</strong>
+                <h2 className={`text-2xl font-heading font-black ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
+                  {vi.reader.congratsTitle}
+                </h2>
+                <p className={`text-sm font-semibold ${isBedtimeMode ? 'text-[#C9F0DD]' : 'text-success'}`}>
+                  💡 {vi.reader.moralTitle}{' '}
+                  <strong className={isBedtimeMode ? 'text-white' : 'text-ink'}>{story.moral}</strong>
                 </p>
 
                 {/* Rating */}
@@ -1045,7 +1090,11 @@ export const StoryReadingPage: React.FC = () => {
                         toast.success('Cảm ơn bé đã chấm điểm! ❤️');
                       }}
                       className={`p-3 rounded-2xl text-2xl transition-all ${
-                        kidReaction === rx.key ? 'bg-brand-600 scale-110 shadow-btn-primary' : 'bg-surface-2'
+                        kidReaction === rx.key
+                          ? 'bg-brand-600 scale-110 shadow-btn-primary'
+                          : isBedtimeMode
+                          ? 'bg-[#32274d]'
+                          : 'bg-surface-2'
                       }`}
                     >
                       {rx.emoji}
@@ -1054,10 +1103,17 @@ export const StoryReadingPage: React.FC = () => {
                 </div>
 
                 {/* Next Drawing Ideas */}
-                <div className="text-left space-y-2 pt-3 border-t border-ink/10">
-                  <p className="text-xs font-bold text-ink-soft">{vi.reader.nextDrawingIdeasTitle}:</p>
+                <div className={`text-left space-y-2 pt-3 border-t ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                  <p className={`text-xs font-bold ${isBedtimeMode ? 'text-[#C8B6FF]' : 'text-ink-soft'}`}>
+                    {vi.reader.nextDrawingIdeasTitle}:
+                  </p>
                   {story.next_drawing_ideas?.map((idea, idx) => (
-                    <div key={idx} className="p-3 bg-surface-2 rounded-xl text-xs font-bold text-ink">
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl text-xs font-bold ${
+                        isBedtimeMode ? 'bg-[#2c2445] text-[#F3EFE6]' : 'bg-surface-2 text-ink'
+                      }`}
+                    >
                       ✏️ {idea}
                     </div>
                   ))}
@@ -1077,9 +1133,46 @@ export const StoryReadingPage: React.FC = () => {
         )}
       </main>
 
+      {/* PRINTABLE FULL STORYBOOK LAYOUT (Visible only during window.print()) */}
+      <section className="hidden print:block p-8 bg-white text-black space-y-6">
+        <div className="text-center border-b border-black/20 pb-4 space-y-1">
+          <h1 className="text-2xl font-heading font-extrabold">{story.title}</h1>
+          <p className="text-sm">
+            Sáng tác từ nét vẽ của Bé {story.child?.nickname || 'Bé yêu'} · DrawToStory
+          </p>
+        </div>
+
+        {story.drawing?.image_path && (
+          <div className="max-w-md mx-auto border border-black/15 rounded-2xl p-3">
+            <img
+              src={story.drawing.image_path}
+              alt={story.title}
+              className="w-full max-h-64 object-contain mx-auto"
+            />
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {pages.map((pg) => (
+            <div key={pg.id} className="p-4 border border-black/15 rounded-xl break-inside-avoid">
+              <div className="text-xs font-bold uppercase mb-1">
+                Trang {pg.page_number} / {totalPages} — Cảm xúc: {pg.emotion}
+              </div>
+              <p className="font-story text-lg leading-relaxed">{pg.text_content}</p>
+            </div>
+          ))}
+        </div>
+
+        {story.moral && (
+          <div className="p-4 border-t border-black/20 text-sm font-bold">
+            Bài học yêu thương: <span className="font-normal">{story.moral}</span>
+          </div>
+        )}
+      </section>
+
       {/* 3. STICKY BOTTOM PLAYBACK CONTROLLER */}
       <footer
-        className={`sticky bottom-0 z-30 backdrop-blur-md border-t px-4 py-3 transition-colors ${
+        className={`sticky bottom-0 z-30 backdrop-blur-md border-t px-4 py-3 transition-colors print:hidden ${
           isBedtimeMode
             ? 'bg-[#181424]/95 border-[#322947]'
             : 'bg-surface/95 border-ink/10'

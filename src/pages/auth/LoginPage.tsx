@@ -95,24 +95,24 @@ export const LoginPage: React.FC = () => {
           {...register('email')}
         />
 
-        <div className="relative">
-          <Input
-            label={vi.auth.passwordLabel}
-            type={showPassword ? 'text' : 'password'}
-            placeholder={vi.auth.passwordPlaceholder}
-            leftIcon={<Lock className="w-4 h-4" />}
-            error={errors.password?.message}
-            {...register('password')}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((prev) => !prev)}
-            className="absolute right-3 top-[34px] p-1.5 text-ink-faint hover:text-ink rounded-lg transition-colors"
-            aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-          >
-            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          </button>
-        </div>
+        <Input
+          label={vi.auth.passwordLabel}
+          type={showPassword ? 'text' : 'password'}
+          placeholder={vi.auth.passwordPlaceholder}
+          leftIcon={<Lock className="w-4 h-4" />}
+          rightIcon={
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="p-1.5 text-ink-faint hover:text-ink rounded-lg transition-colors cursor-pointer"
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          }
+          error={errors.password?.message}
+          {...register('password')}
+        />
 
         <div className="flex items-center justify-end">
           <Link

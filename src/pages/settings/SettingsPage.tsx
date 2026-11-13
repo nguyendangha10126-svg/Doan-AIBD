@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
+import { supabase, isDemoMode } from '@/lib/supabase';
 import { vi } from '@/lib/i18n/vi';
 import { Child } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -200,6 +201,16 @@ export const SettingsPage: React.FC = () => {
     if (!currentPassword.trim()) {
       toast.error('Vui lòng nhập mật khẩu tài khoản để xác thực.');
       return;
+    }
+    if (!isDemoMode && profile?.email) {
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: currentPassword,
+      });
+      if (verifyErr) {
+        toast.error('Mật khẩu tài khoản không chính xác.');
+        return;
+      }
     }
     const ok = await updatePin(newPin.trim());
     if (ok) {
