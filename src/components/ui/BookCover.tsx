@@ -196,7 +196,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
                       transition={{ duration: 0.12 }}
                       className="absolute right-0 bottom-full mb-1 w-44 bg-surface border border-ink/10 rounded-2xl shadow-pop p-1.5 z-30 space-y-0.5"
                     >
-                      {onShare && (
+                      {isApproved && onShare && (
                         <button
                           type="button"
                           onClick={() => {

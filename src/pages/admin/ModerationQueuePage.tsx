@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Check, 
-  X, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Check,
+  X,
   CheckCheck,
   ShieldAlert,
   ShieldCheck,
-  Eye
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { useAdminStore } from '@/store/adminStore';
-import { DEFAULT_ADMIN_PROFILE } from '@/store/authStore';
+import { useAuthStore, DEFAULT_ADMIN_PROFILE } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
 import { Story, isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -20,8 +20,19 @@ import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 
 export const ModerationQueuePage: React.FC = () => {
-  const { stories, updateStoryStatus } = useStoryStore();
-  const { approveStoryModeration, rejectStoryModeration, batchModeration } = useAdminStore();
+  const { stories, fetchStories } = useStoryStore();
+  const { profile } = useAuthStore();
+  const {
+    approveStoryModeration,
+    rejectStoryModeration,
+    batchModeration,
+    fetchAdminData,
+  } = useAdminStore();
+
+  useEffect(() => {
+    fetchStories();
+    fetchAdminData();
+  }, [fetchStories, fetchAdminData]);
 
   const [activeFilter, setActiveFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
@@ -34,7 +45,7 @@ export const ModerationQueuePage: React.FC = () => {
   const cannedReasons = [
     'Hình vẽ có chi tiết sắc nhọn hoặc nhạy cảm có thể làm trẻ nhỏ lo lắng',
     'Từ ngữ cốt truyện cần nhẹ nhàng, phù hợp hơn với lứa tuổi của bé',
-    'Ảnh chụp chưa rõ nét nét vẽ của bé trên giấy, cần chụp lại',
+    'Ảnh chụp chưa rõ nét vẽ của bé trên giấy, cần chụp lại',
     'Cốt truyện chưa phản ánh đúng vật thể thực tế trong tranh vẽ của bé',
   ];
 
@@ -55,19 +66,34 @@ export const ModerationQueuePage: React.FC = () => {
     }
   }, [filteredStories, selectedStory]);
 
-  const handleApprove = async (story: Story) => {
-    await updateStoryStatus(story.id, 'approved');
-    approveStoryModeration(story.id, DEFAULT_ADMIN_PROFILE.id, 'Đã kiểm duyệt đạt chuẩn an toàn trẻ em');
-    toast.success(`Đã phê duyệt câu chuyện "${story.title}"`);
-  };
+  const adminId = profile?.id || DEFAULT_ADMIN_PROFILE.id;
+
+  const handleApprove = useCallback(
+    async (story: Story) => {
+      const ok = await approveStoryModeration(
+        story.id,
+        adminId,
+        'Đã kiểm duyệt đạt chuẩn an toàn trẻ em'
+      );
+      if (ok) {
+        toast.success(`Đã phê duyệt câu chuyện "${story.title}"`);
+      } else {
+        toast.error('Không thể phê duyệt câu chuyện. Vui lòng thử lại.');
+      }
+    },
+    [adminId, approveStoryModeration]
+  );
 
   const handleConfirmReject = async () => {
     if (!selectedStory || !rejectReason.trim()) return;
-    await updateStoryStatus(selectedStory.id, 'rejected', rejectReason.trim());
-    rejectStoryModeration(selectedStory.id, DEFAULT_ADMIN_PROFILE.id, rejectReason.trim());
-    setIsRejectModalOpen(false);
-    setRejectReason('');
-    toast.info(`Đã từ chối câu chuyện "${selectedStory.title}"`);
+    const ok = await rejectStoryModeration(selectedStory.id, adminId, rejectReason.trim());
+    if (ok) {
+      setIsRejectModalOpen(false);
+      setRejectReason('');
+      toast.info(`Đã từ chối câu chuyện "${selectedStory.title}"`);
+    } else {
+      toast.error('Không thể cập nhật trạng thái từ chối.');
+    }
   };
 
   // Keyboard shortcuts: 'A' to Approve, 'R' to Reject
@@ -88,39 +114,47 @@ export const ModerationQueuePage: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [selectedStory, handleApprove]);
 
   const handleBatchApprove = async () => {
     if (selectedIds.length === 0) return;
-    for (const id of selectedIds) {
-      await updateStoryStatus(id, 'approved');
+    const ok = await batchModeration(selectedIds, 'approved', 'Duyệt hàng loạt bởi Quản trị viên');
+    if (ok) {
+      toast.success(`Đã phê duyệt ${selectedIds.length} câu chuyện`);
+      setSelectedIds([]);
+    } else {
+      toast.error('Duyệt hàng loạt thất bại. Vui lòng thử lại.');
     }
-    batchModeration(selectedIds, 'approved', 'Duyệt hàng loạt bởi Quản trị viên');
-    toast.success(`Đã phê duyệt ${selectedIds.length} câu chuyện`);
-    setSelectedIds([]);
   };
 
-  // Grounded objects helper
-  const groundedObjects = selectedStory?.grounded_objects && selectedStory.grounded_objects.length > 0
-    ? selectedStory.grounded_objects
-    : selectedStory?.drawing?.ai_analysis?.objects || [];
+  const groundedObjects =
+    selectedStory?.grounded_objects && selectedStory.grounded_objects.length > 0
+      ? selectedStory.grounded_objects
+      : selectedStory?.drawing?.ai_analysis?.objects || [];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink">
             {vi.admin.queue.title}
           </h1>
           <p className="text-xs sm:text-sm text-ink-soft mt-1">
-            Phím tắt nhanh: bấm <kbd className="px-2 py-0.5 bg-surface border border-ink/15 rounded-md font-mono font-bold text-ink">A</kbd> để Duyệt,{' '}
-            <kbd className="px-2 py-0.5 bg-surface border border-ink/15 rounded-md font-mono font-bold text-ink">R</kbd> để Từ chối
+            Phím tắt nhanh: bấm{' '}
+            <kbd className="px-2 py-0.5 bg-surface border border-ink/15 rounded-md font-mono font-bold text-ink">
+              A
+            </kbd>{' '}
+            để Duyệt,{' '}
+            <kbd className="px-2 py-0.5 bg-surface border border-ink/15 rounded-md font-mono font-bold text-ink">
+              R
+            </kbd>{' '}
+            để Từ chối
           </p>
         </div>
 
-        {/* Status Filter Chips */}
-        <div className="flex items-center gap-1.5 bg-surface p-1.5 rounded-full border border-ink/10 shadow-sm">
+        {/* Status Filter Chips (Responsive flex-wrap) */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-surface p-1.5 rounded-2xl sm:rounded-full border border-ink/10 shadow-xs">
           {[
             { id: 'pending', label: vi.admin.queue.filterPending },
             { id: 'approved', label: vi.admin.queue.filterApproved },
@@ -129,8 +163,9 @@ export const ModerationQueuePage: React.FC = () => {
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveFilter(tab.id as typeof activeFilter)}
-              className={`px-3 py-1.5 rounded-full text-xs font-heading font-bold transition-all min-h-[36px] ${
+              className={`px-3 py-1.5 rounded-full text-xs font-heading font-bold transition-all min-h-[36px] cursor-pointer ${
                 activeFilter === tab.id
                   ? 'bg-brand-600 text-white shadow-btn-primary'
                   : 'text-ink-soft hover:text-ink hover:bg-surface-2'
@@ -144,7 +179,7 @@ export const ModerationQueuePage: React.FC = () => {
 
       {/* Batch Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="p-3.5 bg-surface rounded-2xl border border-brand-400 shadow-card flex items-center justify-between gap-4">
+        <div className="p-3.5 bg-surface rounded-2xl border border-brand-400 shadow-card flex flex-wrap items-center justify-between gap-4">
           <span className="text-xs font-heading font-bold text-ink">
             Đang chọn {selectedIds.length} truyện trong hàng chờ
           </span>
@@ -157,11 +192,7 @@ export const ModerationQueuePage: React.FC = () => {
             >
               {vi.admin.queue.batchApprove}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedIds([])}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
               Bỏ chọn
             </Button>
           </div>
@@ -170,13 +201,13 @@ export const ModerationQueuePage: React.FC = () => {
 
       {/* Queue Body */}
       {filteredStories.length === 0 ? (
-        <Card variant="white" className="p-12 text-center space-y-4">
+        <Card variant="white" className="p-12 text-center space-y-4 border border-ink/10">
           <div className="text-6xl">🎉</div>
           <h2 className="text-xl font-heading font-extrabold text-ink">
             {vi.admin.queue.emptyQueue}
           </h2>
           <p className="text-xs text-ink-soft max-w-md mx-auto">
-            Hàng đợi kiểm duyệt hiện không có câu chuyện nào cần xử lý. Toàn bộ truyện đã được lọc an toàn qua pipeline AI.
+            Danh sách kiểm duyệt hiện không có câu chuyện nào ở trạng thái đang lọc. Toàn bộ truyện đều được thẩm định qua pipeline AI 3 lớp.
           </p>
         </Card>
       ) : (
@@ -202,7 +233,6 @@ export const ModerationQueuePage: React.FC = () => {
                       : 'bg-surface/80 border-ink/10 hover:bg-surface hover:border-ink/20'
                   }`}
                 >
-                  {/* Checkbox */}
                   <input
                     type="checkbox"
                     checked={isChecked}
@@ -216,7 +246,6 @@ export const ModerationQueuePage: React.FC = () => {
                     aria-label={`Chọn truyện ${item.title}`}
                   />
 
-                  {/* Thumbnail */}
                   <div className="w-16 h-16 rounded-xl overflow-hidden bg-surface-2 shrink-0 border border-ink/10 flex items-center justify-center">
                     {item.drawing?.image_path ? (
                       <img
@@ -229,7 +258,6 @@ export const ModerationQueuePage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Story Meta */}
                   <div className="flex-1 overflow-hidden">
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-bold text-brand-600 truncate">
@@ -260,7 +288,6 @@ export const ModerationQueuePage: React.FC = () => {
           {selectedStory && (
             <div className="lg:col-span-8 space-y-6">
               <Card variant="white" className="p-6 md:p-8 border border-ink/10 space-y-6">
-                
                 {/* Header & Quick Action Buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-ink/10">
                   <div>
@@ -268,12 +295,11 @@ export const ModerationQueuePage: React.FC = () => {
                       {selectedStory.title}
                     </h2>
                     <p className="text-xs text-ink-soft mt-1">
-                      Tác giả: <strong className="text-ink">{selectedStory.child?.nickname}</strong> ({selectedStory.child?.age || 5} tuổi) ·{' '}
+                      Tác giả: <strong className="text-ink">{selectedStory.child?.nickname || 'Bé'}</strong> ({selectedStory.child?.age || 5} tuổi) ·{' '}
                       Mô hình: <span className="font-mono text-brand-600 font-bold">{selectedStory.model}</span>
                     </p>
                   </div>
 
-                  {/* Approve / Reject Controls */}
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
@@ -296,7 +322,6 @@ export const ModerationQueuePage: React.FC = () => {
 
                 {/* Split Comparison Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
                   {/* Left: Original Drawing in Paper Frame */}
                   <div className="space-y-2">
                     <span className="text-xs font-heading font-bold text-ink-soft flex items-center gap-1.5">
@@ -319,7 +344,6 @@ export const ModerationQueuePage: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Grounded Objects Chips */}
                     {groundedObjects.length > 0 && (
                       <div className="p-3 bg-surface-2 rounded-2xl border border-ink/10 space-y-1.5">
                         <span className="text-xs font-bold text-ink flex items-center gap-1.5">
@@ -342,8 +366,6 @@ export const ModerationQueuePage: React.FC = () => {
 
                   {/* Right: AI Safety Judgment & Faithfulness Score */}
                   <div className="space-y-4">
-                    
-                    {/* Scores row: Risk Score & Faithfulness Score */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3.5 rounded-2xl bg-surface-2 border border-ink/10">
                         <span className="text-xs font-bold text-ink-soft block">
@@ -364,7 +386,7 @@ export const ModerationQueuePage: React.FC = () => {
 
                       <div className="p-3.5 rounded-2xl bg-surface-2 border border-ink/10">
                         <span className="text-xs font-bold text-ink-soft block">
-                          Độ trung thực tranh (Faithful)
+                          Độ trung thực tranh
                         </span>
                         <div className="mt-1 flex items-center gap-2">
                           <span className="text-2xl font-heading font-extrabold text-brand-600">
@@ -377,7 +399,6 @@ export const ModerationQueuePage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Risk Categories & Reasons */}
                     <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 space-y-2">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-ink">
                         <ShieldAlert className="w-4 h-4 text-warning-text" />
@@ -403,7 +424,6 @@ export const ModerationQueuePage: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Moral */}
                     <div className="p-3.5 rounded-2xl bg-peach/20 border border-peach/50 text-xs text-ink">
                       <strong className="block mb-0.5">Bài học giáo dục (Moral):</strong>
                       <span>{selectedStory.moral}</span>
@@ -459,7 +479,7 @@ export const ModerationQueuePage: React.FC = () => {
                   key={idx}
                   type="button"
                   onClick={() => setRejectReason(reason)}
-                  className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all ${
+                  className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
                     rejectReason === reason
                       ? 'bg-danger-bg border-danger-text/40 text-danger-text font-bold'
                       : 'bg-surface-2 border-ink/10 text-ink hover:bg-surface'

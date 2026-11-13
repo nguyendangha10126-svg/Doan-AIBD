@@ -14,7 +14,7 @@ import { soundEffects } from '@/lib/sound';
 export const KidModePage: React.FC = () => {
   const navigate = useNavigate();
   const { stories, fetchStories } = useStoryStore();
-  const { verifyPin } = useAuthStore();
+  const { childrenList, selectedChildId, verifyPin } = useAuthStore();
 
   useEffect(() => {
     fetchStories();
@@ -22,7 +22,7 @@ export const KidModePage: React.FC = () => {
 
   // Parental Gate Modal
   const [isGateOpen, setIsGateOpen] = useState(false);
-  const [gateType, setGateType] = useState<'hold' | 'math' | 'pin'>('hold');
+  const [gateType, setGateType] = useState<'math' | 'pin'>('math');
   const [mathA] = useState(() => Math.floor(Math.random() * 8) + 2);
   const [mathB] = useState(() => Math.floor(Math.random() * 8) + 2);
   const [userAnswer, setUserAnswer] = useState('');
@@ -33,8 +33,12 @@ export const KidModePage: React.FC = () => {
   const holdTimerRef = useRef<number | null>(null);
   const holdStartTimeRef = useRef<number | null>(null);
 
-  // Kid mode only shows approved stories
-  const approvedStories = stories.filter((s) => isStoryApproved(s.status));
+  const activeChild = childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
+
+  // Kid mode only shows approved stories (scoped to active child when selected)
+  const approvedStories = stories.filter(
+    (s) => isStoryApproved(s.status) && (!activeChild || s.child_id === activeChild.id)
+  );
 
   // Request fullscreen on mount or first interaction
   const requestFullscreen = useCallback(async () => {
@@ -268,9 +272,9 @@ export const KidModePage: React.FC = () => {
                     <button
                       onClick={() => {
                         soundEffects.playMagic();
-                        navigate(`/story/${story.id}`);
+                        navigate(`/story/${story.id}?mode=kid`);
                       }}
-                      className="w-full min-h-[72px] rounded-full bg-brand-600 hover:bg-brand-700 active:scale-97 text-white font-heading font-black text-lg sm:text-xl flex items-center justify-center gap-3 shadow-btn-primary transition-all cursor-pointer"
+                      className="w-full min-h-[72px] rounded-full bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-heading font-black text-lg sm:text-xl flex items-center justify-center gap-3 shadow-btn-primary transition-all cursor-pointer"
                     >
                       <BookOpen className="w-6 h-6 fill-current" />
                       <span>Mở sách đọc</span>

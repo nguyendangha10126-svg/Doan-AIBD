@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Sparkles, 
-  Star,
+  Share2,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -17,11 +17,11 @@ import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { BookCover } from '@/components/ui/BookCover';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { isStoryApproved } from '@/types/database';
+import { Story, isStoryApproved } from '@/types/database';
 
 export const LibraryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { stories, deleteStory, fetchStories } = useStoryStore();
+  const { stories, deleteStory, toggleStoryShare, fetchStories } = useStoryStore();
   const { childrenList } = useAuthStore();
 
   useEffect(() => {
@@ -70,7 +70,25 @@ export const LibraryPage: React.FC = () => {
     const ok = await deleteStory(storyId);
     if (ok) {
       toast.success('Đã xóa câu chuyện khỏi tủ sách');
+    } else {
+      toast.error('Không thể xóa câu chuyện. Vui lòng thử lại.');
     }
+  };
+
+  const handleShareStory = async (story: Story) => {
+    if (!isStoryApproved(story.status)) {
+      toast.error('Chỉ có thể chia sẻ công khai truyện đã được duyệt.');
+      return;
+    }
+    if (!story.is_shared) {
+      const ok = await toggleStoryShare(story.id, true);
+      if (!ok) {
+        toast.error('Không thể bật liên kết chia sẻ lúc này.');
+        return;
+      }
+    }
+    await navigator.clipboard?.writeText(`${window.location.origin}/shared/${story.share_token}`);
+    toast.success('Đã bật chia sẻ và sao chép liên kết công khai!');
   };
 
   return (
@@ -174,9 +192,9 @@ export const LibraryPage: React.FC = () => {
           <Chip
             selected={onlyFavorites}
             onClick={() => setOnlyFavorites(!onlyFavorites)}
-            icon={<Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />}
+            icon={<Share2 className="w-3.5 h-3.5 text-brand-600" />}
           >
-            Được yêu thích
+            Đang chia sẻ
           </Chip>
 
           {(selectedChildFilter !== 'all' || selectedStatusFilter !== 'all' || onlyFavorites || searchQuery) && (
@@ -207,18 +225,15 @@ export const LibraryPage: React.FC = () => {
         />
       ) : (
         <div className="relative">
-          {/* Responsive Grid 2/3/4 cols */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-6">
+          {/* Responsive Grid 1/2/3/4 cols */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pb-6">
             {filteredStories.map((story) => (
               <div key={story.id} className="relative">
                 <BookCover
                   story={story}
                   onRead={(id) => navigate(`/story/${id}`)}
                   onDelete={handleDeleteStory}
-                  onShare={() => {
-                    navigator.clipboard?.writeText(window.location.origin + `/shared/${story.share_token}`);
-                    toast.success('Đã sao chép liên kết chia sẻ!');
-                  }}
+                  onShare={handleShareStory}
                 />
               </div>
             ))}

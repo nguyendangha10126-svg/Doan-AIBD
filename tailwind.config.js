@@ -11,19 +11,19 @@ export default {
         bg: '#FFF9F0',
         surface: '#FFFFFF',
         'surface-2': '#FFF3E6',
-        
-        // Inks (WCAG compliant)
+        'surface-3': '#FCE8D5',
+
+        // Inks (WCAG 2.1 AA compliant)
         ink: {
           DEFAULT: '#2E2540',
           soft: '#5E5370',
           faint: '#8A7F99',
         },
-        // Backward-compatible alias for existing code
         main: {
           DEFAULT: '#2E2540',
           light: '#5E5370',
-          muted: '#8A7F99',
-          subtle: '#A499B3',
+          muted: '#5E5370',
+          subtle: '#8A7F99',
         },
 
         // Brand Palette
@@ -80,10 +80,10 @@ export default {
           dark: '#F5B892',
         },
 
-        // Status pairs
+        // Nested & Top-level Semantic Status Tokens (WCAG AA Verified)
         status: {
           'success-bg': '#DDF6E9',
-          'success-text': '#1F8A5B',
+          'success-text': '#166E48',
           'warning-bg': '#FFF1B8',
           'warning-text': '#8A5A00',
           'danger-bg': '#FFE3EA',
@@ -91,6 +91,18 @@ export default {
           'info-bg': '#CDE7FF',
           'info-text': '#1F5FA8',
         },
+        danger: '#B42343',
+        'danger-bg': '#FFE3EA',
+        'danger-text': '#B42343',
+        success: '#166E48',
+        'success-bg': '#DDF6E9',
+        'success-text': '#166E48',
+        warning: '#8A5A00',
+        'warning-bg': '#FFF1B8',
+        'warning-text': '#8A5A00',
+        info: '#1F5FA8',
+        'info-bg': '#CDE7FF',
+        'info-text': '#1F5FA8',
 
         cream: {
           DEFAULT: '#FFF9F0',
@@ -115,9 +127,9 @@ export default {
         '5xl': '2.5rem',
       },
       boxShadow: {
+        xs: '0 1px 2px rgba(46,37,64,.05)',
         card: '0 1px 2px rgba(46,37,64,.06), 0 12px 32px -12px rgba(46,37,64,.16)',
         pop: '0 24px 48px -16px rgba(46,37,64,.28)',
-        // Alias existing soft to modern soft card
         soft: '0 1px 2px rgba(46,37,64,.06), 0 12px 32px -12px rgba(46,37,64,.16)',
         'soft-lg': '0 24px 48px -16px rgba(46,37,64,.28)',
         'soft-inner': 'inset 0 2px 4px 0 rgba(46, 37, 64, 0.06)',
@@ -130,9 +142,9 @@ export default {
         'magic-gradient': 'linear-gradient(135deg, #8B7CF6, #F472B6)',
       },
       animation: {
-        'float': 'float 4s ease-in-out infinite',
+        float: 'float 4s ease-in-out infinite',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'sparkle': 'sparkle 2s ease-in-out infinite',
+        sparkle: 'sparkle 2s ease-in-out infinite',
       },
       keyframes: {
         float: {

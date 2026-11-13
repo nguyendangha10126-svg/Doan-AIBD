@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, Check, Play, History, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminStore } from '@/store/adminStore';
+import { StoryGenerationService } from '@/features/ai/services/storyGenerationService';
 import { vi } from '@/lib/i18n/vi';
+import { formatCurrencyUSD } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -16,18 +18,33 @@ export const SystemPromptsPage: React.FC = () => {
   const [selectedPromptId, setSelectedPromptId] = useState(activePrompt?.id || '');
   const [editorText, setEditorText] = useState(activePrompt?.prompt_text || '');
   const [newVersionName, setNewVersionName] = useState('');
+  const [isSavingVersion, setIsSavingVersion] = useState(false);
+
+  // Sync editor when systemPrompts load from DB
+  useEffect(() => {
+    if (!selectedPromptId && activePrompt) {
+      setSelectedPromptId(activePrompt.id);
+      setEditorText(activePrompt.prompt_text);
+    }
+  }, [activePrompt, selectedPromptId]);
 
   // Playground state
   const [sampleNickname, setSampleNickname] = useState('Bé Bơ');
   const [sampleAge, setSampleAge] = useState(5);
-  const [sampleDetails, setSampleDetails] = useState('Một chú voi con có đôi tai màu hồng và chiếc cầu vồng bảy sắc');
+  const [sampleDetails, setSampleDetails] = useState('Ngôi nhà mái đỏ dưới ông mặt trời mỉm cười và khóm hoa hướng dương');
   const [isTesting, setIsTesting] = useState(false);
   const [testOutput, setTestOutput] = useState<{
     title: string;
     summary: string;
     moral: string;
-    pages: Array<{ page_number: number; text_content: string }>;
-    metrics: { inputTokens: number; outputTokens: number; latencyMs: number };
+    pages: Array<{ page_number: number; text_content: string; emotion?: string }>;
+    metrics: {
+      inputTokens: number;
+      outputTokens: number;
+      latencyMs: number;
+      estimatedCostUsd: number;
+      model: string;
+    };
   } | null>(null);
 
   const selectedPrompt = systemPrompts.find((p) => p.id === selectedPromptId) || activePrompt;
@@ -40,51 +57,68 @@ export const SystemPromptsPage: React.FC = () => {
     }
   };
 
-  const handleSaveAsNewVersion = () => {
+  const handleSaveAsNewVersion = async () => {
     if (!newVersionName.trim()) {
       toast.error('Vui lòng nhập tên cho phiên bản mới');
       return;
     }
-    saveSystemPromptVersion(newVersionName.trim(), editorText);
-    toast.success('Đã lưu phiên bản System Prompt mới!');
-    setNewVersionName('');
+    if (!editorText.trim()) {
+      toast.error('Nội dung System Prompt không được để trống');
+      return;
+    }
+    setIsSavingVersion(true);
+    const ok = await saveSystemPromptVersion(newVersionName.trim(), editorText.trim());
+    setIsSavingVersion(false);
+    if (ok) {
+      toast.success('Đã lưu phiên bản System Prompt mới vào CSDL!');
+      setNewVersionName('');
+    } else {
+      toast.error('Không thể lưu phiên bản mới. Vui lòng thử lại.');
+    }
+  };
+
+  const handleActivateVersion = async (promptId: string, versionNumber: number) => {
+    const ok = await setActiveSystemPrompt(promptId);
+    if (ok) {
+      toast.success(`Đã kích hoạt phiên bản v${versionNumber} làm Active chính thức!`);
+    } else {
+      toast.error('Không thể kích hoạt phiên bản này.');
+    }
   };
 
   const handleRunPlayground = async () => {
+    if (!editorText.trim()) {
+      toast.error('Vui lòng nhập nội dung System Prompt để thử nghiệm.');
+      return;
+    }
     setIsTesting(true);
     setTestOutput(null);
 
-    // Simulate Playground execution via admin-test-prompt
-    setTimeout(() => {
-      setIsTesting(false);
-      setTestOutput({
-        title: `Chú Voi Con và Cầu Vồng Lấp Lánh (${sampleNickname})`,
-        summary: `Câu chuyện thử nghiệm sáng tác cho bé ${sampleNickname} (${sampleAge} tuổi) từ nét vẽ chú voi tai hồng.`,
-        moral: 'Tình bạn và sự sẻ chia luôn thắp sáng mọi chân trời cổ tích.',
-        pages: [
-          { page_number: 1, text_content: `Buổi sáng nọ, bạn nhỏ ${sampleNickname} dạo chơi cùng một chú voi con có đôi tai hồng rực rỡ dưới ánh nắng mai ấm áp.` },
-          { page_number: 2, text_content: 'Sau cơn mưa rào mùa hạ, chiếc cầu vồng bảy sắc lung linh vắt ngang sườn đồi xanh mướt như một dải lụa tiên sa.' },
-          { page_number: 3, text_content: 'Voi con thích thú vẫy chiếc vòi nhỏ, thổi những giọt nước lấp lánh hòa vào bảy sắc cầu vồng rộn rã tiếng cười.' },
-          { page_number: 4, text_content: 'Các bạn thú nhỏ cùng nắm tay nhau nhảy múa hân hoan. Một ngày tuyệt đẹp khép lại trong tình yêu thương ngọt ngào.' },
-        ],
-        metrics: {
-          inputTokens: 980,
-          outputTokens: 420,
-          latencyMs: 1850,
-        },
+    try {
+      const result = await StoryGenerationService.runPromptPlayground({
+        promptText: editorText,
+        sampleNickname: sampleNickname.trim() || 'Bé Yêu',
+        sampleAge: Math.min(12, Math.max(2, Number(sampleAge) || 5)),
+        sampleDetails: sampleDetails.trim() || 'Bức tranh thiên nhiên tươi sáng',
       });
-      toast.success('Đã chạy thử nghiệm Prompt thành công!');
-    }, 1200);
+      setTestOutput(result);
+      toast.success('Đã chạy thử nghiệm Prompt thật với AI thành công!');
+    } catch (err: unknown) {
+      const error = err as Error;
+      toast.error(error.message || 'Không thể chạy thử nghiệm Prompt lúc này.');
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-heading font-black text-main">
+        <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink">
           {vi.admin.prompts.title}
         </h1>
-        <p className="text-xs sm:text-sm text-main-muted mt-1">
+        <p className="text-xs sm:text-sm text-ink-soft mt-1">
           {vi.admin.prompts.subtitle}
         </p>
       </div>
@@ -93,33 +127,33 @@ export const SystemPromptsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Version History (Left 4 cols) */}
         <div className="lg:col-span-4 space-y-4">
-          <Card variant="white" className="p-5 border-2 border-peach/50 space-y-4">
+          <Card variant="white" className="p-5 border border-ink/10 space-y-4 shadow-card">
             <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-accent" />
-              <h2 className="font-heading font-bold text-sm text-main">
+              <History className="w-4 h-4 text-magic-600" />
+              <h2 className="font-heading font-extrabold text-sm text-ink">
                 {vi.admin.prompts.versionHistory}
               </h2>
             </div>
 
-            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
               {systemPrompts.map((p) => {
                 const isCurrent = p.id === selectedPromptId;
                 return (
                   <div
                     key={p.id}
                     onClick={() => handleSelectPrompt(p.id)}
-                    className={`p-3 rounded-2xl border-2 transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
                       isCurrent
-                        ? 'bg-accent/10 border-accent shadow-soft'
-                        : 'bg-cream-100 border-peach/40 hover:bg-white'
+                        ? 'bg-lavender/35 border-magic-600 shadow-xs'
+                        : 'bg-surface-2 border-ink/10 hover:bg-surface'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="font-heading font-bold text-xs text-main truncate">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-heading font-bold text-xs text-ink truncate">
                         {p.name}
                       </span>
                       {p.is_active ? (
-                        <Badge variant="mint" size="sm">
+                        <Badge variant="success" size="sm">
                           Active
                         </Badge>
                       ) : (
@@ -129,18 +163,18 @@ export const SystemPromptsPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-peach/20">
-                      <span className="text-[10px] text-main-muted">
-                        Phiên bản {p.version}
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-ink/10">
+                      <span className="text-[11px] text-ink-soft">
+                        Phiên bản v{p.version}
                       </span>
                       {!p.is_active && (
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveSystemPrompt(p.id);
-                            toast.success(`Đã kích hoạt phiên bản v${p.version} làm Active!`);
+                            handleActivateVersion(p.id, p.version);
                           }}
-                          className="text-[10px] font-heading font-bold text-accent hover:underline"
+                          className="text-[11px] font-heading font-bold text-brand-600 hover:underline cursor-pointer"
                         >
                           {vi.admin.prompts.setActive}
                         </button>
@@ -155,25 +189,25 @@ export const SystemPromptsPage: React.FC = () => {
 
         {/* Prompt Editor (Right 8 cols) */}
         <div className="lg:col-span-8 space-y-4">
-          <Card variant="white" className="p-6 md:p-8 border-2 border-peach/50 space-y-4">
+          <Card variant="white" className="p-6 md:p-8 border border-ink/10 space-y-4 shadow-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <span className="text-xs font-heading font-bold text-main-muted">
+                <span className="text-xs font-heading font-bold text-ink-soft">
                   Đang chỉnh sửa:
                 </span>
-                <h3 className="text-lg font-heading font-black text-main">
-                  {selectedPrompt?.name} {selectedPrompt?.is_active && '(Đang chạy chính thức)'}
+                <h3 className="text-lg font-heading font-extrabold text-ink">
+                  {selectedPrompt?.name || 'System Prompt'}{' '}
+                  {selectedPrompt?.is_active && (
+                    <span className="text-xs font-bold text-success-text">(Đang chạy chính thức)</span>
+                  )}
                 </h3>
               </div>
 
               {selectedPrompt && !selectedPrompt.is_active && (
                 <Button
-                  variant="accent"
+                  variant="magic"
                   size="sm"
-                  onClick={() => {
-                    setActiveSystemPrompt(selectedPrompt.id);
-                    toast.success('Đã kích hoạt phiên bản làm Active!');
-                  }}
+                  onClick={() => handleActivateVersion(selectedPrompt.id, selectedPrompt.version)}
                   leftIcon={<Check className="w-4 h-4" />}
                 >
                   {vi.admin.prompts.setActive}
@@ -189,16 +223,18 @@ export const SystemPromptsPage: React.FC = () => {
             />
 
             {/* Save as New Version Form */}
-            <div className="p-4 rounded-2xl bg-cream-100 border border-peach/40 flex flex-col sm:flex-row items-center gap-3">
-              <Input
-                placeholder="Tên phiên bản mới (ví dụ: v1.3 - Giọng kể giàu biểu cảm)"
-                value={newVersionName}
-                onChange={(e) => setNewVersionName(e.target.value)}
-                className="bg-white"
-              />
+            <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 flex flex-col sm:flex-row items-center gap-3">
+              <div className="w-full flex-1">
+                <Input
+                  placeholder="Tên phiên bản mới (ví dụ: v1.3 - Giọng kể giàu biểu cảm)"
+                  value={newVersionName}
+                  onChange={(e) => setNewVersionName(e.target.value)}
+                />
+              </div>
               <Button
                 variant="primary"
                 size="md"
+                isLoading={isSavingVersion}
                 onClick={handleSaveAsNewVersion}
                 leftIcon={<Save className="w-4 h-4" />}
                 className="shrink-0 w-full sm:w-auto"
@@ -210,17 +246,17 @@ export const SystemPromptsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Interactive Prompt Playground */}
-      <Card variant="cream" className="p-6 md:p-8 border-2 border-peach space-y-6">
-        <div className="flex items-center justify-between">
+      {/* Real Interactive Gemini Prompt Playground */}
+      <Card variant="white" className="p-6 md:p-8 border border-ink/10 space-y-6 shadow-card bg-surface-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent animate-pulse" />
-            <h2 className="text-lg md:text-xl font-heading font-black text-main">
+            <Sparkles className="w-5 h-5 text-magic-600 animate-pulse" />
+            <h2 className="text-lg md:text-xl font-heading font-extrabold text-ink">
               {vi.admin.prompts.playgroundTitle}
             </h2>
           </div>
-          <Badge variant="accent" size="sm">
-            Thử nghiệm an toàn (Không ghi DB)
+          <Badge variant="magic" size="sm">
+            Gọi Gemini 2.5 Flash trực tiếp (Không tạo sách thừa)
           </Badge>
         </div>
 
@@ -240,53 +276,59 @@ export const SystemPromptsPage: React.FC = () => {
             onChange={(e) => setSampleAge(Number(e.target.value))}
           />
           <Input
-            label="Chi tiết nét vẽ mẫu"
+            label="Chi tiết bức tranh mẫu"
             value={sampleDetails}
             onChange={(e) => setSampleDetails(e.target.value)}
           />
         </div>
 
-        <Button
-          variant="accent"
-          size="md"
-          isLoading={isTesting}
-          onClick={handleRunPlayground}
-          leftIcon={<Play className="w-4 h-4" />}
-        >
-          {vi.admin.prompts.testSampleImage}
-        </Button>
+        <div>
+          <Button
+            variant="magic"
+            size="md"
+            isLoading={isTesting}
+            onClick={handleRunPlayground}
+            leftIcon={<Play className="w-4 h-4" />}
+          >
+            {vi.admin.prompts.testSampleImage}
+          </Button>
+        </div>
 
-        {/* Playground Output */}
+        {/* Playground Real Output */}
         {testOutput && (
-          <div className="p-5 rounded-2xl bg-white border border-peach/50 space-y-4 shadow-soft animate-fadeIn">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-heading font-bold text-accent">
-                {vi.admin.prompts.testOutput}
+          <div className="p-5 md:p-6 rounded-2xl bg-surface border border-ink/10 space-y-4 shadow-card">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-b border-ink/10 pb-3">
+              <span className="font-heading font-extrabold text-magic-600">
+                {vi.admin.prompts.testOutput} ({testOutput.metrics.model})
               </span>
-              <div className="flex items-center gap-3 text-main-muted">
-                <span>Tokens: {testOutput.metrics.inputTokens + testOutput.metrics.outputTokens}</span>
+              <div className="flex flex-wrap items-center gap-3 text-ink-soft font-mono">
+                <span>Tokens: {testOutput.metrics.inputTokens} in / {testOutput.metrics.outputTokens} out</span>
                 <span>Latency: {testOutput.metrics.latencyMs}ms</span>
+                <span>Cost: {formatCurrencyUSD(testOutput.metrics.estimatedCostUsd)}</span>
               </div>
             </div>
 
             <div>
-              <h4 className="text-base font-heading font-black text-main">
+              <h4 className="text-base sm:text-lg font-heading font-extrabold text-ink">
                 {testOutput.title}
               </h4>
-              <p className="text-xs text-main-muted mt-0.5">{testOutput.summary}</p>
+              <p className="text-xs text-ink-soft mt-1">{testOutput.summary}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               {testOutput.pages.map((p) => (
-                <div key={p.page_number} className="p-3 rounded-xl bg-cream-100 border border-peach/30">
-                  <span className="font-bold text-primary block mb-1">Trang {p.page_number}:</span>
-                  <p className="text-main">{p.text_content}</p>
+                <div key={p.page_number} className="p-3.5 rounded-2xl bg-surface-2 border border-ink/10 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-heading font-bold text-brand-600">Trang {p.page_number}</span>
+                    {p.emotion && <span className="text-[11px] text-ink-soft capitalize">{p.emotion}</span>}
+                  </div>
+                  <p className="text-ink leading-relaxed font-story text-sm">{p.text_content}</p>
                 </div>
               ))}
             </div>
 
-            <div className="p-3 bg-peach/20 rounded-xl text-xs font-semibold text-main">
-              💡 Bài học đạo đức: {testOutput.moral}
+            <div className="p-3.5 bg-mint/35 border border-success/20 rounded-2xl text-xs font-heading font-bold text-ink">
+              💡 Bài học đạo đức: <span className="font-normal text-ink-soft">{testOutput.moral}</span>
             </div>
           </div>
         )}

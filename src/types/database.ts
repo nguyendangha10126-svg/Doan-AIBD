@@ -63,6 +63,7 @@ export interface DrawingAiAnalysis {
 
 export interface Profile {
   id: string;
+  email?: string | null;
   full_name: string;
   role: UserRole;
   is_locked: boolean;

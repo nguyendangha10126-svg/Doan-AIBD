@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import HTMLFlipBook from 'react-pageflip';
@@ -21,7 +21,8 @@ import {
   Clock,
   Maximize2,
   Minimize2,
-  RotateCcw
+  RotateCcw,
+  Music
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
@@ -71,23 +72,62 @@ FlipPage.displayName = 'FlipPage';
 
 export const StoryReadingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const isKidReaderMode = searchParams.get('mode') === 'kid';
   const navigate = useNavigate();
-  const { stories, toggleStoryShare, reportStory, logReadingEvent } = useStoryStore();
+  const {
+    stories,
+    fetchStoryById,
+    toggleStoryShare,
+    reportStory,
+    logReadingEvent,
+    awardBadgeBySlug,
+  } = useStoryStore();
 
-  const story: Story | undefined = stories.find((s) => s.id === id) || stories[0];
-  const pages: StoryPage[] = story?.pages && story.pages.length > 0
-    ? story.pages
-    : [
-        {
-          id: 'p1',
-          story_id: story?.id || '',
-          page_number: 1,
-          text_content: 'Ngày xửa ngày xưa, trong một khu rừng thần tiên tràn ngập ánh nắng ban mai...',
-          emotion: 'hân hoan',
-          focus_region: { x: 50, y: 50, zoom: 1.15 },
-          created_at: new Date().toISOString(),
-        },
-      ];
+  const [fetchedStory, setFetchedStory] = useState<Story | null>(null);
+  const [isLoadingStory, setIsLoadingStory] = useState<boolean>(Boolean(id));
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (!id) {
+        setIsLoadingStory(false);
+        return;
+      }
+      const existing = useStoryStore.getState().stories.find((s) => s.id === id);
+      if (existing) {
+        setFetchedStory(existing);
+        setIsLoadingStory(false);
+        return;
+      }
+      setIsLoadingStory(true);
+      const fromDb = await fetchStoryById(id);
+      if (active) {
+        setFetchedStory(fromDb);
+        setIsLoadingStory(false);
+      }
+    }
+    load();
+    return () => {
+      active = false;
+    };
+  }, [id, fetchStoryById]);
+
+  const story: Story | undefined = stories.find((s) => s.id === id) || fetchedStory || undefined;
+  const pages: StoryPage[] =
+    story?.pages && story.pages.length > 0
+      ? [...story.pages].sort((a, b) => a.page_number - b.page_number)
+      : [
+          {
+            id: 'p1',
+            story_id: story?.id || '',
+            page_number: 1,
+            text_content: story?.summary || 'Đang tải nội dung trang sách...',
+            emotion: 'ấm áp',
+            focus_region: { x: 50, y: 50, zoom: 1.15 },
+            created_at: new Date().toISOString(),
+          },
+        ];
 
   const totalPages = pages.length;
   // 0-indexed page in story
@@ -106,10 +146,30 @@ export const StoryReadingPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Bedtime Mode
+  // Bedtime Mode & Lullaby Music Box
   const [isBedtimeMode, setIsBedtimeMode] = useState(false);
+  const [isLullabyPlaying, setIsLullabyPlaying] = useState(false);
   const [bedtimeTimerMinutes, setBedtimeTimerMinutes] = useState<number>(0);
   const bedtimeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      soundEffects.stopLullaby();
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleToggleLullaby = () => {
+    if (isLullabyPlaying) {
+      soundEffects.stopLullaby();
+      setIsLullabyPlaying(false);
+    } else {
+      soundEffects.startLullaby();
+      setIsLullabyPlaying(true);
+    }
+  };
 
   // Font Size: 'sm' | 'md' | 'lg'
   const [fontSizeLevel, setFontSizeLevel] = useState<'sm' | 'md' | 'lg'>('md');
@@ -203,6 +263,8 @@ export const StoryReadingPage: React.FC = () => {
       if (bedtimeTimerRef.current) clearTimeout(bedtimeTimerRef.current);
       bedtimeTimerRef.current = window.setTimeout(() => {
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        soundEffects.stopLullaby();
+        setIsLullabyPlaying(false);
         setIsPlayingVoice(false);
         toast.info('Đã hết giờ hẹn ru ngủ. Chúc bé ngủ ngon! 🌙');
       }, bedtimeTimerMinutes * 60 * 1000);
@@ -212,11 +274,14 @@ export const StoryReadingPage: React.FC = () => {
     };
   }, [bedtimeTimerMinutes]);
 
-  // Trigger celebration on ending page
+  // Trigger celebration & badge check on ending page
   useEffect(() => {
-    if (currentPageIndex === totalPages) {
+    if (currentPageIndex === totalPages && story) {
       soundEffects.playSuccess();
       soundEffects.playSparkle();
+      if (story.child_id) {
+        awardBadgeBySlug(story.child_id, 'bedtime_reader');
+      }
       confetti({
         particleCount: 90,
         spread: 80,
@@ -224,7 +289,7 @@ export const StoryReadingPage: React.FC = () => {
         colors: ['#D13A5E', '#6C5CE7', '#C9F0DD', '#FFD6BA', '#FFF1B8'],
       });
     }
-  }, [currentPageIndex, totalPages]);
+  }, [currentPageIndex, totalPages, story, awardBadgeBySlug]);
 
   // Stop TTS helper
   const stopVoice = useCallback(() => {
@@ -347,9 +412,17 @@ export const StoryReadingPage: React.FC = () => {
     speakSentence(index);
   };
 
-  const handleCopyShareLink = () => {
-    const url = `${window.location.origin}/shared/${story?.share_token}`;
-    navigator.clipboard.writeText(url);
+  const handleCopyShareLink = async () => {
+    if (!story) return;
+    if (!story.is_shared) {
+      const ok = await toggleStoryShare(story.id, true);
+      if (!ok) {
+        toast.error('Không thể kích hoạt liên kết chia sẻ.');
+        return;
+      }
+    }
+    const url = `${window.location.origin}/shared/${story.share_token}`;
+    await navigator.clipboard.writeText(url);
     setIsCopied(true);
     toast.success(vi.share.copiedToast);
     setTimeout(() => setIsCopied(false), 2000);
@@ -361,9 +434,14 @@ export const StoryReadingPage: React.FC = () => {
 
   const handleSendReport = async () => {
     if (!story || !reportReason.trim()) return;
-    await reportStory(story.id, reportReason.trim());
-    setIsReportModalOpen(false);
-    toast.success(vi.report.reportSuccess);
+    const ok = await reportStory(story.id, reportReason.trim());
+    if (ok) {
+      setIsReportModalOpen(false);
+      setReportReason('');
+      toast.success(vi.report.reportSuccess);
+    } else {
+      toast.error('Không thể gửi báo cáo lúc này. Vui lòng thử lại.');
+    }
   };
 
   // Clamped Ken Burns parameters to ensure artwork is NEVER cropped
@@ -387,13 +465,24 @@ export const StoryReadingPage: React.FC = () => {
     ? story.grounded_objects
     : story?.drawing?.ai_analysis?.objects || [];
 
+  if (isLoadingStory && !story) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8 text-center bg-bg">
+        <div className="space-y-3">
+          <Sparkles className="w-8 h-8 text-brand-600 animate-spin mx-auto" />
+          <p className="text-sm font-heading font-bold text-ink-soft">Đang mở cuốn sách cổ tích...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!story) {
     return (
       <div className="min-h-screen flex items-center justify-center p-8 text-center bg-bg">
         <div className="space-y-4">
-          <p className="text-ink-soft">Không tìm thấy câu chuyện này.</p>
-          <Button variant="primary" onClick={() => navigate('/library')}>
-            {vi.reader.backToLibrary}
+          <p className="text-ink-soft font-heading font-bold">Không tìm thấy câu chuyện này.</p>
+          <Button variant="primary" onClick={() => navigate(isKidReaderMode ? '/kid' : '/library')}>
+            {isKidReaderMode ? 'Quay lại Góc Bé' : vi.reader.backToLibrary}
           </Button>
         </div>
       </div>
@@ -423,11 +512,13 @@ export const StoryReadingPage: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/library')}
+              onClick={() => navigate(isKidReaderMode ? '/kid' : '/library')}
               className={`rounded-full min-h-[44px] ${isBedtimeMode ? 'text-[#F3EFE6] hover:bg-white/10' : ''}`}
               leftIcon={<ArrowLeft className="w-4 h-4" />}
             >
-              <span className="hidden sm:inline">{vi.reader.backToLibrary}</span>
+              <span className="hidden sm:inline">
+                {isKidReaderMode ? 'Góc Bé' : vi.reader.backToLibrary}
+              </span>
             </Button>
 
             <div className="min-w-0">
@@ -469,12 +560,34 @@ export const StoryReadingPage: React.FC = () => {
             <Button
               variant={isBedtimeMode ? 'magic' : 'secondary'}
               size="sm"
-              onClick={() => setIsBedtimeMode(!isBedtimeMode)}
+              onClick={() => {
+                const next = !isBedtimeMode;
+                setIsBedtimeMode(next);
+                if (next && story.child_id) {
+                  awardBadgeBySlug(story.child_id, 'bedtime_reader');
+                }
+              }}
               leftIcon={isBedtimeMode ? <Sun className="w-3.5 h-3.5 text-butter" /> : <Moon className="w-3.5 h-3.5" />}
               className="rounded-full text-xs"
             >
               <span className="hidden md:inline">{isBedtimeMode ? 'Đèn ngày' : 'Ru ngủ'}</span>
             </Button>
+
+            {/* Ambient Lullaby Music Toggle */}
+            <button
+              onClick={handleToggleLullaby}
+              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                isLullabyPlaying
+                  ? 'bg-magic-600 text-white shadow-btn-magic'
+                  : isBedtimeMode
+                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+              }`}
+              title={isLullabyPlaying ? 'Tắt nhạc ru êm dịu' : 'Bật nhạc nền ru ngủ'}
+              aria-label="Nhạc nền ru ngủ"
+            >
+              <Music className={`w-4 h-4 ${isLullabyPlaying ? 'animate-pulse' : ''}`} />
+            </button>
 
             {/* Fullscreen Toggle */}
             <button
@@ -490,47 +603,53 @@ export const StoryReadingPage: React.FC = () => {
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
-            {/* Share */}
-            <button
-              onClick={() => setIsShareModalOpen(true)}
-              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
-                isBedtimeMode
-                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
-                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
-              }`}
-              title={vi.share.title}
-              aria-label={vi.share.title}
-            >
-              <Share2 className="w-4 h-4" />
-            </button>
+            {/* Share (hidden in Kid Mode) */}
+            {!isKidReaderMode && (
+              <button
+                onClick={() => setIsShareModalOpen(true)}
+                className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                  isBedtimeMode
+                    ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                    : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+                }`}
+                title={vi.share.title}
+                aria-label={vi.share.title}
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            )}
 
-            {/* Print */}
-            <button
-              onClick={handlePrint}
-              className={`hidden sm:flex p-2.5 rounded-full min-w-[44px] min-h-[44px] items-center justify-center transition-colors ${
-                isBedtimeMode
-                  ? 'text-[#F3EFE6]/80 hover:bg-white/10'
-                  : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
-              }`}
-              title={vi.reader.printStory}
-              aria-label={vi.reader.printStory}
-            >
-              <Printer className="w-4 h-4" />
-            </button>
+            {/* Print (hidden in Kid Mode) */}
+            {!isKidReaderMode && (
+              <button
+                onClick={handlePrint}
+                className={`hidden sm:flex p-2.5 rounded-full min-w-[44px] min-h-[44px] items-center justify-center transition-colors ${
+                  isBedtimeMode
+                    ? 'text-[#F3EFE6]/80 hover:bg-white/10'
+                    : 'text-ink-soft hover:bg-ink/5 hover:text-ink'
+                }`}
+                title={vi.reader.printStory}
+                aria-label={vi.reader.printStory}
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+            )}
 
-            {/* Report */}
-            <button
-              onClick={() => setIsReportModalOpen(true)}
-              className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
-                isBedtimeMode
-                  ? 'text-[#F3EFE6]/60 hover:text-danger hover:bg-white/10'
-                  : 'text-ink-faint hover:text-danger hover:bg-danger-bg'
-              }`}
-              title={vi.reader.reportStory}
-              aria-label={vi.reader.reportStory}
-            >
-              <Flag className="w-3.5 h-3.5" />
-            </button>
+            {/* Report (hidden in Kid Mode) */}
+            {!isKidReaderMode && (
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className={`p-2.5 rounded-full min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors ${
+                  isBedtimeMode
+                    ? 'text-[#F3EFE6]/60 hover:text-danger hover:bg-white/10'
+                    : 'text-ink-faint hover:text-danger hover:bg-danger-bg'
+                }`}
+                title={vi.reader.reportStory}
+                aria-label={vi.reader.reportStory}
+              >
+                <Flag className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -598,113 +717,128 @@ export const StoryReadingPage: React.FC = () => {
                 style={{}}
               >
                 {/* Generate two facing pages for each story page */}
-                {pages.map((pg) => [
-                  // LEFT SPREAD PAGE: Polaroid Artwork Frame
-                  <FlipPage key={`left-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-10 flex flex-col justify-between">
-                    <div className="space-y-4">
-                      {/* Top Header of Left Page */}
-                      <div className="flex items-center justify-between">
-                        <Badge variant={isBedtimeMode ? 'lavender' : 'peach'} size="sm">
-                          {pg.page_number === 1 ? 'Khởi đầu' : `Chương ${pg.page_number}`}
-                        </Badge>
-                        <span className="text-xs font-bold font-heading px-2.5 py-1 rounded-full bg-ink/5 flex items-center gap-1">
-                          <span>{getEmotionEmoji(pg.emotion)}</span>
-                          <span className="capitalize">{pg.emotion}</span>
-                        </span>
-                      </div>
+                {pages.map((pg, pgIdx) => {
+                  const pgFocus = pg.focus_region || { x: 50, y: 50, zoom: 1.15 };
+                  const pgZoom = Math.min(1.35, Math.max(1.0, pgFocus.zoom || 1.15));
+                  const pgPanX = (50 - Math.max(20, Math.min(80, pgFocus.x ?? 50))) * 0.25;
+                  const pgPanY = (50 - Math.max(20, Math.min(80, pgFocus.y ?? 50))) * 0.25;
+                  const pgSentences = pg.text_content
+                    .split(/(?<=[.?!])\s+/)
+                    .filter((s) => s.trim().length > 0);
+                  const isCurrentSpread = currentPageIndex === pgIdx;
 
-                      {/* Polaroid / Paper Framed Artwork */}
-                      <div className="p-3 pb-5 bg-white rounded-2xl shadow-card border border-ink/10 rotate-[-1deg] transition-transform hover:rotate-0">
-                        <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
-                          {story.drawing?.image_path ? (
-                            <motion.img
-                              key={pg.id}
-                              src={story.drawing.image_path}
-                              alt={story.title}
-                              initial={isReducedMotion ? false : { scale: 1, x: 0, y: 0 }}
-                              animate={isReducedMotion ? { scale: 1, x: 0, y: 0 } : {
-                                scale: safeZoom,
-                                x: `${panX}%`,
-                                y: `${panY}%`,
-                              }}
-                              transition={{ duration: 4.5, ease: 'easeInOut' }}
-                              className="w-full h-full object-contain select-none"
-                            />
-                          ) : (
-                            <div className="text-6xl select-none">🎨</div>
-                          )}
+                  return [
+                    // LEFT SPREAD PAGE: Polaroid Artwork Frame
+                    <FlipPage key={`left-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-10 flex flex-col justify-between">
+                      <div className="space-y-4">
+                        {/* Top Header of Left Page */}
+                        <div className="flex items-center justify-between">
+                          <Badge variant={isBedtimeMode ? 'lavender' : 'peach'} size="sm">
+                            {pg.page_number === 1 ? 'Khởi đầu' : `Chương ${pg.page_number}`}
+                          </Badge>
+                          <span className="text-xs font-bold font-heading px-2.5 py-1 rounded-full bg-ink/5 flex items-center gap-1">
+                            <span>{getEmotionEmoji(pg.emotion)}</span>
+                            <span className="capitalize">{pg.emotion}</span>
+                          </span>
                         </div>
-                        <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2 tracking-wide">
-                          Tranh vẽ của Bé {story.child?.nickname || ''}
-                        </p>
-                      </div>
-                    </div>
 
-                    {/* "Bé đã vẽ, AI thấy gì" Grounded Object Chips */}
-                    {groundedObjects.length > 0 && (
-                      <div className="pt-3 border-t border-ink/10 space-y-1.5">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-soft">
-                          <Sparkles className="w-3 h-3 text-magic-600" />
-                          <span>Bé đã vẽ, AI thấy gì:</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {groundedObjects.slice(0, 4).map((obj: string, oIdx: number) => (
-                            <span
-                              key={oIdx}
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                isBedtimeMode
-                                  ? 'bg-[#32274d] text-lavender border-[#4a3a70]'
-                                  : 'bg-surface-2 text-ink-soft border-ink/10'
-                              }`}
-                            >
-                              ✨ {obj}
-                            </span>
-                          ))}
+                        {/* Polaroid / Paper Framed Artwork */}
+                        <div className="p-3 pb-5 bg-white rounded-2xl shadow-card border border-ink/10 rotate-[-1deg] transition-transform hover:rotate-0">
+                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+                            {story.drawing?.image_path ? (
+                              <motion.img
+                                key={pg.id}
+                                src={story.drawing.image_path}
+                                alt={story.title}
+                                initial={isReducedMotion ? false : { scale: 1, x: 0, y: 0 }}
+                                animate={
+                                  isReducedMotion || !isCurrentSpread
+                                    ? { scale: 1, x: 0, y: 0 }
+                                    : {
+                                        scale: pgZoom,
+                                        x: `${pgPanX}%`,
+                                        y: `${pgPanY}%`,
+                                      }
+                                }
+                                transition={{ duration: 4.5, ease: 'easeInOut' }}
+                                className="w-full h-full object-contain select-none"
+                              />
+                            ) : (
+                              <div className="text-6xl select-none">🎨</div>
+                            )}
+                          </div>
+                          <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2 tracking-wide">
+                            Tranh vẽ của Bé {story.child?.nickname || ''}
+                          </p>
                         </div>
                       </div>
-                    )}
-                  </FlipPage>,
 
-                  // RIGHT SPREAD PAGE: Modern Story Text with Karaoke Sentence Highlight
-                  <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
-                    <div className="space-y-6">
-                      {/* Top Header of Right Page */}
-                      <div className="flex items-center justify-between text-xs font-bold text-ink-soft border-b border-ink/10 pb-3">
-                        <span className="font-heading tracking-wider uppercase text-[11px] text-brand-600">
-                          {story.title}
-                        </span>
-                        <span>Trang {pg.page_number} / {totalPages}</span>
+                      {/* "Bé đã vẽ, AI thấy gì" Grounded Object Chips */}
+                      {groundedObjects.length > 0 && (
+                        <div className="pt-3 border-t border-ink/10 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-ink-soft">
+                            <Sparkles className="w-3 h-3 text-magic-600" />
+                            <span>Bé đã vẽ, AI thấy gì:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {groundedObjects.slice(0, 4).map((obj: string, oIdx: number) => (
+                              <span
+                                key={oIdx}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  isBedtimeMode
+                                    ? 'bg-[#32274d] text-lavender border-[#4a3a70]'
+                                    : 'bg-surface-2 text-ink-soft border-ink/10'
+                                }`}
+                              >
+                                ✨ {obj}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </FlipPage>,
+
+                    // RIGHT SPREAD PAGE: Modern Story Text with Karaoke Sentence Highlight
+                    <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
+                      <div className="space-y-6">
+                        {/* Top Header of Right Page */}
+                        <div className="flex items-center justify-between text-xs font-bold text-ink-soft border-b border-ink/10 pb-3">
+                          <span className="font-heading tracking-wider uppercase text-[11px] text-brand-600">
+                            {story.title}
+                          </span>
+                          <span>Trang {pg.page_number} / {totalPages}</span>
+                        </div>
+
+                        {/* Main Story Text with Karaoke Highlighting */}
+                        <div className={`font-story leading-[1.7] ${fontSizeClass} tracking-wide space-y-2 select-text`}>
+                          {pgSentences.map((sent, sIdx) => {
+                            const isHighlighted = isCurrentSpread && isPlayingVoice && currentSentenceIndex === sIdx;
+                            return (
+                              <span
+                                key={sIdx}
+                                className={`transition-all duration-300 rounded-lg px-1.5 py-0.5 inline-block ${
+                                  isHighlighted
+                                    ? isBedtimeMode
+                                      ? 'bg-butter text-[#181424] font-black shadow-sm scale-[1.02]'
+                                      : 'bg-brand-100 text-brand-700 font-black shadow-sm scale-[1.02]'
+                                    : ''
+                                }`}
+                              >
+                                {sent}{' '}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </div>
 
-                      {/* Main Story Text with Karaoke Highlighting */}
-                      <div className={`font-story leading-[1.7] ${fontSizeClass} tracking-wide space-y-2 select-text`}>
-                        {sentences.map((sent, sIdx) => {
-                          const isHighlighted = isPlayingVoice && currentSentenceIndex === sIdx;
-                          return (
-                            <span
-                              key={sIdx}
-                              className={`transition-all duration-300 rounded-lg px-1.5 py-0.5 inline-block ${
-                                isHighlighted
-                                  ? isBedtimeMode
-                                    ? 'bg-butter text-[#181424] font-black shadow-sm scale-[1.02]'
-                                    : 'bg-brand-100 text-brand-700 font-black shadow-sm scale-[1.02]'
-                                  : ''
-                              }`}
-                            >
-                              {sent}{' '}
-                            </span>
-                          );
-                        })}
+                      {/* Page Footer Decor */}
+                      <div className="pt-4 border-t border-ink/10 flex items-center justify-between text-xs text-ink-faint font-heading">
+                        <span>DrawToStory</span>
+                        <span>· {pg.page_number} ·</span>
                       </div>
-                    </div>
-
-                    {/* Page Footer Decor */}
-                    <div className="pt-4 border-t border-ink/10 flex items-center justify-between text-xs text-ink-faint font-heading">
-                      <span>DrawToStory</span>
-                      <span>· {pg.page_number} ·</span>
-                    </div>
-                  </FlipPage>
-                ])}
+                    </FlipPage>,
+                  ];
+                })}
 
                 {/* FINAL SPREAD: CELEBRATION & NEXT DRAWING IDEAS */}
                 <FlipPage key="final-left" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">

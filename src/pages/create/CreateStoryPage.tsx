@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
+import { useAdminStore } from '@/store/adminStore';
 import { Story, StoryPage } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -28,8 +29,13 @@ import { StoryGenerationService } from '@/features/ai/services/storyGenerationSe
 
 export const CreateStoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { childrenList, selectedChildId, setSelectedChildId, addChild } = useAuthStore();
-  const { addStory } = useStoryStore();
+  const { profile, childrenList, selectedChildId, setSelectedChildId, addChild } = useAuthStore();
+  const { addStory, getTodayStoryCount } = useStoryStore();
+  const { globalDailyLimit } = useAdminStore();
+
+  const effectiveDailyLimit = Math.min(profile?.daily_quota ?? 5, globalDailyLimit || 5);
+  const todayUsedCount = getTodayStoryCount();
+  const remainingQuota = Math.max(0, effectiveDailyLimit - todayUsedCount);
 
   // Child selection: auto-skip step 1 if only 1 child
   const initialChild = 
@@ -72,6 +78,10 @@ export const CreateStoryPage: React.FC = () => {
         avatar_color: newColor,
         avatar_emoji: newEmoji,
       });
+      if (!created) {
+        toast.error(useAuthStore.getState().error || 'Không thể tạo hồ sơ cho bé. Vui lòng thử lại.');
+        return;
+      }
       setSelectedChild(created);
       setSelectedChildId(created.id);
       setIsAddingChild(false);
@@ -286,8 +296,8 @@ export const CreateStoryPage: React.FC = () => {
         onStageChange: (stage) => setGenerationStage(stage),
       });
 
-      // Save to store
-      addStory(result.story);
+      // Save to store & evaluate badges
+      await addStory(result.story);
       setIsGenerating(false);
       setCompletedStory(result);
 
@@ -306,20 +316,26 @@ export const CreateStoryPage: React.FC = () => {
       if (code === 'NOT_A_DRAWING') {
         setGenerationError({
           code: 'NOT_A_DRAWING',
-          message: 'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé.',
+          message: error.message || 'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé.',
           actionType: 'reupload',
         });
-      } else if (code === 'QUOTA_EXCEEDED') {
+      } else if (code === 'QUOTA_EXCEEDED' || code === 'ACCOUNT_LOCKED') {
         setGenerationError({
-          code: 'QUOTA_EXCEEDED',
+          code,
           message: error.message || 'Bé đã đạt giới hạn truyện trong ngày. Hãy quay lại vào ngày mai nhé!',
           actionType: 'library',
         });
-      } else if (code === 'REAL_FACE_DETECTED' || code === 'PII_DETECTED') {
+      } else if (code === 'REAL_FACE_DETECTED' || code === 'PII_DETECTED' || code === 'UNSAFE_INPUT') {
         setGenerationError({
           code: 'SAFETY_BLOCKED',
-          message: error.message || 'Bức ảnh có khuôn mặt người thật hoặc thông tin cá nhân. Hãy chỉ chụp phần tranh vẽ của bé.',
+          message: error.message || 'Bức ảnh chưa phù hợp với tiêu chuẩn an toàn thiếu nhi. Hãy chỉ chụp phần tranh vẽ của bé nhé.',
           actionType: 'reupload',
+        });
+      } else if (code === 'MISSING_AI_KEY' || code === 'INVALID_AI_KEY') {
+        setGenerationError({
+          code,
+          message: error.message || 'Hệ thống AI chưa được cấu hình khóa Gemini API Key.',
+          actionType: 'retry',
         });
       } else {
         setGenerationError({
@@ -396,7 +412,9 @@ export const CreateStoryPage: React.FC = () => {
           })}
         </div>
 
-        <div className="w-10" />
+        <Badge variant={remainingQuota > 0 ? 'mint' : 'warning'} size="sm">
+          Còn {remainingQuota}/{effectiveDailyLimit} lượt hôm nay
+        </Badge>
       </header>
 
       {/* 2. STEP 1: CHỌN HOẶC TẠO HỒ SƠ BÉ */}
@@ -501,7 +519,7 @@ export const CreateStoryPage: React.FC = () => {
                         type="button"
                         onClick={() => setNewColor(color)}
                         className={`w-8 h-8 rounded-full transition-all ${
-                          newColor === color ? 'ring-3 ring-brand-600 ring-offset-2 scale-110' : 'hover:scale-105'
+                          newColor === color ? 'ring-2 ring-brand-600 ring-offset-2 scale-110' : 'hover:scale-105'
                         }`}
                         style={{ backgroundColor: color }}
                       />
@@ -538,7 +556,7 @@ export const CreateStoryPage: React.FC = () => {
                       }}
                       className={`p-5 rounded-[24px] border-2 cursor-pointer transition-all flex items-center gap-4 ${
                         isSelected
-                          ? 'bg-surface border-brand-600 shadow-card ring-2 ring-brand-100 scale-102'
+                          ? 'bg-surface border-brand-600 shadow-card ring-2 ring-brand-100 scale-[1.02]'
                           : 'bg-surface border-ink/10 hover:border-ink/25 shadow-xs'
                       }`}
                     >
@@ -949,6 +967,17 @@ export const CreateStoryPage: React.FC = () => {
                   </Button>
                 )}
 
+                {(generationError.code === 'MISSING_AI_KEY' || generationError.code === 'INVALID_AI_KEY') &&
+                  profile?.role === 'admin' && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={() => navigate('/admin/settings')}
+                    >
+                      Cấu hình Gemini API Key
+                    </Button>
+                  )}
+
                 {generationError.actionType === 'retry' && (
                   <Button
                     variant="primary"
@@ -1015,7 +1044,7 @@ export const CreateStoryPage: React.FC = () => {
               <button
                 type="button"
                 onClick={capturePhotoFromCamera}
-                className="w-18 h-18 rounded-full border-4 border-white bg-brand-600 shadow-pop flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-white bg-brand-600 shadow-pop flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all"
                 aria-label="Chụp ảnh ngay"
               >
                 <Camera className="w-8 h-8 text-white" />

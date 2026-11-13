@@ -3,36 +3,36 @@
 **Đồ án môn học:** Lập trình Ứng dụng Trí tuệ Nhân tạo (*AI Based Programming*) — **Trường Đại học Phú Xuân**  
 **Giảng viên hướng dẫn:** Bộ môn Công nghệ Thông tin, Đại học Phú Xuân  
 **Repository GitHub:** [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)  
-**Công nghệ cốt lõi:** React 18, TypeScript (Strict Mode), Vite, Tailwind CSS, Supabase (Postgres, Auth, Storage, Edge Functions), Google Gemini 2.5 Flash, Web Speech API, Web Audio API.
+**Công nghệ cốt lõi:** React 18, TypeScript (Strict Mode), Vite, Tailwind CSS, Supabase (Postgres, GoTrue Auth, Storage, Edge Functions), Google Gemini 2.5 Flash, Web Speech API, Web Audio API.
 
 ---
 
 ## 🌟 GIỚI THIỆU TỔNG QUAN
 
-**DrawToStory** là một ứng dụng web cao cấp biến những bức tranh vẽ ngây ngô của trẻ em (từ 2 đến 12 tuổi) thành những cuốn **sách tranh cổ tích 4-5 trang sống động, có giọng đọc truyền cảm, lật trang chân thực (react-pageflip) và hiệu ứng lia máy hoạt hình (Ken Burns effect)**.
+**DrawToStory** là một ứng dụng web cao cấp biến những bức tranh vẽ ngây ngô của trẻ em (từ 2 đến 12 tuổi) thành những cuốn **sách tranh cổ tích 4–5 trang sống động, có giọng đọc truyền cảm, nhạc hộp ru ngủ êm dịu, lật trang chân thực (`react-pageflip`) và hiệu ứng lia máy hoạt hình (Ken Burns effect)**.
 
 Ứng dụng được thiết kế theo triết lý **Modern Storybook** và **Responsible AI**:
-1. **Thiết kế Modern Storybook**: Nền kem ấm áp có nhiễu giấy siêu nhẹ (`3.5%`), loại bỏ hoàn toàn các tấm đế be dày, tranh của bé luôn là nhân vật chính đặt trong khung polaroid mềm mại, phông chữ `Baloo 2` chuẩn tiếng Việt và hệ thống màu sắc đạt chuẩn WCAG 2.1 AA (19/19 token pairs pass).
-2. **AI là trái tim của hệ thống**: Vận hành **Pipeline 3 Lớp chuyên sâu** kết hợp thị giác máy tính, phân loại tranh vẽ nghiêm ngặt (`child_drawing`), bám sát vật thể tranh (`grounded_objects`) và chấm điểm trung thực (`faithfulness_score`).
-3. **An toàn thiếu nhi tuyệt đối**: Tự động từ chối ảnh có mặt người thật, ảnh chụp đời thường, logo đồ họa hoặc ảnh chụp màn hình văn bản với mã lỗi thân thiện `NOT_A_DRAWING`.
-4. **Chế độ Bé cô lập (Kid Mode)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, nút chạm lớn $\ge 72px$, âm thanh vui nhộn (Web Audio API) và cổng phụ huynh bảo mật (giữ 2 giây, đố toán hoặc mã PIN băm SHA-256).
-5. **Trình đọc sách hoàn hảo (Reading View)**: Đọc từng câu với highlight karaoke, tích hợp giọng đọc Tiếng Việt chuẩn tự nhiên (Hoài My, Nam Minh, An, Linh, Google) kèm menu đổi giọng và điều chỉnh tốc độ, sách lật 2 trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ hiển thị `object-fit: contain` không bao giờ bị cắt mất viền, chế độ ru ngủ dịu mắt.
-6. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Moderation Queue với Split View và phím tắt `A`/`R`), bật tắt kiểm tra tranh vẽ nghiêm ngặt, quản lý bộ quy tắc an toàn động và giám sát chi phí token thời gian thực.
-7. **Kiến trúc Dữ liệu Sạch (Clean Database-First)**: Không sử dụng dữ liệu rác hay truyện mẫu cứng; kết nối trực tiếp với Supabase PostgreSQL (`htvslxbytqoteyimtcxg.supabase.co`). Khởi tạo với Admin và Mẹ Thu Hà, phụ huynh tự tay thêm hồ sơ bé và lưu trữ bền vững.
-8. **Phân quyền RBAC Thống nhất & Chia sẻ Công khai**: Chuẩn hóa logic kiểm tra duyệt truyện `isStoryApproved` (`auto_approved`, `approved`, `parent_approved`). Route chia sẻ `/shared/:token` tự động nạp từ Supabase cho người thân xem trên bất kỳ thiết bị nào.
-9. **Chống tràn viền 100% (Zero Overflow Guarantee)**: Kiểm thử toàn diện trên dải kích thước từ màn hình siêu hẹp (320px–375px) đến màn hình lớn (1440px), đảm bảo mọi nút bấm, bảng biểu và thanh điều khiển luôn nằm trọn vẹn trong khung nhìn.
+1. **Thiết kế Modern Storybook đồng nhất 100%**: Nền kem ấm áp có nhiễu giấy siêu nhẹ (`3.5%`), thống nhất hoàn toàn hệ thống token màu trên cả trang Phụ huynh, Xác thực và toàn bộ **8 trang Quản trị viên (Admin)**, phông chữ `Baloo 2` chuẩn tiếng Việt và độ tương phản đạt chuẩn WCAG 2.1 AA (19/19 cặp màu pass tự động khi build).
+2. **Pipeline AI 3 Lớp Gemini 2.5 Flash Thật Kép (Dual-Path Engine)**: Vận hành **Pipeline 3 Lớp chuyên sâu** (Phân loại tranh vẽ đa thể thức $\rightarrow$ Sáng tác bám sát `grounded_objects` $\rightarrow$ Chấm điểm trung thực `faithfulness_score` & Thẩm định an toàn độc lập) qua Supabase Edge Function hoặc trực tiếp với Gemini 2.5 Flash Structured Output (cấu hình API Key ngay tại `/admin/settings` hoặc `.env`). Tuyệt đối không sinh truyện mẫu giả trong chế độ Live.
+3. **An toàn thiếu nhi & Cô lập đa gia đình (Strict Multi-Family RLS)**: Tự động từ chối ảnh có mặt người thật, ảnh chụp đời thường, logo đồ họa hoặc ảnh chụp màn hình văn bản với mã lỗi thân thiện `NOT_A_DRAWING`. Dữ liệu giữa các gia đình và giữa từng bé trong cùng gia đình được cô lập chặt chẽ, kèm cơ chế tự động dọn dẹp tệp ảnh Storage khi xóa truyện, xóa hồ sơ bé hoặc xóa dữ liệu tài khoản.
+4. **Chế độ Bé cô lập tuyệt đối (Kid Mode `?mode=kid`)**: Toàn màn hình tự động, bẫy lịch sử duyệt web chống thoát tự ý, khóa luồng đọc `?mode=kid` đưa bé quay về thẳng `/kid` (ẩn sạch các nút Chia sẻ/In ấn/Báo cáo của người lớn), nút chạm lớn $\ge 72\text{px}$ và Cổng phụ huynh bảo mật 3 cơ chế (nhấn giữ 2 giây, đố toán nhân ngẫu nhiên, hoặc mã PIN băm SHA-256).
+5. **Trình đọc sách hoàn hảo & Hộp nhạc Ru ngủ (Reading View)**: Đọc từng câu với highlight Karaoke tiếng Việt tự nhiên (*Hoài My*, *Nam Minh*, *Google Tiếng Việt*, *Linh*), sách lật 2 trang độc lập chuẩn xác từng trang trên máy tính và vuốt ngang trên điện thoại, tranh vẽ `object-fit: contain` không bao giờ bị cắt mất viền, chế độ Ru ngủ kèm bộ tổng hợp nhạc hộp `startLullaby()` dịu êm.
+6. **Gamification 5 Huy hiệu Tự động & Streak đọc sách**: Tự động xét duyệt và trao 5 huy hiệu (`first_story`, `art_explorer`, `bedtime_reader`, `streak_3`, `master_storyteller`) lưu trực tiếp trên Supabase với thanh tiến độ thời gian thực và chuỗi ngày đọc liên tiếp.
+7. **Quản trị viên có vai trò thực thụ**: Hàng đợi kiểm duyệt (Split View, phím tắt `A`/`R`), quản lý Gemini API Key & ngân sách tháng trực tiếp trên giao diện, phòng thí nghiệm System Prompt chạy thử Gemini thật (đo token, độ trễ, chi phí USD), biểu đồ thống kê 7 ngày / 30 ngày thực tế và khóa tài khoản an toàn (chống tự khóa chính mình).
+8. **Kiến trúc Dữ liệu Sạch 1-Click (`supabase/full_setup.sql`)**: Kịch bản SQL idempotent duy nhất khởi tạo toàn bộ 14 bảng, hàm bảo mật `SECURITY DEFINER` chống đệ quy RLS, Storage bucket `drawings` và tài khoản GoTrue thật cho Admin & Phụ huynh với **0 hồ sơ bé, 0 bức tranh, 0 cuốn truyện mẫu** để kiểm thử thực tế ngay từ đầu.
+9. **Chống tràn viền 100% (Zero Overflow Guarantee)**: Tương thích hoàn hảo từ màn hình di động hẹp (`320px`–`390px`) đến máy tính (`1440px`) kèm cơ chế giữ phiên đăng nhập mượt mà khi nhấn F5 (`AuthInitializingScreen`).
 
 ---
 
 ## 📚 HỆ THỐNG TÀI LIỆU DỰ ÁN (DOCUMENTATION INDEX)
 
 Mọi khía cạnh kỹ thuật, nghiệp vụ và kiểm thử của đồ án được biên soạn chi tiết trong các tệp tài liệu:
-- [01-NGHIEP-VU.md](docs/01-NGHIEP-VU.md): Nghiệp vụ sản phẩm, chân dung người dùng (Personas), ma trận phân quyền RBAC, biểu đồ tuần tự tạo truyện và bộ 10 quy tắc an toàn thiếu nhi.
-- [02-GIAO-DIEN-AI.md](docs/02-GIAO-DIEN-AI.md): Kiến trúc chuyên sâu Pipeline AI 3 lớp (Phân loại ảnh, Visual Grounding, Faithfulness scoring & Judge), danh mục 6 test fixtures.
-- [03-KY-THUAT-FRONTEND.md](docs/03-KY-THUAT-FRONTEND.md): Ngôn ngữ thiết kế Modern Storybook, tokens màu đạt chuẩn WCAG 2.1 AA, thư viện UI Primitives, Focus Routes, thuật toán Canvas kiểm tra ảnh (Laplacian & Luminance), trình đọc sách và Kid Mode.
-- [04-KY-THUAT-ADMIN.md](docs/04-KY-THUAT-ADMIN.md): Cổng điều hành Quản trị viên, hàng đợi kiểm duyệt trực quan (Split View, phím tắt A/R), công tắc Strict Drawing Check, hàm bảo mật Postgres `is_admin()` và RLS.
-- [ASSUMPTIONS.md](docs/ASSUMPTIONS.md): Toàn bộ giả định kỹ thuật, kích thước màn hình mục tiêu (1440px Desktop & 390px Mobile), bảng giá token Gemini, Web Speech API và quyền riêng tư thiếu nhi.
-- [AI-DECLARATION.md](AI-DECLARATION.md): Bản tuyên ngôn sử dụng Trí Tuệ Nhân Tạo theo quy chuẩn học thuật của Trường Đại học Phú Xuân, nhật ký tương tác qua 7 Phase và các can thiệp kỹ thuật then chốt từ con người.
+- [01-NGHIEP-VU.md](docs/01-NGHIEP-VU.md): Nghiệp vụ sản phẩm, chân dung người dùng (Personas), ma trận phân quyền RBAC chuẩn xác, biểu đồ tuần tự tạo truyện, bộ 10 quy tắc an toàn và hệ thống 5 huy hiệu Gamification.
+- [02-GIAO-DIEN-AI.md](docs/02-GIAO-DIEN-AI.md): Kiến trúc chuyên sâu Pipeline AI 3 lớp Gemini 2.5 Flash (Dual-Path Execution, Visual Grounding, Faithfulness Retry & Judge), Prompt Playground thật, bộ tổng hợp âm thanh & nhạc ru ngủ Web Audio API, và 6 test fixtures.
+- [03-KY-THUAT-FRONTEND.md](docs/03-KY-THUAT-FRONTEND.md): Ngôn ngữ thiết kế Modern Storybook, tokens màu đạt chuẩn WCAG 2.1 AA, UI Primitives, bảo toàn phiên F5, kiểm tra ảnh Canvas (Laplacian & Luminance), trình đọc sách 2 trang và cô lập Kid Mode `?mode=kid`.
+- [04-KY-THUAT-ADMIN.md](docs/04-KY-THUAT-ADMIN.md): Cổng điều hành 8 trang Quản trị viên chuẩn Modern Storybook, cấu hình Gemini API Key động, hàng đợi kiểm duyệt Split View, System Prompt Playground, bộ hàm `SECURITY DEFINER` chống đệ quy RLS trên 14 bảng.
+- [ASSUMPTIONS.md](docs/ASSUMPTIONS.md): Toàn bộ giả định kỹ thuật, cơ chế lưu trữ và dọn dẹp ảnh Storage, bảng giá token Gemini 2.5 Flash, Web Speech API và quyền riêng tư thiếu nhi.
+- [AI-DECLARATION.md](AI-DECLARATION.md): Bản tuyên bố sử dụng Trí Tuệ Nhân Tạo theo quy chuẩn học thuật của Trường Đại học Phú Xuân, nhật ký tương tác đầy đủ qua 10 Phase và các can thiệp kỹ thuật cốt lõi từ con người.
 
 ---
 
@@ -75,7 +75,7 @@ Mọi khía cạnh kỹ thuật, nghiệp vụ và kiểm thử của đồ án 
 ## 🧠 KIẾN TRÚC PIPELINE AI 3 LỚP (RESPONSIBLE AI)
 
 ```
-[Ảnh tải lên từ phụ huynh]
+[Ảnh tải lên từ phụ huynh + Kiểm tra Quota ngày & Quy tắc an toàn]
        │
        ▼
 ┌────────────────────────────────────────────────────────┐
@@ -89,20 +89,23 @@ Mọi khía cạnh kỹ thuật, nghiệp vụ và kiểm thử của đồ án 
        ▼
 ┌────────────────────────────────────────────────────────┐
 │ LỚP 2: VISUAL GROUNDING CREATIVE ENGINE                │
-│ • Sáng tác truyện 4-5 trang với font Baloo 2           │
+│ • Sáng tác truyện 4-5 trang với Active System Prompt   │
 │ • Bắt buộc bám sát grounded_objects từ tranh của bé    │
 │ • Kẹp an toàn Ken Burns focus_region (zoom <= 1.35x)   │
-│ • Định dạng Zod Schema JSON có cấu trúc                │
+│ • Định dạng Gemini Structured Output + Zod Schema      │
 └────────────────────────────────────────────────────────┘
        │
        ▼
 ┌────────────────────────────────────────────────────────┐
 │ LỚP 3: FAITHFULNESS SCORING & OUTPUT SAFETY JUDGE      │
 │ • Chấm điểm độ trung thực tranh vẽ (faithfulness_score)│
-│ • Tự động thử lại (retry) nếu điểm trung thực < 60     │
+│ • Tự động tạo lại & chấm lại nếu điểm trung thực < 60  │
 │ • Chấm điểm rủi ro an toàn tâm lý thiếu nhi (0 - 100)  │
 │ • Định tuyến: auto_approved | pending_review | rejected│
 └────────────────────────────────────────────────────────┘
+       │
+       ▼
+[Lưu Stories, Story Pages, AI Logs & Tự động trao Huy hiệu]
 ```
 
 ---
@@ -118,69 +121,75 @@ Mọi khía cạnh kỹ thuật, nghiệp vụ và kiểm thử của đồ án 
 npm install
 ```
 
-### 3. Cấu Hình Biến Môi Trường (`.env`)
+### 3. Cấu Hình Biến Môi Trường (`.env`) & Khóa Gemini AI
 Tạo file `.env` từ `.env.example`:
 ```env
-# Đặt VITE_USE_MOCK=false để chạy trực tiếp với Cơ Sở Dữ Liệu Supabase đã triển khai
+# Đặt VITE_USE_MOCK=false để chạy trực tiếp với Cơ Sở Dữ Liệu Supabase thực tế
 VITE_USE_MOCK=false
 VITE_SUPABASE_URL=https://htvslxbytqoteyimtcxg.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_0M7XpzEBfVsKECDTkRVpKA_PgCpJiGc
+
+# (Tùy chọn) Khóa Google Gemini 2.5 Flash — hoặc có thể nhập trực tiếp trên giao diện Admin (/admin/settings)
+VITE_GEMINI_API_KEY=
 ```
-> **Kiến trúc Dữ liệu Sạch (Clean Data Architecture)**: Hệ thống được thiết lập cơ sở dữ liệu PostgreSQL chuẩn mực 100%, không sử dụng dữ liệu rác hay truyện mẫu cứng. Khởi đầu với 2 tài khoản chính (Admin và Mẹ Thu Hà), 0 hồ sơ bé và 0 cuốn truyện. Phụ huynh trực tiếp tạo hồ sơ bé, chụp tranh vẽ tay và toàn bộ dữ liệu (tranh vẽ, câu chuyện, trang sách, nhật ký AI) được lưu trữ bền vững vào Supabase.
+> **Hai cách kích hoạt AI Gemini 2.5 Flash linh hoạt**:
+> 1. **Ngay trên giao diện Admin (Khuyên dùng khi test nhanh)**: Đăng nhập tài khoản Admin $\rightarrow$ vào mục **Cài đặt kiểm duyệt (`/admin/settings`)** $\rightarrow$ dán Google Gemini API Key vào ô cấu hình và bấm Lưu. Khóa được lưu bảo mật trong `app_settings` và kích hoạt tức thì cho cả luồng Tạo truyện lẫn Phòng thí nghiệm Prompt mà không cần deploy lại Edge Functions.
+> 2. **Qua Biến môi trường / Supabase Edge Functions**: Đặt `VITE_GEMINI_API_KEY` trong `.env` (hoặc `GEMINI_API_KEY` trong Supabase Secrets khi chạy serverless Deno).
 
-### 4. Tính Năng Giọng Đọc Tiếng Việt & Hiệu Ứng Âm Thanh Độc Quyền
-- **Giọng đọc Tiếng Việt chuẩn tự nhiên (Neural Vietnamese TTS)**: Nhận diện và ưu tiên giọng đọc chất lượng cao (`vi-VN`) như *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, và *Apple Linh*. Có menu cho phép phụ huynh linh hoạt đổi giọng và điều chỉnh tốc độ kể chuyện (0.8x, 1.0x, 1.2x).
-- **Bộ tổng hợp hiệu ứng âm thanh thời gian thực (Web Audio API Synthesizers)**:
-  - `playPageTurn()`: Mô phỏng tiếng lật trang giấy sách chân thực bằng bộ lọc Bandpass Noise dải tần 1000Hz $\rightarrow$ 320Hz.
-  - `playSparkle()`: Hợp âm chuông thần tiên ngũ cung lung linh.
-  - `playConfetti()`: Âm thanh chúc mừng hân hoan khi bé đọc xong truyện.
-  - `playTap()` / `playLock()`: Tương tác chạm nút lớn trong Kid Mode và khóa cổng an toàn phụ huynh.
+### 4. Tính Năng Giọng Đọc Tiếng Việt & Bộ Tổng Hợp Âm Thanh Web Audio API
+- **Giọng đọc Tiếng Việt chuẩn tự nhiên (Neural Vietnamese TTS)**: Nhận diện và ưu tiên giọng đọc chất lượng cao (`vi-VN`) như *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, và *Apple Linh*. Hỗ trợ đổi giọng trực tiếp và tùy chỉnh tốc độ kể chuyện (`0.8x`, `1.0x`, `1.2x`).
+- **Bộ tổng hợp hiệu ứng âm thanh & Nhạc ru ngủ thời gian thực (`src/lib/sound.ts`)**:
+  - `playPageTurn()`: Mô phỏng tiếng lật trang giấy sách chân thực bằng bộ lọc Bandpass Noise.
+  - `playSparkle()` / `playMagic()` / `playSuccess()`: Hợp âm chuông thần tiên ngũ cung khi hóa phép và hoàn thành đọc sách.
+  - `startLullaby()` / `stopLullaby()`: Hộp nhạc ru ngủ êm dịu (giai điệu ngũ cung sóng Sine hài hòa) tích hợp ngay trên thanh công cụ đọc truyện và Chế độ Ru ngủ.
+  - `playTap()` / `playLock()`: Phản hồi xúc giác âm thanh trong Kid Mode và Cổng phụ huynh.
 
-### 4. Các Lệnh Kiểm Thử & Chạy Ứng Dụng
+### 5. Các Lệnh Kiểm Thử & Chạy Ứng Dụng
 
 | Lệnh | Mục đích |
 | :--- | :--- |
-| `npm run test:pipeline` | Chạy bộ kiểm thử tự động 6 fixtures phân loại tranh vẽ và kiểm tra toggle cài đặt |
+| `npm run test:pipeline` | Chạy bộ kiểm thử tự động 6 fixtures phân loại tranh vẽ và kiểm tra toggle `strict_drawing_check` |
+| `npm run check:contrast` | Kiểm tra tự động độ tương phản WCAG 2.1 AA trên toàn bộ 19 cặp màu token |
 | `npm run typecheck` | Kiểm tra toàn bộ mã nguồn TypeScript Strict (`tsc --noEmit`, 0 lỗi) |
-| `npm run lint` | Chạy ESLint kiểm tra cú pháp và quy chuẩn mã nguồn toàn bộ repo (0 warnings) |
-| `npm run build` | Tự động kiểm tra độ tương phản WCAG 2.1 AA (19 cặp màu), typecheck và đóng gói Vite |
+| `npm run lint` | Chạy ESLint kiểm tra cú pháp và quy chuẩn mã nguồn toàn bộ repo (0 lỗi, 0 cảnh báo) |
+| `npm run build` | Chạy tuần tự `check:contrast` + `tsc` + đóng gói sản phẩm Vite vào `dist/` |
 | `npm run dev` | Khởi chạy máy chủ phát triển tại `http://localhost:5173` |
 
-### 5. Lối Tắt Kiểm Thử Dành Cho Người Đánh Giá (Reviewer Shortcuts)
-- **Styleguide Tokens & Components**: Truy cập route `/dev/styleguide` để xem toàn bộ tokens màu, nút, thẻ, badge, modal, input, bottom sheet và empty states.
-- **Tài khoản Phụ huynh Demo**: `me@phuhuynh.vn` (Mật khẩu: bất kỳ $\ge 6$ ký tự, PIN mặc định: `1234`).
-- **Tài khoản Quản trị viên (Admin)**: `admin@drawtostory.vn` (Toàn quyền truy cập Cổng Admin `/admin`).
+### 6. Tài Khoản Khởi Tạo & Lối Tắt Kiểm Thử (Reviewer Credentials)
+Sau khi chạy `supabase/full_setup.sql`, hệ thống tạo sẵn 2 tài khoản xác thực GoTrue thật trên cơ sở dữ liệu sạch (0 hồ sơ bé, 0 bức tranh, 0 cuốn truyện):
+- **Tài khoản Quản trị viên (Admin)**:
+  - Email: `admin@drawtostory.vn` | Mật khẩu: `Admin@123`
+  - Quyền hạn: Truy cập toàn bộ 8 trang quản trị tại `/admin`, cấu hình Gemini API Key tại `/admin/settings`, thử nghiệm Prompt Studio và kiểm duyệt truyện.
+- **Tài khoản Phụ huynh (Mẹ của bé)**:
+  - Email: `me@phuhuynh.vn` | Mật khẩu: `Parent@123` | Mã PIN phụ huynh mặc định: `1234`
+  - Trạng thái ban đầu: Chưa có hồ sơ bé và chưa có truyện — phụ huynh tự tay thêm bé, tải tranh vẽ tay, tạo truyện thật, chia sẻ link công khai và mở khóa huy hiệu.
+- **Styleguide Tokens & Components**: Truy cập `/dev/styleguide` để kiểm tra trực quan hệ thống thiết kế Modern Storybook.
 
 ---
 
 ## 🚀 HƯỚNG DẪN TRIỂN KHAI CLOUD (VERCEL & SUPABASE)
 
-### 1. Triển khai Frontend lên Vercel
+### 1. Khởi tạo Cơ sở dữ liệu Supabase (Chỉ 1 bước duy nhất)
+1. Mở Project trên [Supabase Dashboard](https://supabase.com) $\rightarrow$ vào **SQL Editor** $\rightarrow$ chọn **New Query**.
+2. Sao chép toàn bộ nội dung file `supabase/full_setup.sql`, dán vào trình soạn thảo và bấm **Run**.
+3. Kịch bản idempotent này sẽ tự động làm sạch dữ liệu test cũ (bao gồm cả tệp tồn đọng trong bucket `drawings`), khởi tạo 14 bảng chuẩn khóa ngoại, 3 view thống kê, các hàm `SECURITY DEFINER` chống đệ quy RLS, 10 quy tắc an toàn, 5 danh mục huy hiệu, System Prompt v1.2 và 2 tài khoản GoTrue (`admin@drawtostory.vn` & `me@phuhuynh.vn`).
+4. *(Tùy chọn)* Nếu muốn chạy AI thông qua Supabase Edge Functions thay vì Direct Gemini Mode:
+   ```bash
+   supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
+   supabase functions deploy generate-story
+   supabase functions deploy admin-test-prompt
+   supabase functions deploy get-shared-story
+   ```
+
+### 2. Triển khai Frontend lên Vercel
 1. Đẩy mã nguồn lên GitHub repository: `https://github.com/nguyendangha10126-svg/Doan-AIBD.git`.
 2. Truy cập [Vercel Dashboard](https://vercel.com) $\rightarrow$ chọn **Add New Project** $\rightarrow$ chọn repo `Doan-AIBD`.
 3. Cấu hình Build:
    - **Framework Preset**: `Vite`
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
 4. Cấu hình Environment Variables trên Vercel:
    - `VITE_SUPABASE_URL`: URL project Supabase của bạn.
    - `VITE_SUPABASE_ANON_KEY`: Anon Public Key Supabase của bạn.
-   - `VITE_USE_MOCK`: `false` (hoặc `true` nếu muốn chạy chế độ demo).
-
-### 2. Triển khai Backend lên Supabase
-1. Mở Project trên [Supabase Dashboard](https://supabase.com).
-2. Vào mục **SQL Editor** $\rightarrow$ chọn **New Query** và dán toàn bộ nội dung file tiện ích gom sẵn:
-   - `supabase/full_setup.sql`: Chứa trọn gói cấu trúc bảng, enum, hàm `is_admin()`, chính sách RLS, storage bucket `drawings`, các chỉ số Lớp 1-2-3 và toàn bộ dữ liệu mẫu (10 quy tắc an toàn, badge, prompt hệ thống v1.2, tài khoản demo).
-   - *(Hoặc có thể chạy riêng lẻ theo thứ tự: `supabase/migrations/001_init.sql` $\rightarrow$ `supabase/migrations/002_pipeline_ai_fixes.sql` $\rightarrow$ `supabase/seed.sql`)*.
-3. Bấm **Run** để khởi tạo database và dữ liệu mẫu trong 1 thao tác.
-4. Triển khai Supabase Edge Functions (nếu cần xử lý Gemini trên serverless Deno):
-   ```bash
-   # Cấu hình Secret Gemini API Key trên Supabase
-   supabase secrets set GEMINI_API_KEY=your_gemini_api_key_here
-
-   # Triển khai các hàm xử lý
-   supabase functions deploy generate-story
-   supabase functions deploy admin-test-prompt
-   supabase functions deploy get-shared-story
-   ```
+   - `VITE_USE_MOCK`: `false`
+   - `VITE_GEMINI_API_KEY`: *(Tùy chọn nếu đã lưu khóa trong `/admin/settings`)*.

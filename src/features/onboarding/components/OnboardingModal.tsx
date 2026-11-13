@@ -19,21 +19,21 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
       desc: vi.onboarding.step1Desc,
       icon: Sparkles,
       emoji: '🎨',
-      color: 'bg-peach/40 text-primary-dark',
+      color: 'bg-peach/45 text-ink',
     },
     {
       title: vi.onboarding.step2Title,
       desc: vi.onboarding.step2Desc,
       icon: HeartHandshake,
       emoji: '🥑',
-      color: 'bg-mint/40 text-emerald-800',
+      color: 'bg-mint/45 text-ink',
     },
     {
       title: vi.onboarding.step3Title,
       desc: vi.onboarding.step3Desc,
       icon: ShieldCheck,
       emoji: '🛡️',
-      color: 'bg-sky/40 text-sky-900',
+      color: 'bg-sky/45 text-ink',
     },
   ];
 
@@ -51,19 +51,17 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="lg" showCloseButton={true}>
       <div className="py-2 text-center">
-        {/* Step Indicator dots */}
         <div className="flex justify-center items-center gap-2 mb-6">
           {steps.map((_, idx) => (
             <div
               key={idx}
               className={`h-2.5 rounded-full transition-all duration-300 ${
-                idx === currentStep ? 'w-8 bg-primary' : 'w-2.5 bg-peach/60'
+                idx === currentStep ? 'w-8 bg-brand-600' : 'w-2.5 bg-ink/15'
               }`}
             />
           ))}
         </div>
 
-        {/* Animated Slide */}
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -74,29 +72,29 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
             className="space-y-4"
           >
             <div
-              className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center text-4xl shadow-soft ${current.color}`}
+              className={`w-24 h-24 mx-auto rounded-3xl border border-ink/10 flex items-center justify-center text-4xl shadow-xs ${current.color}`}
             >
               {current.emoji}
             </div>
 
-            <h2 className="text-2xl font-heading font-black text-main">
+            <h2 className="text-2xl font-heading font-extrabold text-ink">
               {current.title}
             </h2>
 
-            <p className="text-sm md:text-base text-main-muted max-w-md mx-auto leading-relaxed">
+            <p className="text-sm md:text-base text-ink-soft max-w-md mx-auto leading-relaxed">
               {current.desc}
             </p>
           </motion.div>
         </AnimatePresence>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between gap-4 mt-8 pt-4 border-t border-peach/30">
+        <div className="flex items-center justify-between gap-4 mt-8 pt-4 border-t border-ink/10">
           <button
+            type="button"
             onClick={() => {
               localStorage.setItem('has_seen_onboarding', 'true');
               onClose();
             }}
-            className="text-xs font-heading font-bold text-main-muted hover:text-main px-4 py-2 min-h-[44px]"
+            className="text-xs font-heading font-bold text-ink-soft hover:text-ink px-4 py-2 min-h-[44px]"
           >
             {vi.onboarding.skip}
           </button>
@@ -120,4 +118,3 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClos
     </Modal>
   );
 };
-

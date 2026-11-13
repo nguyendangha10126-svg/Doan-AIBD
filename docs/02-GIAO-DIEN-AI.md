@@ -5,84 +5,91 @@
 
 ---
 
-## 1. TỔNG QUAN KIẾN TRÚC PIPELINE AI 3 LỚP (RESPONSIBLE AI PIPELINE)
+## 1. TỔNG QUAN KIẾN TRÚC PIPELINE AI 3 LỚP THẬT KÉP (DUAL-PATH RESPONSIBLE AI)
 
-Hệ thống AI của **DrawToStory** vận hành một **pipeline xử lý đa tầng (3-Layer Multi-Stage AI Pipeline)** chạy độc lập trong môi trường bảo mật của Supabase Edge Functions (Deno Runtime). 
+Hệ thống AI của **DrawToStory** vận hành một **Pipeline xử lý đa tầng (3-Layer Multi-Stage AI Pipeline)** sử dụng mô hình đa phương thức **Google Gemini 2.5 Flash** với đầu ra JSON có cấu trúc (`responseMimeType: "application/json"` + `responseSchema`).
 
-Mô hình AI đóng vai trò **trung tâm cốt lõi (Core Engine)**, loại bỏ triệt để các hạn chế trước đây (ảnh logo/ảnh chụp đời thường bị biến thành truyện thú hoang dại, hoặc AI tưởng tượng ra nhân vật không có trong tranh):
-- **Layer 1: Phân loại tranh vẽ đa phương thức & An toàn đầu vào**: Nhận diện chính xác loại ảnh (`child_drawing`, `artwork`, `photo`, `logo_graphic`, `screenshot_text`, `other`), độ tin cậy `confidence`, kiểm tra khuôn mặt người thật và PII. Nếu không phải tranh vẽ trẻ em và chế độ nghiêm ngặt đang bật, trả về mã lỗi thân thiện `NOT_A_DRAWING`.
-- **Layer 2: Sáng tác bám sát nét vẽ (Visual Grounding Engine)**: Bắt buộc truyện phải xoay quanh các vật thể thực tế bé đã vẽ (`grounded_objects`), chỉ định cảm xúc và tọa độ camera Ken Burns kẹp an toàn (`focus_region`).
-- **Layer 3: Chấm điểm trung thực & Thẩm định an toàn độc lập (Judge & Faithfulness)**: Tính toán `faithfulness_score` (0-100) đối chiếu truyện với nét vẽ, tự động thử lại nếu điểm dưới 60, đồng thời chấm điểm rủi ro `risk_score` theo 10 quy tắc an toàn thiếu nhi.
+Để đảm bảo hệ thống luôn chạy AI thật 100% (tuyệt đối không sinh truyện mẫu "cầu vồng" giả trong chế độ Live), `StoryGenerationService` hỗ trợ **Kiến trúc Thực thi Kép (Dual-Path Execution)**:
+1. **Luồng Serverless (Supabase Edge Functions)**: Gọi hàm `supabase/functions/generate-story/index.ts` trên Deno Runtime khi dự án đã cấu hình secret `GEMINI_API_KEY`.
+2. **Luồng Trực tiếp (Direct 3-Layer Gemini Engine)**: Khi chưa deploy Edge Function hoặc cần kiểm thử tức thì, hệ thống tự động sử dụng khóa Gemini lưu trong `app_settings.gemini_api_key` (cấu hình trực tiếp tại `/admin/settings`) hoặc `VITE_GEMINI_API_KEY` trong `.env` để thực thi trọn vẹn cả 3 lớp Gemini 2.5 Flash, kiểm tra hạn mức ngày, áp dụng quy tắc an toàn động, lưu nhật ký token/chi phí vào `ai_logs` và trao huy hiệu tự động.
+
+Mô hình AI đóng vai trò **trung tâm cốt lõi (Core Engine)**:
+- **Layer 1 — Phân loại tranh vẽ đa phương thức & An toàn đầu vào**: Nhận diện chính xác thể thức ảnh (`child_drawing`, `artwork`, `photo`, `logo_graphic`, `screenshot_text`, `other`), độ tin cậy `confidence`, kiểm tra khuôn mặt người thật, PII và đối chiếu bộ quy tắc `safety_rules` đang bật. Nếu không phải tranh vẽ trẻ em khi bật chế độ nghiêm ngặt, trả về mã lỗi thân thiện `NOT_A_DRAWING` và dọn ảnh tạm trên Storage.
+- **Layer 2 — Sáng tác bám sát nét vẽ (Visual Grounding Engine)**: Nạp phiên bản `SystemPrompt` đang kích hoạt (`is_active = true`), bắt buộc truyện phải xoay quanh các vật thể thực tế bé đã vẽ (`grounded_objects`), chỉ định cảm xúc và tọa độ camera Ken Burns kẹp an toàn (`focus_region`).
+- **Layer 3 — Chấm điểm trung thực & Thẩm định an toàn độc lập (Judge & Faithfulness Retry)**: Tính toán `faithfulness_score` (0–100) đối chiếu truyện với nét vẽ. Nếu điểm dưới 60, hệ thống tự động sinh lại bản nháp ở `temperature = 0.35` và **chạy lại bộ chấm điểm Judge trên bản nháp mới** trước khi quyết định định tuyến trạng thái theo `moderation_mode` và `auto_approve_max_risk`.
 
 ```mermaid
 flowchart TD
-    A["🖼️ Ảnh tải lên từ phụ huynh (Storage Private URL)"] --> L1
+    A["🖼️ Ảnh tải lên + Kiểm tra Quota ngày & Quy tắc Block"] --> L1
 
     subgraph Layer1 ["LỚP 1: STRICT DRAWING CLASSIFICATION & SAFETY"]
-        L1["🤖 Gemini 2.5 Flash Vision (Structured JSON)"]
+        L1["🤖 Gemini 2.5 Flash Vision (Structured Output)"]
         L1 --> L1Class{"Phân loại ảnh & An toàn"}
-        L1Class -- "logo / photo / screenshot (NOT_A_DRAWING)" --> L1Reject["❌ Từ chối thân thiện:<br/>'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé'"]
-        L1Class -- "Tranh vẽ thiếu nhi hợp lệ (child_drawing)" --> L1Data["✅ Trích xuất Ngữ nghĩa:<br/>- grounded_objects (chú voi, cầu vồng, hoa...)<br/>- Gam màu & tâm trạng (Mood)<br/>- Nhân vật trọng tâm"]
+        L1Class -- "logo / photo / screenshot (NOT_A_DRAWING)" --> L1Reject["❌ Xóa ảnh tạm & Từ chối thân thiện:<br/>'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé'"]
+        L1Class -- "Mặt người thật / PII / Rule Block (UNSAFE_INPUT)" --> L1Unsafe["🛡️ Xóa ảnh tạm & Chặn bảo vệ quyền riêng tư"]
+        L1Class -- "Tranh vẽ thiếu nhi hợp lệ (child_drawing)" --> L1Data["✅ Trích xuất Ngữ nghĩa:<br/>- grounded_objects (nhân vật, vật thể thật trong tranh)<br/>- Gam màu & tâm trạng (Mood)"]
     end
 
     L1Data --> L2
 
     subgraph Layer2 ["LỚP 2: VISUAL GROUNDING CREATIVE ENGINE"]
-        L2["✍️ Gemini Creative Storyteller<br/>- Active System Prompt<br/>- grounded_objects bắt buộc<br/>- Tuổi & Biệt danh bé"]
+        L2["✍️ Gemini Creative Storyteller<br/>- Active System Prompt từ DB<br/>- grounded_objects bắt buộc<br/>- Tuổi, Biệt danh bé & Safety Rules"]
         L2 --> L2Gen["Tạo truyện 4-5 trang có cấu trúc"]
-        L2Gen --> L2Zod{"Validate JSON qua Zod Schema"}
-        L2Zod -- "Cấu trúc hợp lệ" --> L2Output["📄 Story Data:<br/>- 4-5 trang văn bản (30-50 từ/trang, font Baloo 2)<br/>- Emotion & Focus Region kẹp Ken Burns<br/>- Bài học đạo đức (Moral)<br/>- 3 Gợi ý vẽ tiếp theo"]
+        L2Gen --> L2Zod{"Validate Schema & Kẹp Focus Region"}
+        L2Zod -- "Hợp lệ" --> L2Output["📄 Story Draft:<br/>- 4-5 trang văn bản (font Baloo 2)<br/>- Emotion & Focus Region (zoom <= 1.35x)<br/>- Bài học đạo đức (Moral) & 3 Gợi ý vẽ tiếp"]
     end
 
     L2Output --> L3
 
     subgraph Layer3 ["LỚP 3: FAITHFULNESS SCORING & SAFETY JUDGE"]
-        L3["⚖️ Gemini Safety & Grounding Judge<br/>Đóng vai Chuyên gia Tâm lý Thiếu nhi<br/>Đối chiếu Story với grounded_objects"]
-        L3 --> L3Faith{"Độ trung thực >= 60?"}
-        L3Faith -- "Chưa đạt (< 60)" --> L2Retry["🔄 Retry 1 lần với temperature thấp"]
-        L3Faith -- "Đạt chuẩn" --> L3Score["Chấm điểm Risk Score (0-100)<br/>& Ghi nhận faithfulness_score"]
-        L3Score --> L3Route{"Định tuyến Trạng thái"}
-        L3Route -- "Risk <= Ngưỡng & Chế độ Auto" --> S_Auto["🟢 auto_approved<br/>Đọc ngay lập tức"]
-        L3Route -- "Risk > Ngưỡng HOẶC Chế độ Manual" --> S_Pending["🟡 pending_review<br/>Chuyển sang Hàng chờ Admin"]
-        L3Route -- "Vi phạm nghiêm trọng (Rule Block)" --> S_Reject["🔴 rejected<br/>Từ chối & thông báo phụ huynh"]
+        L3["⚖️ Gemini Safety & Grounding Judge<br/>Đối chiếu bản nháp với grounded_objects & 10 Safety Rules"]
+        L3 --> L3Faith{"faithfulness_score >= 60?"}
+        L3Faith -- "Chưa đạt (< 60, lần đầu)" --> L2Retry["🔄 Sinh lại ở temperature 0.35<br/>& Chấm lại Judge trên bản mới"]
+        L2Retry --> L3Score
+        L3Faith -- "Đạt chuẩn (>= 60)" --> L3Score["Ghi nhận faithfulness_score, risk_score<br/>& Chi phí Token thực tế vào ai_logs"]
+        L3Score --> L3Route{"Định tuyến theo Cài đặt Admin"}
+        L3Route -- "Risk <= auto_approve_max_risk & Chế độ Auto" --> S_Auto["🟢 auto_approved<br/>Đọc ngay & Xét trao Huy hiệu"]
+        L3Route -- "Risk > Ngưỡng HOẶC Chế độ Manual All" --> S_Pending["🟡 pending_review<br/>Chuyển vào Hàng chờ Admin"]
+        L3Route -- "Vi phạm nghiêm trọng (Risk >= 80)" --> S_Reject["🔴 rejected<br/>Từ chối & lưu lý do sư phạm"]
     end
 
-    S_Auto --> DB["💾 Lưu Database (Stories, Pages, AI Logs)"]
+    S_Auto --> DB["💾 Lưu Supabase (stories, story_pages, ai_logs, user_badges)"]
     S_Pending --> DB
     S_Reject --> DB
 ```
 
 ---
 
-## 2. CHI TIẾT CÁC LỚP TRONG PIPELINE
+## 2. CHI TIẾT CÁC LỚP TRONG PIPELINE & PHÒNG THÍ NGHIỆM PROMPT
 
 ### 2.1. LỚP 1: PHÂN LOẠI TRANH VẼ ĐA PHƯƠNG THỨC (STRICT DRAWING CLASSIFICATION)
-- **Cơ chế**: Prompt của Gemini phân tích hình ảnh và trả về JSON có cấu trúc chứa:
-  - `is_drawing`: boolean.
-  - `image_type`: enum `child_drawing | artwork | logo_graphic | photo | screenshot_text | other`.
-  - `confidence`: số từ 0.0 đến 1.0.
-  - `contains_real_person_face`: boolean.
-  - `pii_detected`: boolean.
-  - `objects`, `colors`, `mood`, `characters`: danh sách chuỗi trích xuất.
-- **Quy tắc chặn nghiêm ngặt (Strict Drawing Check)**:
-  - Nếu `image_type` thuộc `{ 'logo_graphic', 'photo', 'screenshot_text' }` hoặc `!is_drawing`: hàm trả về lỗi `NOT_A_DRAWING` kèm thông điệp rõ ràng hướng dẫn cha mẹ chụp lại tranh vẽ trên giấy.
-  - Có thể chuyển đổi cờ `strict_drawing_check` trong trang Cài đặt kiểm duyệt (`/admin/settings`) để phục vụ kiểm thử demo.
+- **Cơ chế**: Gemini Vision phân tích dữ liệu ảnh Base64/Storage và trả về JSON có cấu trúc:
+  - `is_drawing`: `boolean`
+  - `image_type`: enum `child_drawing | artwork | logo_graphic | photo | screenshot_text | other`
+  - `confidence`: số thực từ `0.0` đến `1.0`
+  - `contains_real_person_face`: `boolean`
+  - `pii_detected`: `boolean`
+  - `objects`, `colors`, `mood`, `characters`: danh sách đặc trưng thị giác trích xuất trực tiếp từ nét vẽ.
+- **Quy tắc chặn nghiêm ngặt (`strict_drawing_check`)**:
+  - Khi `strict_drawing_check = true`: nếu `image_type` thuộc `{ 'logo_graphic', 'photo', 'screenshot_text', 'other' }` hoặc `!is_drawing`, pipeline trả về mã lỗi `NOT_A_DRAWING` kèm lời nhắn nhẹ nhàng hướng dẫn cha mẹ chụp lại tranh vẽ trên giấy.
+  - Quản trị viên có thể bật/tắt công tắc `strict_drawing_check` tức thì tại `/admin/settings`.
 
 ### 2.2. LỚP 2: SÁNG TÁC BÁM SÁT NÉT VẼ (STRICT VISUAL GROUNDING)
-- **Cơ chế**: Truyền danh sách `grounded_objects` từ Lớp 1 vào ngữ cảnh tạo truyện.
+- **Cơ chế**: Truyền danh sách `grounded_objects` từ Lớp 1 cùng nội dung `SystemPrompt` đang hoạt động và các quy tắc `rewrite`/`flag` từ `safety_rules` vào ngữ cảnh tạo truyện.
 - **Ràng buộc**:
-  - Từng trang truyện bắt buộc phải xuất hiện ít nhất một đồ vật/nhân vật do chính bé vẽ.
-  - Không được tự ý đưa vào các sinh vật không hề có trong tranh nếu tranh chỉ vẽ các đối tượng đơn giản (ví dụ tranh chỉ vẽ hoa thì tập trung vào bạn hoa, không được sinh ra "chú voi hồng").
-  - Tọa độ `focus_region` `{x, y, zoom}` được kẹp giá trị an toàn ($x, y \in [20, 80]$, $zoom \le 1.35$) để khi phóng Ken Burns, tranh của bé không bao giờ bị cắt mất viền (`object-fit: contain`).
-  - Văn bản trang sử dụng phông chữ `Baloo 2` chuẩn tiếng Việt, cỡ chữ `clamp(22px, 2.4vw, 32px)` và line-height 1.7.
+  - Từng trang truyện bắt buộc phải nhắc tới ít nhất một nhân vật/chi tiết thực sự có trong tranh của bé.
+  - Không bịa thêm sinh vật lạ không liên quan khi tranh chỉ vẽ các đối tượng cụ thể.
+  - Tọa độ `focus_region` `{x, y, zoom}` được kẹp an toàn ($x, y \in [20, 80]$, $\text{zoom} \le 1.35$) để hiệu ứng Ken Burns mượt mà mà không bao giờ cắt mất nét vẽ ở rìa tranh (`object-fit: contain`).
 
-### 2.3. LỚP 3: CHẤM ĐIỂM TRUNG THỰC & THẨM ĐỊNH AN TOÀN ĐỘC LẬP
-- **Faithfulness Scoring**: Đánh giá độ trùng khớp giữa nội dung câu chuyện và các vật thể thực tế trong tranh. Điểm số từ 0 đến 100 lưu vào cột `faithfulness_score` của bảng `stories`.
-- **Cơ chế Thử lại (Retry)**: Nếu `faithfulness_score < 60`, pipeline tự động thử lại 1 lần với temperature thấp (0.4) để đảm bảo độ trung thực cao nhất.
-- **Phòng thủ 3 lớp**:
-  - An toàn đầu vào: Lớp 1 chặn ảnh nhạy cảm / PII.
-  - An toàn đầu ra: Lớp 3 độc lập chấm điểm rủi ro `risk_score`.
-  - Giám sát con người: Quản trị viên duyệt qua Hàng chờ với phím tắt nhanh `A` và `R`.
+### 2.3. LỚP 3: CHẤM ĐIỂM TRUNG THỰC, RETRY CHUẨN XÁC & THẨM ĐỊNH AN TOÀN
+- **Faithfulness Scoring**: Đánh giá mức độ trung thực giữa văn bản truyện và `grounded_objects` (thang điểm 0–100, lưu vào `stories.faithfulness_score`).
+- **Cơ chế Thử lại & Chấm lại (Regenerate & Re-Judge)**: Nếu `faithfulness_score < 60`, Lớp 2 tự động sinh lại câu chuyện với `temperature = 0.35` kèm chỉ dẫn bám sát vật thể khắt khe hơn, sau đó Lớp 3 gọi lại `buildJudgePrompt` trên chính bản thảo vừa sinh lại để cập nhật chính xác `faithfulness_score` và `risk_score`.
+- **Ghi nhận Chi phí & Hiệu năng thật (`ai_logs`)**: Tổng hợp chính xác `tokens_input`, `tokens_output`, `latency_ms` và `cost_usd` từ `usageMetadata` của Gemini API qua cả 3 lớp.
+
+### 2.4. PHÒNG THÍ NGHIỆM SYSTEM PROMPT THỜI GIAN THỰC (`runPromptPlayground`)
+Tại trang `/admin/prompts`, Quản trị viên có thể chỉnh sửa nội dung System Prompt và bấm **Chạy thử nghiệm**:
+- Hệ thống gọi trực tiếp Gemini 2.5 Flash (qua Edge Function `admin-test-prompt` hoặc Direct Gemini Engine) với kịch bản tranh vẽ thử nghiệm.
+- Hiển thị ngay câu chuyện JSON sinh ra, số lượng token đầu vào/đầu ra, độ trễ phản hồi (`ms`) và chi phí ước tính (`USD`), đồng thời ghi log vào `ai_logs` để theo dõi ngân sách tập trung.
 
 ---
 
@@ -100,17 +107,18 @@ Chạy kiểm thử bất kỳ lúc nào bằng lệnh:
 ```bash
 npm run test:pipeline
 ```
-Kịch bản đồng thời kiểm tra chức năng công tắc `strict_drawing_check` (true: chặn nghiêm ngặt; false: cho phép ở chế độ demo).
+Kịch bản đồng thời kiểm tra tính đúng đắn của công tắc `strict_drawing_check` (`true`: chặn nghiêm ngặt; `false`: cho phép ở chế độ demo).
 
 ---
 
-## 4. GIỌNG ĐỌC TIẾNG VIỆT & TỔNG HỢP ÂM THANH SƯ PHẠM (AUDIO & TTS ENGINE)
+## 4. GIỌNG ĐỌC TIẾNG VIỆT & BỘ TỔNG HỢP ÂM THANH SƯ PHẠM (AUDIO, TTS & LULLABY ENGINE)
 1. **Bộ tổng hợp giọng đọc Tiếng Việt (Neural Vietnamese TTS)**:
-   - Tự động nhận dạng và chọn lọc các giọng đọc tiếng Việt mượt mà của hệ thống: *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, *Apple Linh*, *An (Thiếu nhi)*.
-   - Hỗ trợ đổi giọng trực tiếp trong menu góc đọc và tùy chỉnh tốc độ kể chuyện 0.8x (ru ngủ / chậm rãi), 1.0x (tiêu chuẩn), 1.2x (sôi nổi).
-   - Tự động tách câu theo dấu ngắt và highlight chữ theo hiệu ứng Karaoke đồng bộ với giọng đọc.
-2. **Bộ tạo hiệu ứng âm thanh thời gian thực (Web Audio API Synthesizers)**:
-   - Tạo trực tiếp qua bộ tạo dao động âm thanh (Oscillator & BiquadFilter) trong `src/lib/sound.ts`, không tốn băng thông tải file mp3:
-     - `playPageFlip()`: Âm thanh lật giấy sách chân thực bằng tiếng ồn hồng qua bộ lọc thông dải (Bandpass noise sweep 1000Hz $\rightarrow$ 320Hz).
-     - `playSparkle()`: Hợp âm ngũ cung lung linh khi chuyển trang hoặc hoàn thành sáng tác.
-     - `playLock()` / `playTap()`: Phản hồi âm thanh xúc giác trong Chế độ bé và Cổng bảo vệ phụ huynh.
+   - Tự động quét và ưu tiên các giọng đọc tiếng Việt (`vi-VN`) tự nhiên trên thiết bị: *Microsoft Hoài My (Nữ)*, *Microsoft Nam Minh (Nam)*, *Google Tiếng Việt*, *Apple Linh*.
+   - Hỗ trợ đổi giọng trực tiếp ngay trên thanh điều khiển đọc sách (cả trang đọc chính lẫn trang chia sẻ `/shared/:token`) và điều chỉnh tốc độ kể chuyện `0.8x` (ru ngủ), `1.0x` (tiêu chuẩn), `1.2x` (sôi nổi).
+   - Tự động tách câu theo dấu ngắt và highlight chữ Karaoke đồng bộ với tiến trình đọc của từng trang.
+2. **Bộ tạo hiệu ứng âm thanh & Nhạc hộp Ru ngủ thời gian thực (`src/lib/sound.ts`)**:
+   - Tổng hợp trực tiếp bằng Web Audio API (`OscillatorNode`, `GainNode`, `BiquadFilterNode`), không phụ thuộc tệp âm thanh ngoài:
+     - `playPageTurn()`: Âm thanh lật giấy sách chân thực bằng tiếng ồn qua bộ lọc thông dải (Bandpass sweep).
+     - `playSparkle()` / `playMagic()` / `playSuccess()`: Hợp âm ngũ cung lung linh khi hóa phép tạo truyện hoặc hoàn thành đọc sách.
+     - `startLullaby()` / `stopLullaby()`: Bộ tổng hợp nhạc hộp ru ngủ êm dịu phát vòng lặp giai điệu ngũ cung (`C5–E5–G5–B5–A5`) ở âm lượng nhẹ nhàng, tự động dọn dẹp bộ hẹn giờ khi rời trang hoặc hết giờ hẹn ngủ.
+     - `playTap()` / `playLock()`: Phản hồi âm thanh xúc giác trong Chế độ bé và Cổng bảo vệ phụ huynh.

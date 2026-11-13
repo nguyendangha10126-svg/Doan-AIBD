@@ -76,14 +76,14 @@ export const UserLayout: React.FC = () => {
 
   if (isFocusRoute) {
     return (
-      <div className="min-h-screen bg-bg text-ink flex flex-col">
+      <div className="min-h-screen bg-bg text-ink flex flex-col overflow-x-hidden">
         <Outlet />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-bg text-ink flex flex-col selection:bg-brand-100 selection:text-brand-700">
+    <div className="min-h-screen bg-bg text-ink flex flex-col selection:bg-brand-100 selection:text-brand-700 overflow-x-hidden">
       {/* Desktop Topbar (Slim & Refined) */}
       <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-md border-b border-ink/10 px-4 lg:px-8 py-2.5 transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">

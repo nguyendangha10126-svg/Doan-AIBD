@@ -71,12 +71,24 @@ serve(async (req: Request) => {
       });
     }
 
-    // 4. Check Daily Story Limit
+    // 4. Check Account Lock & Daily Story Limit
     const { data: profile } = await supabase
       .from('profiles')
-      .select('daily_quota')
+      .select('daily_quota, is_locked')
       .eq('id', currentUserId)
       .single();
+
+    if (profile?.is_locked) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'ACCOUNT_LOCKED',
+            message: 'Tài khoản của bạn hiện đang tạm khóa bởi Quản trị viên. Vui lòng liên hệ bộ phận hỗ trợ.',
+          },
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const dailyQuota = profile?.daily_quota ?? 5;
     const todayStart = new Date();
@@ -257,14 +269,14 @@ YÊU CẦU SÁNG TÁC BẮT BUỘC:
     // ========================================================
     // LAYER 3: OUTPUT SAFETY JUDGE & FAITHFULNESS
     // ========================================================
-    const judgePrompt = `Bạn là Giám định viên Độc lập về An toàn Nội dung Trẻ em và Độ Bám sát Tranh vẽ (Responsible AI Safety & Faithfulness Judge).
+    const buildJudgePrompt = (storyCandidate: Layer2Story) => `Bạn là Giám định viên Độc lập về An toàn Nội dung Trẻ em và Độ Bám sát Tranh vẽ (Responsible AI Safety & Faithfulness Judge).
 Nhiệm vụ: Thẩm định câu chuyện sau đây viết cho bé ${child.age} tuổi.
 
-Tiêu đề: "${generatedStory.title}"
-Tóm tắt: "${generatedStory.summary}"
-Bài học: "${generatedStory.moral}"
+Tiêu đề: "${storyCandidate.title}"
+Tóm tắt: "${storyCandidate.summary}"
+Bài học: "${storyCandidate.moral}"
 Nội dung các trang:
-${generatedStory.pages.map((p) => `Trang ${p.page_number} (${p.grounded_objects?.join(', ')}): ${p.text_content}`).join('\n')}
+${storyCandidate.pages.map((p) => `Trang ${p.page_number} (${p.grounded_objects?.join(', ')}): ${p.text_content}`).join('\n')}
 
 Danh sách đồ vật/nhân vật thật trong nét vẽ của bé:
 ${validatedInspection.objects.join(', ')} | ${validatedInspection.characters.join(', ')}
@@ -280,7 +292,7 @@ Yêu cầu chấm điểm:
 5. pedagogical_feedback: nhận xét ngắn gọn mang tính xây dựng.`;
 
     let judgeResult = await callGeminiStructured<Layer3Judge>({
-      contents: [{ role: 'user', parts: [{ text: judgePrompt }] }],
+      contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
       responseSchema: Layer3JsonSchema,
       temperature: 0.1,
     });
@@ -300,9 +312,9 @@ Yêu cầu chấm điểm:
       });
       generatedStory = Layer2StorySchema.parse(storyGenerationResult.data);
 
-      // Re-evaluate Judge
+      // Re-evaluate Judge against the newly regenerated story
       judgeResult = await callGeminiStructured<Layer3Judge>({
-        contents: [{ role: 'user', parts: [{ text: judgePrompt }] }],
+        contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
         responseSchema: Layer3JsonSchema,
         temperature: 0.1,
       });

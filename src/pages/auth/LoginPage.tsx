@@ -3,11 +3,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Sparkles, Shield, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Sparkles, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
-import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -22,6 +21,7 @@ export const LoginPage: React.FC = () => {
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -32,7 +32,7 @@ export const LoginPage: React.FC = () => {
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: 'me@phuhuynh.vn',
-      password: 'DrawToStory2026!',
+      password: 'Parent@123',
     },
   });
 
@@ -40,44 +40,47 @@ export const LoginPage: React.FC = () => {
     setAuthError(null);
     const success = await login(data.email, data.password);
     if (success) {
+      const currentProfile = useAuthStore.getState().profile;
       toast.success(vi.auth.loginSuccess);
-      if (data.email.toLowerCase().includes('admin')) {
+      if (currentProfile?.role === 'admin') {
         navigate('/admin');
       } else {
         navigate('/');
       }
     } else {
-      setAuthError('Email hoặc mật khẩu không chính xác.');
+      const storeErr = useAuthStore.getState().error;
+      setAuthError(storeErr || 'Email hoặc mật khẩu không chính xác.');
       toast.error('Đăng nhập không thành công');
     }
   };
 
-  const handleQuickDemo = (type: 'user' | 'admin') => {
+  const handleQuickFill = (type: 'user' | 'admin') => {
+    setAuthError(null);
     if (type === 'admin') {
-      setValue('email', 'admin@drawtostory.vn');
-      setValue('password', 'AdminSafety2026!');
+      setValue('email', 'admin@drawtostory.vn', { shouldValidate: true });
+      setValue('password', 'Admin@123', { shouldValidate: true });
     } else {
-      setValue('email', 'me@phuhuynh.vn');
-      setValue('password', 'DrawToStory2026!');
+      setValue('email', 'me@phuhuynh.vn', { shouldValidate: true });
+      setValue('password', 'Parent@123', { shouldValidate: true });
     }
   };
 
   return (
-    <Card variant="white" className="border-2 border-white shadow-soft-lg">
+    <div className="bg-surface rounded-card border border-ink/10 shadow-card p-6 sm:p-8">
       <div className="text-center mb-6">
-        <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-peach/40 flex items-center justify-center text-3xl shadow-soft">
+        <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-surface-2 border border-ink/10 flex items-center justify-center text-3xl shadow-xs">
           🎨
         </div>
-        <h1 className="text-2xl font-heading font-black text-main">
+        <h1 className="text-2xl font-heading font-extrabold text-ink">
           {vi.auth.loginTitle}
         </h1>
-        <p className="text-sm text-main-muted mt-1">
+        <p className="text-sm text-ink-soft mt-1">
           {vi.auth.loginSubtitle}
         </p>
       </div>
 
       {authError && (
-        <div className="mb-4 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+        <div className="mb-4 p-3.5 rounded-2xl bg-danger-bg border border-danger/25 text-danger text-xs font-bold leading-relaxed">
           {authError}
         </div>
       )}
@@ -92,19 +95,29 @@ export const LoginPage: React.FC = () => {
           {...register('email')}
         />
 
-        <Input
-          label={vi.auth.passwordLabel}
-          type="password"
-          placeholder={vi.auth.passwordPlaceholder}
-          leftIcon={<Lock className="w-4 h-4" />}
-          error={errors.password?.message}
-          {...register('password')}
-        />
+        <div className="relative">
+          <Input
+            label={vi.auth.passwordLabel}
+            type={showPassword ? 'text' : 'password'}
+            placeholder={vi.auth.passwordPlaceholder}
+            leftIcon={<Lock className="w-4 h-4" />}
+            error={errors.password?.message}
+            {...register('password')}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute right-3 top-[34px] p-1.5 text-ink-faint hover:text-ink rounded-lg transition-colors"
+            aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
 
         <div className="flex items-center justify-end">
           <Link
             to="/forgot-password"
-            className="text-xs font-bold text-accent hover:underline min-h-[44px] flex items-center"
+            className="text-xs font-heading font-bold text-accent hover:underline min-h-[36px] flex items-center"
           >
             Quên mật khẩu?
           </Link>
@@ -122,44 +135,43 @@ export const LoginPage: React.FC = () => {
         </Button>
       </form>
 
-      {/* Quick Demo Shortcuts for Reviewers */}
-      <div className="mt-6 pt-5 border-t border-peach/40">
-        <p className="text-xs text-center text-main-muted font-bold uppercase tracking-wider mb-3">
-          ⚡ Đăng nhập mẫu nhanh (Dành cho Giám khảo & Thử nghiệm):
+      {/* Quick Fill Shortcuts for Reviewers */}
+      <div className="mt-6 pt-5 border-t border-ink/10">
+        <p className="text-[11px] text-center text-ink-soft font-heading font-bold uppercase tracking-wider mb-3">
+          Điền nhanh tài khoản khởi tạo trên CSDL
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2.5">
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => handleQuickDemo('user')}
-            leftIcon={<Sparkles className="w-3.5 h-3.5 text-primary" />}
+            onClick={() => handleQuickFill('user')}
+            leftIcon={<Sparkles className="w-3.5 h-3.5 text-brand-600" />}
             className="text-xs"
           >
-            Tài khoản Mẹ Hà
+            Mẹ Thu Hà
           </Button>
           <Button
             type="button"
             variant="accent"
             size="sm"
-            onClick={() => handleQuickDemo('admin')}
+            onClick={() => handleQuickFill('admin')}
             leftIcon={<Shield className="w-3.5 h-3.5" />}
             className="text-xs"
           >
-            Tài khoản Admin
+            Quản trị Admin
           </Button>
         </div>
       </div>
 
       <div className="text-center mt-6">
-        <p className="text-xs text-main-muted">
+        <p className="text-xs text-ink-soft">
           {vi.auth.noAccount}{' '}
-          <Link to="/register" className="font-heading font-black text-primary hover:underline">
+          <Link to="/register" className="font-heading font-extrabold text-brand-600 hover:underline">
             {vi.auth.submitRegister}
           </Link>
         </p>
       </div>
-    </Card>
+    </div>
   );
 };
-

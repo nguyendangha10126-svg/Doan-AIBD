@@ -1,15 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { 
-  SafetyRule, 
-  SystemPrompt, 
-  AiLog, 
-  ModerationReview, 
-  AdminAuditLog, 
-  Profile 
+import {
+  SafetyRule,
+  SystemPrompt,
+  AiLog,
+  ModerationReview,
+  AdminAuditLog,
+  Profile,
+  RiskReason,
+  isStoryApproved,
 } from '@/types/database';
 import { supabase, isDemoMode } from '@/lib/supabase';
-import { DEFAULT_ADMIN_PROFILE, DEFAULT_USER_PROFILE } from '@/store/authStore';
+import { DEFAULT_ADMIN_PROFILE, DEFAULT_USER_PROFILE, useAuthStore } from '@/store/authStore';
+import { useStoryStore } from '@/store/storyStore';
 
 export interface AdminKpis {
   storiesToday: number;
@@ -30,9 +33,17 @@ export interface DailyChartPoint {
   rejected: number;
 }
 
+export interface RejectionCategoryPoint {
+  name: string;
+  count: number;
+}
+
 export interface AdminState {
   kpis: AdminKpis;
   chartData: DailyChartPoint[];
+  chartData30d: DailyChartPoint[];
+  rejectionCategories: RejectionCategoryPoint[];
+  hasReviewedStories: boolean;
   safetyRules: SafetyRule[];
   systemPrompts: SystemPrompt[];
   aiLogs: AiLog[];
@@ -43,47 +54,70 @@ export interface AdminState {
   autoApproveMaxRisk: number;
   globalDailyLimit: number;
   strictDrawingCheck: boolean;
+  geminiApiKey: string;
   isLoading: boolean;
-  
+
   // Actions
   fetchAdminData: () => Promise<void>;
-  toggleSafetyRule: (ruleId: string) => Promise<void>;
-  addSafetyRule: (rule: Omit<SafetyRule, 'id' | 'created_at'>) => Promise<void>;
-  deleteSafetyRule: (ruleId: string) => Promise<void>;
-  updateSafetyRule: (rule: SafetyRule) => Promise<void>;
+  toggleSafetyRule: (ruleId: string) => Promise<boolean>;
+  addSafetyRule: (rule: Omit<SafetyRule, 'id' | 'created_at'>) => Promise<boolean>;
+  deleteSafetyRule: (ruleId: string) => Promise<boolean>;
+  updateSafetyRule: (rule: SafetyRule) => Promise<boolean>;
 
-  saveSystemPromptVersion: (name: string, promptText: string) => Promise<void>;
-  setActiveSystemPrompt: (promptId: string) => Promise<void>;
+  saveSystemPromptVersion: (name: string, promptText: string) => Promise<boolean>;
+  setActiveSystemPrompt: (promptId: string) => Promise<boolean>;
 
-  approveStoryModeration: (storyId: string, adminId: string, reason?: string) => Promise<void>;
-  rejectStoryModeration: (storyId: string, adminId: string, reason: string) => Promise<void>;
-  batchModeration: (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => Promise<void>;
+  approveStoryModeration: (storyId: string, adminId: string, reason?: string) => Promise<boolean>;
+  rejectStoryModeration: (storyId: string, adminId: string, reason: string) => Promise<boolean>;
+  batchModeration: (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => Promise<boolean>;
 
-  updateModerationSettings: (mode: 'auto' | 'manual_all', maxRisk: number) => Promise<void>;
-  setStrictDrawingCheck: (val: boolean) => Promise<void>;
-  updateGlobalDailyLimit: (limit: number) => Promise<void>;
-  toggleUserLock: (userId: string) => Promise<void>;
-  updateUserQuota: (userId: string, quota: number) => Promise<void>;
+  updateModerationSettings: (mode: 'auto' | 'manual_all', maxRisk: number) => Promise<boolean>;
+  setStrictDrawingCheck: (val: boolean) => Promise<boolean>;
+  updateGlobalDailyLimit: (limit: number) => Promise<boolean>;
+  updateMonthlyBudget: (budgetUsd: number) => Promise<boolean>;
+  updateGeminiApiKey: (apiKey: string) => Promise<boolean>;
+  toggleUserLock: (userId: string) => Promise<boolean>;
+  updateUserQuota: (userId: string, quota: number) => Promise<boolean>;
 
   logAudit: (action: string, targetType: string, targetId: string, details?: Record<string, unknown>) => Promise<void>;
   exportAiLogsCsv: () => string;
 }
 
-// Default clean initial chart points (7 days, 0 counts)
-const CLEAN_CHART_DATA: DailyChartPoint[] = Array.from({ length: 7 }).map((_, i) => {
-  const d = new Date(Date.now() - (6 - i) * 86400000);
-  return {
-    date: `${d.getDate()}/${d.getMonth() + 1}`,
-    stories: 0,
-    approved: 0,
-    rejected: 0,
-    tokens: 0,
-    cost: 0,
-    avgLatency: 0,
-  };
-});
+function buildEmptyDays(daysCount: number): Array<{ isoKey: string; point: DailyChartPoint }> {
+  return Array.from({ length: daysCount }).map((_, idx) => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (daysCount - 1 - idx));
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return {
+      isoKey: `${year}-${month}-${day}`,
+      point: {
+        date: `${d.getDate()}/${d.getMonth() + 1}`,
+        stories: 0,
+        approved: 0,
+        rejected: 0,
+        tokens: 0,
+        cost: 0,
+        avgLatency: 0,
+      },
+    };
+  });
+}
 
-// Master Safety Rules from Supabase schema
+function toLocalDayKey(isoString?: string | null): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+const CLEAN_CHART_7D = buildEmptyDays(7).map((b) => b.point);
+const CLEAN_CHART_30D = buildEmptyDays(30).map((b) => b.point);
+
 const INITIAL_SAFETY_RULES: SafetyRule[] = [
   { id: 'e0000001-0000-0000-0000-000000000001', category: 'Bạo lực & Vũ khí', description: 'Tranh vẽ hoặc văn bản chứa súng đạn, đao kiếm gây thương tích đẫm máu.', severity: 5, action: 'block', is_active: true, created_at: new Date().toISOString() },
   { id: 'e0000002-0000-0000-0000-000000000002', category: 'Nội dung người lớn', description: 'Mọi yếu tố không phù hợp với thuần phong mỹ tục lứa tuổi thiếu nhi.', severity: 5, action: 'block', is_active: true, created_at: new Date().toISOString() },
@@ -106,16 +140,26 @@ const INITIAL_SYSTEM_PROMPTS: SystemPrompt[] = [
 Nhiệm vụ: Từ bức tranh do bé vẽ, hãy dệt nên một câu chuyện tranh cổ tích ấm áp 4-5 trang.
 
 QUY TẮC BẮT BUỘC:
-1. Độ tuổi và từ vựng: Điều chỉnh độ dài câu và từ vựng chính xác theo độ tuổi của bé (2-5 tuổi câu ngắn, nhịp điệu vui vẻ; 6-12 tuổi cốt truyện phiêu lưu giàu tưởng tượng).
-2. Độ dài mỗi trang: Đúng từ 30 đến 50 từ tiếng Việt. Giọng văn êm dịu, sư phạm.
-3. Cảm xúc và vùng nhìn: Mỗi trang xác định emotion và focus_region {x, y, zoom} trên tranh gốc.
-4. Kết thúc và bài học (Moral): Câu chuyện luôn kết thúc có hậu, tràn đầy hy vọng.
-5. Vẽ tiếp gì nào: Đúng 3 gợi ý nét vẽ sáng tạo để bé tiếp tục vẽ bức tranh tiếp theo.`,
+1. Bám sát tranh vẽ 100%: Tiêu đề và mọi trang truyện phải kể đúng về các nhân vật, đồ vật, màu sắc thật sự xuất hiện trong tranh của bé; tuyệt đối không bịa thêm nhân vật chính ngoài tranh.
+2. Độ tuổi và từ vựng: Điều chỉnh độ dài câu và từ vựng chính xác theo độ tuổi của bé (2-5 tuổi câu ngắn, nhịp điệu vui vẻ; 6-12 tuổi cốt truyện phiêu lưu giàu tưởng tượng).
+3. Độ dài mỗi trang: Đúng từ 30 đến 50 từ tiếng Việt. Giọng văn êm dịu, sư phạm.
+4. Cảm xúc và vùng nhìn: Mỗi trang xác định emotion và focus_region {x, y, zoom} trên tranh gốc.
+5. Kết thúc và bài học (Moral): Câu chuyện luôn kết thúc có hậu, tràn đầy hy vọng.
+6. Vẽ tiếp gì nào: Đúng 3 gợi ý nét vẽ sáng tạo để bé tiếp tục vẽ bức tranh tiếp theo.`,
     is_active: true,
     created_by: 'a0000000-0000-0000-0000-000000000001',
     created_at: new Date().toISOString(),
   },
 ];
+
+const ERROR_CODE_LABELS: Record<string, string> = {
+  NOT_A_DRAWING: 'Ảnh không phải tranh vẽ',
+  REAL_FACE_DETECTED: 'Khuôn mặt người thật',
+  PII_DETECTED: 'Thông tin cá nhân (PII)',
+  UNSAFE_INPUT: 'Vi phạm an toàn đầu vào',
+  IMAGE_TOO_BLURRY: 'Ảnh mờ / thiếu nét',
+  IMAGE_TOO_DARK: 'Ảnh thiếu sáng',
+};
 
 export const useAdminStore = create<AdminState>()(
   persist(
@@ -128,7 +172,10 @@ export const useAdminStore = create<AdminState>()(
         monthlyBudgetUsd: 50.0,
         aiAdminAgreementPercent: 100,
       },
-      chartData: CLEAN_CHART_DATA,
+      chartData: CLEAN_CHART_7D,
+      chartData30d: CLEAN_CHART_30D,
+      rejectionCategories: [],
+      hasReviewedStories: false,
       safetyRules: INITIAL_SAFETY_RULES,
       systemPrompts: INITIAL_SYSTEM_PROMPTS,
       aiLogs: [],
@@ -139,13 +186,15 @@ export const useAdminStore = create<AdminState>()(
       autoApproveMaxRisk: 25,
       globalDailyLimit: 5,
       strictDrawingCheck: true,
+      geminiApiKey: '',
       isLoading: false,
 
       fetchAdminData: async () => {
         if (isDemoMode) return;
         set({ isLoading: true });
         try {
-          // Fetch profiles, rules, prompts, settings, stories, logs
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+
           const [
             { data: profiles },
             { data: rules },
@@ -158,17 +207,17 @@ export const useAdminStore = create<AdminState>()(
           ] = await Promise.all([
             supabase.from('profiles').select('*').order('created_at', { ascending: false }),
             supabase.from('safety_rules').select('*').order('created_at', { ascending: true }),
-            supabase.from('system_prompts').select('*').order('created_at', { ascending: false }),
+            supabase.from('system_prompts').select('*').order('version', { ascending: false }),
             supabase.from('app_settings').select('*'),
-            supabase.from('ai_logs').select('*').order('created_at', { ascending: false }).limit(50),
-            supabase.from('stories').select('id, status, risk_score, created_at'),
+            supabase.from('ai_logs').select('*').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(500),
+            supabase.from('stories').select('id, status, risk_score, risk_reasons, rejection_reason, created_at'),
             supabase.from('moderation_reviews').select('*').order('created_at', { ascending: false }),
-            supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(50),
+            supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
           ]);
 
           const stateUpdates: Partial<AdminState> = {};
 
-          if (profiles && profiles.length > 0) {
+          if (profiles) {
             stateUpdates.usersList = profiles as Profile[];
           }
 
@@ -180,49 +229,155 @@ export const useAdminStore = create<AdminState>()(
             stateUpdates.systemPrompts = prompts as SystemPrompt[];
           }
 
-          if (logs) {
-            stateUpdates.aiLogs = logs as AiLog[];
-          }
+          const allLogs = (logs as AiLog[]) || [];
+          stateUpdates.aiLogs = allLogs;
 
-          if (reviews) {
-            stateUpdates.moderationReviews = reviews as ModerationReview[];
-          }
+          const allReviews = (reviews as ModerationReview[]) || [];
+          stateUpdates.moderationReviews = allReviews;
+          stateUpdates.hasReviewedStories = allReviews.length > 0;
 
           if (audits) {
             stateUpdates.auditLogs = audits as AdminAuditLog[];
           }
 
-          // Parse app settings
+          let maxRiskThreshold = 25;
+          let budgetUsd = 50.0;
+
           if (settings) {
             settings.forEach((s: { key: string; value: string }) => {
-              if (s.key === 'moderation_mode') stateUpdates.moderationMode = s.value as 'auto' | 'manual_all';
-              if (s.key === 'auto_approve_max_risk') stateUpdates.autoApproveMaxRisk = parseInt(s.value, 10) || 25;
-              if (s.key === 'daily_story_limit') stateUpdates.globalDailyLimit = parseInt(s.value, 10) || 5;
-              if (s.key === 'strict_drawing_check') stateUpdates.strictDrawingCheck = s.value === 'true';
+              if (s.key === 'moderation_mode') {
+                stateUpdates.moderationMode = s.value === 'manual_all' ? 'manual_all' : 'auto';
+              }
+              if (s.key === 'auto_approve_max_risk') {
+                maxRiskThreshold = parseInt(s.value, 10) || 25;
+                stateUpdates.autoApproveMaxRisk = maxRiskThreshold;
+              }
+              if (s.key === 'daily_story_limit') {
+                stateUpdates.globalDailyLimit = parseInt(s.value, 10) || 5;
+              }
+              if (s.key === 'strict_drawing_check') {
+                stateUpdates.strictDrawingCheck = s.value === 'true';
+              }
+              if (s.key === 'monthly_budget_usd') {
+                budgetUsd = parseFloat(s.value) || 50.0;
+              }
+              if (s.key === 'gemini_api_key') {
+                stateUpdates.geminiApiKey = s.value || '';
+              }
             });
           }
 
-          // Compute Real-time KPIs
-          const allStories = stories || [];
-          const allLogs = logs || [];
-          const todayPrefix = new Date().toISOString().substring(0, 10);
-          const storiesToday = allStories.filter((s) => (s.created_at || '').startsWith(todayPrefix)).length;
+          // Build 30-day & 7-day real charts
+          const buckets = buildEmptyDays(30);
+          const bucketMap = new Map(buckets.map((b) => [b.isoKey, b.point]));
+          const latencyCounter = new Map<string, { sum: number; count: number }>();
+
+          const allStories = (stories || []) as Array<{
+            id: string;
+            status: string;
+            risk_score: number;
+            risk_reasons: RiskReason[] | null;
+            rejection_reason: string | null;
+            created_at: string;
+          }>;
+
+          for (const st of allStories) {
+            const key = toLocalDayKey(st.created_at);
+            const bucket = bucketMap.get(key);
+            if (bucket) {
+              bucket.stories += 1;
+              if (isStoryApproved(st.status)) bucket.approved += 1;
+              if (st.status === 'rejected') bucket.rejected += 1;
+            }
+          }
+
+          for (const lg of allLogs) {
+            const key = toLocalDayKey(lg.created_at);
+            const bucket = bucketMap.get(key);
+            if (bucket) {
+              bucket.tokens += (Number(lg.input_tokens) || 0) + (Number(lg.output_tokens) || 0);
+              bucket.cost = Number((bucket.cost + (Number(lg.estimated_cost_usd) || 0)).toFixed(6));
+              if (lg.latency_ms > 0) {
+                const prev = latencyCounter.get(key) || { sum: 0, count: 0 };
+                latencyCounter.set(key, { sum: prev.sum + lg.latency_ms, count: prev.count + 1 });
+              }
+            }
+          }
+
+          for (const [key, lat] of latencyCounter.entries()) {
+            const bucket = bucketMap.get(key);
+            if (bucket && lat.count > 0) {
+              bucket.avgLatency = Math.round(lat.sum / lat.count);
+            }
+          }
+
+          const computed30d = buckets.map((b) => b.point);
+          stateUpdates.chartData30d = computed30d;
+          stateUpdates.chartData = computed30d.slice(-7);
+
+          // Build real rejection / block categories
+          const catCounts = new Map<string, number>();
+          for (const st of allStories) {
+            if (st.status === 'rejected') {
+              const reasons = Array.isArray(st.risk_reasons) ? st.risk_reasons : [];
+              if (reasons.length > 0) {
+                for (const r of reasons) {
+                  if (r.category) {
+                    catCounts.set(r.category, (catCounts.get(r.category) || 0) + 1);
+                  }
+                }
+              } else {
+                catCounts.set('Từ chối kiểm duyệt', (catCounts.get('Từ chối kiểm duyệt') || 0) + 1);
+              }
+            }
+          }
+          for (const lg of allLogs) {
+            if (lg.status === 'error' && lg.error_code && ERROR_CODE_LABELS[lg.error_code]) {
+              const label = ERROR_CODE_LABELS[lg.error_code];
+              catCounts.set(label, (catCounts.get(label) || 0) + 1);
+            }
+          }
+          stateUpdates.rejectionCategories = Array.from(catCounts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 6);
+
+          // Compute Real KPIs
+          const todayKey = toLocalDayKey(new Date().toISOString());
+          const storiesToday = allStories.filter((s) => toLocalDayKey(s.created_at) === todayKey).length;
           const pendingCount = allStories.filter((s) => s.status === 'pending_review').length;
           const rejectedCount = allStories.filter((s) => s.status === 'rejected').length;
-          const blockedRate = allStories.length > 0 ? Number(((rejectedCount / allStories.length) * 100).toFixed(1)) : 0;
-          const totalCostUsd = allLogs.reduce((acc, curr) => acc + (Number(curr.estimated_cost_usd) || 0), 0);
+          const inputBlockedCount = allLogs.filter(
+            (l) => l.action === 'layer1_input_safety_blocked'
+          ).length;
+          const totalAttempts = allStories.length + inputBlockedCount;
+          const blockedRate =
+            totalAttempts > 0
+              ? Number((((rejectedCount + inputBlockedCount) / totalAttempts) * 100).toFixed(1))
+              : 0;
 
-          let budgetUsd = 50.0;
-          const budgetSetting = settings?.find((s: { key: string }) => s.key === 'monthly_budget_usd');
-          if (budgetSetting) budgetUsd = parseFloat(budgetSetting.value) || 50.0;
+          const currentMonthPrefix = new Date().toISOString().substring(0, 7);
+          const monthlyCostUsd = allLogs
+            .filter((l) => (l.created_at || '').startsWith(currentMonthPrefix))
+            .reduce((acc, curr) => acc + (Number(curr.estimated_cost_usd) || 0), 0);
+
+          let agreementPercent = 100;
+          if (allReviews.length > 0) {
+            const agreed = allReviews.filter(
+              (r) =>
+                (r.decision === 'rejected' && r.ai_risk_score_at_review > maxRiskThreshold) ||
+                (r.decision === 'approved' && r.ai_risk_score_at_review <= 60)
+            ).length;
+            agreementPercent = Math.round((agreed / allReviews.length) * 100);
+          }
 
           stateUpdates.kpis = {
             storiesToday,
             blockedRatePercent: blockedRate,
             pendingQueueCount: pendingCount,
-            monthlyCostUsd: Number(totalCostUsd.toFixed(4)),
+            monthlyCostUsd: Number(monthlyCostUsd.toFixed(4)),
             monthlyBudgetUsd: budgetUsd,
-            aiAdminAgreementPercent: reviews && reviews.length > 0 ? 95 : 100,
+            aiAdminAgreementPercent: agreementPercent,
           };
 
           set(stateUpdates);
@@ -235,284 +390,515 @@ export const useAdminStore = create<AdminState>()(
 
       toggleSafetyRule: async (ruleId: string) => {
         const rule = get().safetyRules.find((r) => r.id === ruleId);
-        const nextActive = !rule?.is_active;
+        if (!rule) return false;
+        const nextActive = !rule.is_active;
+
+        if (!isDemoMode) {
+          const { error } = await supabase
+            .from('safety_rules')
+            .update({ is_active: nextActive })
+            .eq('id', ruleId);
+          if (error) {
+            console.error('toggleSafetyRule error:', error);
+            return false;
+          }
+        }
 
         set((state) => ({
           safetyRules: state.safetyRules.map((r) =>
             r.id === ruleId ? { ...r, is_active: nextActive } : r
           ),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('safety_rules').update({ is_active: nextActive }).eq('id', ruleId);
-        }
         await get().logAudit('TOGGLE_RULE', 'safety_rules', ruleId, { is_active: nextActive });
+        return true;
       },
 
       addSafetyRule: async (rule) => {
-        const tempId = 'e' + Date.now().toString(16).padStart(31, '0').substring(0, 31);
-        const newRule: SafetyRule = {
+        let createdRule: SafetyRule = {
           ...rule,
-          id: tempId,
+          id: 'e' + Date.now().toString(16).padStart(31, '0').substring(0, 31),
           created_at: new Date().toISOString(),
         };
 
         if (!isDemoMode) {
-          const { data } = await supabase.from('safety_rules').insert(rule).select().single();
-          if (data) newRule.id = data.id;
+          const { data, error } = await supabase
+            .from('safety_rules')
+            .insert(rule)
+            .select()
+            .single();
+          if (error || !data) {
+            console.error('addSafetyRule error:', error);
+            return false;
+          }
+          createdRule = data as SafetyRule;
         }
 
         set((state) => ({
-          safetyRules: [newRule, ...state.safetyRules],
+          safetyRules: [createdRule, ...state.safetyRules],
         }));
-        await get().logAudit('CREATE_RULE', 'safety_rules', newRule.id, { category: rule.category });
+        await get().logAudit('CREATE_RULE', 'safety_rules', createdRule.id, { category: rule.category });
+        return true;
       },
 
       deleteSafetyRule: async (ruleId: string) => {
+        if (!isDemoMode) {
+          const { error } = await supabase.from('safety_rules').delete().eq('id', ruleId);
+          if (error) {
+            console.error('deleteSafetyRule error:', error);
+            return false;
+          }
+        }
+
         set((state) => ({
           safetyRules: state.safetyRules.filter((r) => r.id !== ruleId),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('safety_rules').delete().eq('id', ruleId);
-        }
         await get().logAudit('DELETE_RULE', 'safety_rules', ruleId);
+        return true;
       },
 
       updateSafetyRule: async (rule: SafetyRule) => {
+        if (!isDemoMode) {
+          const { error } = await supabase
+            .from('safety_rules')
+            .update({
+              category: rule.category,
+              description: rule.description,
+              severity: rule.severity,
+              action: rule.action,
+              is_active: rule.is_active,
+            })
+            .eq('id', rule.id);
+          if (error) {
+            console.error('updateSafetyRule error:', error);
+            return false;
+          }
+        }
+
         set((state) => ({
           safetyRules: state.safetyRules.map((r) => (r.id === rule.id ? rule : r)),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('safety_rules').update(rule).eq('id', rule.id);
-        }
-        await get().logAudit('UPDATE_RULE', 'safety_rules', rule.id, { severity: rule.severity, action: rule.action });
+        await get().logAudit('UPDATE_RULE', 'safety_rules', rule.id, {
+          severity: rule.severity,
+          action: rule.action,
+        });
+        return true;
       },
 
       saveSystemPromptVersion: async (name: string, promptText: string) => {
         const { systemPrompts } = get();
-        const nextVersion = systemPrompts.length + 1;
-        const newPrompt: SystemPrompt = {
+        const maxVersion = systemPrompts.reduce((max, p) => Math.max(max, p.version || 0), 0);
+        const nextVersion = maxVersion + 1;
+        const adminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+
+        let createdPrompt: SystemPrompt = {
           id: 'f' + Date.now().toString(16).padStart(31, '0').substring(0, 31),
-          name,
+          name: name.trim(),
           version: nextVersion,
-          prompt_text: promptText,
+          prompt_text: promptText.trim(),
           is_active: false,
-          created_by: 'a0000000-0000-0000-0000-000000000001',
+          created_by: adminId,
           created_at: new Date().toISOString(),
         };
 
         if (!isDemoMode) {
-          const { data } = await supabase.from('system_prompts').insert({
-            name,
-            version: nextVersion,
-            prompt_text: promptText,
-            is_active: false,
-            created_by: 'a0000000-0000-0000-0000-000000000001',
-          }).select().single();
-          if (data) newPrompt.id = data.id;
+          const { data, error } = await supabase
+            .from('system_prompts')
+            .insert({
+              name: name.trim(),
+              version: nextVersion,
+              prompt_text: promptText.trim(),
+              is_active: false,
+              created_by: adminId,
+            })
+            .select()
+            .single();
+          if (error || !data) {
+            console.error('saveSystemPromptVersion error:', error);
+            return false;
+          }
+          createdPrompt = data as SystemPrompt;
         }
 
-        set({ systemPrompts: [newPrompt, ...systemPrompts] });
-        await get().logAudit('SAVE_PROMPT_VERSION', 'system_prompts', newPrompt.id, { version: nextVersion });
+        set({ systemPrompts: [createdPrompt, ...systemPrompts] });
+        await get().logAudit('SAVE_PROMPT_VERSION', 'system_prompts', createdPrompt.id, {
+          version: nextVersion,
+        });
+        return true;
       },
 
       setActiveSystemPrompt: async (promptId: string) => {
+        if (!isDemoMode) {
+          const { error: offError } = await supabase
+            .from('system_prompts')
+            .update({ is_active: false })
+            .neq('id', promptId);
+          if (offError) {
+            console.error('setActiveSystemPrompt offError:', offError);
+            return false;
+          }
+          const { error: onError } = await supabase
+            .from('system_prompts')
+            .update({ is_active: true })
+            .eq('id', promptId);
+          if (onError) {
+            console.error('setActiveSystemPrompt onError:', onError);
+            return false;
+          }
+        }
+
         set((state) => ({
           systemPrompts: state.systemPrompts.map((p) => ({
             ...p,
             is_active: p.id === promptId,
           })),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('system_prompts').update({ is_active: false }).neq('id', promptId);
-          await supabase.from('system_prompts').update({ is_active: true }).eq('id', promptId);
-        }
         await get().logAudit('SET_ACTIVE_PROMPT', 'system_prompts', promptId);
+        return true;
       },
 
       approveStoryModeration: async (storyId: string, adminId: string, reason = 'Phê duyệt an toàn') => {
-        const review: ModerationReview = {
+        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId || DEFAULT_ADMIN_PROFILE.id;
+        const targetStory = useStoryStore.getState().stories.find((s) => s.id === storyId);
+        const riskAtReview = targetStory?.risk_score ?? 0;
+
+        let createdReview: ModerationReview = {
           id: 'rev-' + Date.now(),
           story_id: storyId,
-          admin_id: adminId,
+          admin_id: resolvedAdminId,
           decision: 'approved',
           reason,
-          ai_risk_score_at_review: 20,
+          ai_risk_score_at_review: riskAtReview,
           created_at: new Date().toISOString(),
         };
 
         if (!isDemoMode) {
-          await supabase.from('moderation_reviews').insert({
-            story_id: storyId,
-            admin_id: adminId,
-            decision: 'approved',
-            reason,
-            ai_risk_score_at_review: 20,
-          });
-          await supabase.from('stories').update({
-            status: 'approved',
-            reviewed_by: adminId,
-            reviewed_at: new Date().toISOString(),
-          }).eq('id', storyId);
+          const { data: revData, error: revErr } = await supabase
+            .from('moderation_reviews')
+            .insert({
+              story_id: storyId,
+              admin_id: resolvedAdminId,
+              decision: 'approved',
+              reason,
+              ai_risk_score_at_review: riskAtReview,
+            })
+            .select()
+            .single();
+
+          if (revErr) {
+            console.error('approveStoryModeration review error:', revErr);
+            return false;
+          }
+          if (revData) createdReview = revData as ModerationReview;
+
+          const { error: storyErr } = await supabase
+            .from('stories')
+            .update({
+              status: 'approved',
+              rejection_reason: null,
+              reviewed_by: resolvedAdminId,
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', storyId);
+
+          if (storyErr) {
+            console.error('approveStoryModeration story error:', storyErr);
+            return false;
+          }
         }
 
+        await useStoryStore.getState().updateStoryStatus(storyId, 'approved');
+
         set((state) => ({
-          moderationReviews: [review, ...state.moderationReviews],
-          kpis: { ...state.kpis, pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1) },
+          moderationReviews: [createdReview, ...state.moderationReviews],
+          hasReviewedStories: true,
+          kpis: {
+            ...state.kpis,
+            pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1),
+          },
         }));
-        await get().logAudit('APPROVE_STORY', 'stories', storyId, { reason });
+        await get().logAudit('APPROVE_STORY', 'stories', storyId, { reason, riskAtReview });
+        return true;
       },
 
       rejectStoryModeration: async (storyId: string, adminId: string, reason: string) => {
-        const review: ModerationReview = {
+        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId || DEFAULT_ADMIN_PROFILE.id;
+        const targetStory = useStoryStore.getState().stories.find((s) => s.id === storyId);
+        const riskAtReview = targetStory?.risk_score ?? 50;
+
+        let createdReview: ModerationReview = {
           id: 'rev-' + Date.now(),
           story_id: storyId,
-          admin_id: adminId,
+          admin_id: resolvedAdminId,
           decision: 'rejected',
           reason,
-          ai_risk_score_at_review: 55,
+          ai_risk_score_at_review: riskAtReview,
           created_at: new Date().toISOString(),
         };
 
         if (!isDemoMode) {
-          await supabase.from('moderation_reviews').insert({
-            story_id: storyId,
-            admin_id: adminId,
-            decision: 'rejected',
-            reason,
-            ai_risk_score_at_review: 55,
-          });
-          await supabase.from('stories').update({
-            status: 'rejected',
-            rejection_reason: reason,
-            reviewed_by: adminId,
-            reviewed_at: new Date().toISOString(),
-          }).eq('id', storyId);
+          const { data: revData, error: revErr } = await supabase
+            .from('moderation_reviews')
+            .insert({
+              story_id: storyId,
+              admin_id: resolvedAdminId,
+              decision: 'rejected',
+              reason,
+              ai_risk_score_at_review: riskAtReview,
+            })
+            .select()
+            .single();
+
+          if (revErr) {
+            console.error('rejectStoryModeration review error:', revErr);
+            return false;
+          }
+          if (revData) createdReview = revData as ModerationReview;
+
+          const { error: storyErr } = await supabase
+            .from('stories')
+            .update({
+              status: 'rejected',
+              rejection_reason: reason,
+              reviewed_by: resolvedAdminId,
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', storyId);
+
+          if (storyErr) {
+            console.error('rejectStoryModeration story error:', storyErr);
+            return false;
+          }
         }
 
+        await useStoryStore.getState().updateStoryStatus(storyId, 'rejected', reason);
+
         set((state) => ({
-          moderationReviews: [review, ...state.moderationReviews],
-          kpis: { ...state.kpis, pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1) },
+          moderationReviews: [createdReview, ...state.moderationReviews],
+          hasReviewedStories: true,
+          kpis: {
+            ...state.kpis,
+            pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1),
+          },
         }));
-        await get().logAudit('REJECT_STORY', 'stories', storyId, { reason });
+        await get().logAudit('REJECT_STORY', 'stories', storyId, { reason, riskAtReview });
+        return true;
       },
 
       batchModeration: async (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => {
-        const newReviews: ModerationReview[] = storyIds.map((id) => ({
-          id: 'rev-' + Math.random().toString(36).substring(2, 9),
-          story_id: id,
-          admin_id: 'a0000000-0000-0000-0000-000000000001',
-          decision,
-          reason,
-          ai_risk_score_at_review: decision === 'approved' ? 15 : 60,
-          created_at: new Date().toISOString(),
-        }));
+        const resolvedAdminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+        const storiesMap = new Map(useStoryStore.getState().stories.map((s) => [s.id, s]));
 
-        if (!isDemoMode) {
-          for (const sId of storyIds) {
-            await supabase.from('moderation_reviews').insert({
+        const newReviews: ModerationReview[] = [];
+
+        for (const sId of storyIds) {
+          const riskAtReview = storiesMap.get(sId)?.risk_score ?? (decision === 'approved' ? 15 : 60);
+          if (!isDemoMode) {
+            const { error: revErr } = await supabase.from('moderation_reviews').insert({
               story_id: sId,
-              admin_id: 'a0000000-0000-0000-0000-000000000001',
+              admin_id: resolvedAdminId,
               decision,
               reason,
-              ai_risk_score_at_review: decision === 'approved' ? 15 : 60,
+              ai_risk_score_at_review: riskAtReview,
             });
-            await supabase.from('stories').update({
-              status: decision === 'approved' ? 'approved' : 'rejected',
-              rejection_reason: decision === 'rejected' ? reason : null,
-              reviewed_by: 'a0000000-0000-0000-0000-000000000001',
-              reviewed_at: new Date().toISOString(),
-            }).eq('id', sId);
+            if (revErr) {
+              console.error('batchModeration review error:', revErr);
+              return false;
+            }
+            const { error: stErr } = await supabase
+              .from('stories')
+              .update({
+                status: decision === 'approved' ? 'approved' : 'rejected',
+                rejection_reason: decision === 'rejected' ? reason : null,
+                reviewed_by: resolvedAdminId,
+                reviewed_at: new Date().toISOString(),
+              })
+              .eq('id', sId);
+            if (stErr) {
+              console.error('batchModeration story error:', stErr);
+              return false;
+            }
           }
+
+          await useStoryStore
+            .getState()
+            .updateStoryStatus(sId, decision === 'approved' ? 'approved' : 'rejected', decision === 'rejected' ? reason : undefined);
+
+          newReviews.push({
+            id: 'rev-' + Math.random().toString(36).substring(2, 9),
+            story_id: sId,
+            admin_id: resolvedAdminId,
+            decision,
+            reason,
+            ai_risk_score_at_review: riskAtReview,
+            created_at: new Date().toISOString(),
+          });
         }
 
         set((state) => ({
           moderationReviews: [...newReviews, ...state.moderationReviews],
+          hasReviewedStories: true,
           kpis: {
             ...state.kpis,
             pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - storyIds.length),
           },
         }));
-        await get().logAudit('BATCH_MODERATION', 'stories', storyIds.join(','), { count: storyIds.length, decision });
+        await get().logAudit('BATCH_MODERATION', 'stories', storyIds.join(','), {
+          count: storyIds.length,
+          decision,
+        });
+        return true;
       },
 
       updateModerationSettings: async (mode: 'auto' | 'manual_all', maxRisk: number) => {
+        if (!isDemoMode) {
+          const { error } = await supabase.from('app_settings').upsert([
+            { key: 'moderation_mode', value: mode, updated_at: new Date().toISOString() },
+            { key: 'auto_approve_max_risk', value: maxRisk.toString(), updated_at: new Date().toISOString() },
+          ]);
+          if (error) {
+            console.error('updateModerationSettings error:', error);
+            return false;
+          }
+        }
+
         set({
           moderationMode: mode,
           autoApproveMaxRisk: maxRisk,
         });
-
-        if (!isDemoMode) {
-          await supabase.from('app_settings').upsert([
-            { key: 'moderation_mode', value: mode, updated_at: new Date().toISOString() },
-            { key: 'auto_approve_max_risk', value: maxRisk.toString(), updated_at: new Date().toISOString() },
-          ]);
-        }
         await get().logAudit('UPDATE_SETTINGS', 'app_settings', 'moderation_mode', { mode, maxRisk });
+        return true;
       },
 
       setStrictDrawingCheck: async (val: boolean) => {
-        set({ strictDrawingCheck: val });
-
         if (!isDemoMode) {
-          await supabase.from('app_settings').upsert({
+          const { error } = await supabase.from('app_settings').upsert({
             key: 'strict_drawing_check',
             value: val ? 'true' : 'false',
             updated_at: new Date().toISOString(),
           });
+          if (error) {
+            console.error('setStrictDrawingCheck error:', error);
+            return false;
+          }
         }
-        await get().logAudit('UPDATE_STRICT_DRAWING', 'app_settings', 'strict_drawing_check', { enabled: val });
+
+        set({ strictDrawingCheck: val });
+        await get().logAudit('UPDATE_STRICT_DRAWING', 'app_settings', 'strict_drawing_check', {
+          enabled: val,
+        });
+        return true;
       },
 
       updateGlobalDailyLimit: async (limit: number) => {
-        set({ globalDailyLimit: limit });
-
         if (!isDemoMode) {
-          await supabase.from('app_settings').upsert({
+          const { error } = await supabase.from('app_settings').upsert({
             key: 'daily_story_limit',
             value: limit.toString(),
             updated_at: new Date().toISOString(),
           });
+          if (error) {
+            console.error('updateGlobalDailyLimit error:', error);
+            return false;
+          }
         }
+
+        set({ globalDailyLimit: limit });
         await get().logAudit('UPDATE_GLOBAL_LIMIT', 'app_settings', 'daily_story_limit', { limit });
+        return true;
+      },
+
+      updateMonthlyBudget: async (budgetUsd: number) => {
+        if (!isDemoMode) {
+          const { error } = await supabase.from('app_settings').upsert({
+            key: 'monthly_budget_usd',
+            value: budgetUsd.toFixed(2),
+            updated_at: new Date().toISOString(),
+          });
+          if (error) {
+            console.error('updateMonthlyBudget error:', error);
+            return false;
+          }
+        }
+
+        set((state) => ({
+          kpis: { ...state.kpis, monthlyBudgetUsd: budgetUsd },
+        }));
+        await get().logAudit('UPDATE_MONTHLY_BUDGET', 'app_settings', 'monthly_budget_usd', { budgetUsd });
+        return true;
+      },
+
+      updateGeminiApiKey: async (apiKey: string) => {
+        const cleanKey = apiKey.trim();
+        if (!isDemoMode) {
+          const { error } = await supabase.from('app_settings').upsert({
+            key: 'gemini_api_key',
+            value: cleanKey,
+            updated_at: new Date().toISOString(),
+          });
+          if (error) {
+            console.error('updateGeminiApiKey error:', error);
+            return false;
+          }
+        }
+
+        set({ geminiApiKey: cleanKey });
+        await get().logAudit('UPDATE_AI_KEY', 'app_settings', 'gemini_api_key', {
+          configured: Boolean(cleanKey),
+        });
+        return true;
       },
 
       toggleUserLock: async (userId: string) => {
         const user = get().usersList.find((u) => u.id === userId);
-        const nextLock = !user?.is_locked;
+        if (!user) return false;
+        const nextLock = !user.is_locked;
+
+        if (!isDemoMode) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ is_locked: nextLock, updated_at: new Date().toISOString() })
+            .eq('id', userId);
+          if (error) {
+            console.error('toggleUserLock error:', error);
+            return false;
+          }
+        }
 
         set((state) => ({
           usersList: state.usersList.map((u) =>
             u.id === userId ? { ...u, is_locked: nextLock } : u
           ),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('profiles').update({ is_locked: nextLock }).eq('id', userId);
-        }
         await get().logAudit('TOGGLE_USER_LOCK', 'profiles', userId, { is_locked: nextLock });
+        return true;
       },
 
       updateUserQuota: async (userId: string, quota: number) => {
+        if (!isDemoMode) {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ daily_quota: quota, updated_at: new Date().toISOString() })
+            .eq('id', userId);
+          if (error) {
+            console.error('updateUserQuota error:', error);
+            return false;
+          }
+        }
+
         set((state) => ({
           usersList: state.usersList.map((u) =>
             u.id === userId ? { ...u, daily_quota: quota } : u
           ),
         }));
-
-        if (!isDemoMode) {
-          await supabase.from('profiles').update({ daily_quota: quota }).eq('id', userId);
-        }
         await get().logAudit('UPDATE_USER_QUOTA', 'profiles', userId, { quota });
+        return true;
       },
 
       logAudit: async (action: string, targetType: string, targetId: string, details = {}) => {
-        const audit: AdminAuditLog = {
+        const adminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+        let audit: AdminAuditLog = {
           id: 'aud-' + Date.now(),
-          admin_id: 'a0000000-0000-0000-0000-000000000001',
+          admin_id: adminId,
           action,
           target_type: targetType,
           target_id: targetId,
@@ -521,13 +907,18 @@ export const useAdminStore = create<AdminState>()(
         };
 
         if (!isDemoMode) {
-          await supabase.from('admin_audit_logs').insert({
-            admin_id: 'a0000000-0000-0000-0000-000000000001',
-            action,
-            target_type: targetType,
-            target_id: targetId,
-            details,
-          });
+          const { data } = await supabase
+            .from('admin_audit_logs')
+            .insert({
+              admin_id: adminId,
+              action,
+              target_type: targetType,
+              target_id: targetId,
+              details,
+            })
+            .select()
+            .single();
+          if (data) audit = data as AdminAuditLog;
         }
 
         set((state) => ({
@@ -537,7 +928,18 @@ export const useAdminStore = create<AdminState>()(
 
       exportAiLogsCsv: () => {
         const { aiLogs } = get();
-        const headers = ['Thời gian', 'Người dùng', 'Thao tác', 'Model', 'Input Tokens', 'Output Tokens', 'Độ trễ (ms)', 'Chi phí ($)', 'Trạng thái'];
+        const headers = [
+          'Thời gian',
+          'Người dùng',
+          'Thao tác',
+          'Model',
+          'Input Tokens',
+          'Output Tokens',
+          'Độ trễ (ms)',
+          'Chi phí ($)',
+          'Trạng thái',
+          'Mã lỗi',
+        ];
         const rows = aiLogs.map((l) => [
           l.created_at,
           l.user_id || 'N/A',
@@ -548,12 +950,19 @@ export const useAdminStore = create<AdminState>()(
           l.latency_ms,
           l.estimated_cost_usd,
           l.status,
+          l.error_code || '',
         ]);
         return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
       },
     }),
     {
       name: 'drawtostory-admin-storage',
+      partialize: (state) => ({
+        moderationMode: state.moderationMode,
+        autoApproveMaxRisk: state.autoApproveMaxRisk,
+        globalDailyLimit: state.globalDailyLimit,
+        strictDrawingCheck: state.strictDrawingCheck,
+      }),
     }
   )
 );

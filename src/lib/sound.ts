@@ -1,6 +1,8 @@
-// Web Audio API lightweight sound effects for Kid Mode and interactive story elements
+// Web Audio API lightweight sound effects & gentle lullaby music box for storytelling
 class SoundEffects {
   private ctx: AudioContext | null = null;
+  private lullabyTimer: number | null = null;
+  private isLullabyPlaying = false;
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -183,6 +185,49 @@ class SoundEffects {
       osc.stop(ctx.currentTime + 0.2);
     } catch {
       // AudioContext silenced
+    }
+  }
+
+  // Soothing pentatonic music-box lullaby loop for bedtime storytelling
+  startLullaby() {
+    if (this.isLullabyPlaying || typeof window === 'undefined') return;
+    this.isLullabyPlaying = true;
+
+    const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 659.25, 523.25, 392.0];
+    let step = 0;
+
+    const playNote = () => {
+      if (!this.isLullabyPlaying) return;
+      try {
+        const ctx = this.getContext();
+        if (!ctx) return;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        const freq = melody[step % melody.length];
+        step++;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.035, ctx.currentTime + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.0008, ctx.currentTime + 1.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 1.45);
+      } catch {
+        // ignore audio errors
+      }
+    };
+
+    playNote();
+    this.lullabyTimer = window.setInterval(playNote, 1500);
+  }
+
+  stopLullaby() {
+    this.isLullabyPlaying = false;
+    if (this.lullabyTimer !== null) {
+      clearInterval(this.lullabyTimer);
+      this.lullabyTimer = null;
     }
   }
 }

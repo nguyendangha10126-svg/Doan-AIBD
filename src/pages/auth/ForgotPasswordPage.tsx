@@ -4,8 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link } from 'react-router-dom';
 import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
-import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -16,6 +17,7 @@ const forgotSchema = z.object({
 type ForgotFormData = z.infer<typeof forgotSchema>;
 
 export const ForgotPasswordPage: React.FC = () => {
+  const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,38 +29,41 @@ export const ForgotPasswordPage: React.FC = () => {
     resolver: zodResolver(forgotSchema),
   });
 
-  const onSubmit = async (_data: ForgotFormData) => {
+  const onSubmit = async (data: ForgotFormData) => {
     setIsLoading(true);
-    // Simulate reset link dispatch
-    setTimeout(() => {
-      setIsLoading(false);
+    const ok = await requestPasswordReset(data.email);
+    setIsLoading(false);
+    if (ok) {
       setIsSubmitted(true);
-    }, 800);
+      toast.success('Đã gửi yêu cầu khôi phục mật khẩu!');
+    } else {
+      toast.error('Không thể gửi email khôi phục lúc này. Vui lòng thử lại sau ít phút.');
+    }
   };
 
   return (
-    <Card variant="white" className="border-2 border-white shadow-soft-lg">
+    <div className="bg-surface rounded-card border border-ink/10 shadow-card p-6 sm:p-8">
       <div className="text-center mb-6">
-        <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-butter/50 flex items-center justify-center text-3xl shadow-soft">
+        <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-butter/60 border border-ink/10 flex items-center justify-center text-3xl shadow-xs">
           🔑
         </div>
-        <h1 className="text-2xl font-heading font-black text-main">
+        <h1 className="text-2xl font-heading font-extrabold text-ink">
           {vi.auth.forgotPasswordTitle}
         </h1>
-        <p className="text-sm text-main-muted mt-1">
+        <p className="text-sm text-ink-soft mt-1">
           {vi.auth.forgotPasswordSubtitle}
         </p>
       </div>
 
       {isSubmitted ? (
-        <div className="text-center space-y-4 py-4">
-          <div className="w-12 h-12 mx-auto rounded-full bg-mint flex items-center justify-center text-emerald-700">
+        <div className="text-center space-y-4 py-3">
+          <div className="w-12 h-12 mx-auto rounded-full bg-success-bg flex items-center justify-center text-success">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <p className="text-sm font-semibold text-main leading-relaxed">
-            Liên kết khôi phục đã được gửi đến hòm thư của bạn. Vui lòng kiểm tra hộp thư đến hoặc hòm thư rác.
+          <p className="text-sm font-semibold text-ink leading-relaxed">
+            Liên kết khôi phục mật khẩu đã được gửi qua Supabase Auth tới hộp thư của bạn. Vui lòng kiểm tra hộp thư đến hoặc thư rác.
           </p>
-          <Link to="/login" className="inline-block mt-4">
+          <Link to="/login" className="inline-block mt-3">
             <Button variant="outline" size="md" leftIcon={<ArrowLeft className="w-4 h-4" />}>
               {vi.auth.backToLogin}
             </Button>
@@ -88,7 +93,7 @@ export const ForgotPasswordPage: React.FC = () => {
           <div className="text-center mt-4">
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 text-xs font-heading font-bold text-main-muted hover:text-primary transition-colors min-h-[44px]"
+              className="inline-flex items-center gap-1.5 text-xs font-heading font-bold text-ink-soft hover:text-brand-600 transition-colors min-h-[44px]"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               {vi.auth.backToLogin}
@@ -96,6 +101,6 @@ export const ForgotPasswordPage: React.FC = () => {
           </div>
         </form>
       )}
-    </Card>
+    </div>
   );
 };

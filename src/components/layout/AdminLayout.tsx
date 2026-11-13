@@ -48,7 +48,7 @@ export const AdminLayout: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col md:flex-row text-ink selection:bg-brand-100 selection:text-brand-700">
+    <div className="min-h-screen bg-bg flex flex-col md:flex-row text-ink selection:bg-brand-100 selection:text-brand-700 overflow-x-hidden">
       {/* Mobile Header Bar */}
       <div className="md:hidden bg-surface border-b border-ink/10 px-4 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-2">
