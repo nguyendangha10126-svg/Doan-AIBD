@@ -25,6 +25,17 @@ export const SharedStoryPage: React.FC = () => {
         return;
       }
 
+      const localMatch = stories.find(
+        (s) => s.share_token === token && s.is_shared && isStoryApproved(s.status)
+      );
+      if (localMatch) {
+        if (mounted) {
+          setDbStory(localMatch);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       if (!isDemoMode) {
         try {
           const { data } = await supabase
@@ -75,7 +86,7 @@ export const SharedStoryPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [token, stories]);
 
   // Select natural Vietnamese voice
   useEffect(() => {
@@ -122,11 +133,11 @@ export const SharedStoryPage: React.FC = () => {
   }, [stopSpeech]);
 
   // Strict token matching ONLY (never leak arbitrary shared stories)
-  const demoMatchedStory = isDemoMode && token
+  const localMatchedStory = token
     ? stories.find((s) => s.share_token === token && s.is_shared && isStoryApproved(s.status)) || null
     : null;
 
-  const story = isDemoMode ? demoMatchedStory : dbStory;
+  const story = localMatchedStory || dbStory;
   const pages = story?.pages
     ? [...story.pages].sort((a, b) => a.page_number - b.page_number)
     : [];

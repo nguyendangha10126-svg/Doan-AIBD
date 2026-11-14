@@ -35,10 +35,10 @@ export const KidModePage: React.FC = () => {
 
   const activeChild = childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
 
-  // Kid mode only shows approved stories (scoped to active child when selected)
-  const approvedStories = stories.filter(
-    (s) => isStoryApproved(s.status) && (!activeChild || s.child_id === activeChild.id)
-  );
+  // Kid mode only shows approved stories belonging to the active child
+  const approvedStories = activeChild
+    ? stories.filter((s) => isStoryApproved(s.status) && s.child_id === activeChild.id)
+    : [];
 
   // Request fullscreen on mount or first interaction
   const requestFullscreen = useCallback(async () => {

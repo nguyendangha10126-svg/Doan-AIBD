@@ -6,9 +6,11 @@ import {
   SafetyRule,
   RiskReason,
 } from '@/types/database';
-import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
+import { supabase, supabaseUrl } from '@/lib/supabase';
 import { generateUuid } from '@/lib/utils';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
+import { useStoryStore } from '@/store/storyStore';
+import { useAdminStore } from '@/store/adminStore';
 
 export interface GenerateStoryParams {
   childId: string;
@@ -182,17 +184,19 @@ function calculateGeminiCostUsd(inputTokens: number, outputTokens: number): numb
   return Number((inputCost + outputCost).toFixed(6));
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
+async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      const commaIdx = dataUrl.indexOf(',');
-      resolve(commaIdx !== -1 ? dataUrl.substring(commaIdx + 1) : dataUrl);
-    };
+    reader.onloadend = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error('Không thể mã hóa dữ liệu tranh vẽ.'));
     reader.readAsDataURL(blob);
   });
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const dataUrl = await blobToDataUrl(blob);
+  const commaIdx = dataUrl.indexOf(',');
+  return commaIdx !== -1 ? dataUrl.substring(commaIdx + 1) : dataUrl;
 }
 
 async function callGeminiDirect<T>(params: {
@@ -437,12 +441,144 @@ export class StoryGenerationService {
     const { childId, childNickname, childAge, drawingFile, drawingPreviewUrl, onStageChange } = params;
     const pipelineStart = Date.now();
 
+    const { profile, childrenList } = useAuthStore.getState();
+    if (!profile) {
+      throw new StoryPipelineError('UNAUTHORIZED', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+    if (profile.is_locked) {
+      throw new StoryPipelineError(
+        'ACCOUNT_LOCKED',
+        'Tài khoản của bạn đang bị tạm khóa bởi Quản trị viên.'
+      );
+    }
+
+    const matchedChild = childrenList.find((c) => c.id === childId);
+    const inDemoSession = isUsingDemoSession();
+
+    onStageChange?.(1);
+
+    let globalDailyLimit = 5;
+    let todayCount = 0;
+    let activeRules: SafetyRule[] = [];
+    let strictDrawingCheck = true;
+    let moderationMode: 'auto' | 'manual_all' = 'auto';
+    let autoApproveMaxRisk = 25;
+    let systemPromptText =
+      'Bạn là Bác Gấu Kể Chuyện - tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương.';
+    let promptVersionId: string | null = 'f0000000-0000-0000-0000-000000000001';
+    let directApiKey = '';
+
+    if (inDemoSession) {
+      const adminState = useAdminStore.getState();
+      globalDailyLimit = adminState.globalDailyLimit || 5;
+      todayCount = useStoryStore.getState().getTodayStoryCount();
+      activeRules = adminState.safetyRules.filter((r) => r.is_active);
+      strictDrawingCheck = adminState.strictDrawingCheck;
+      moderationMode = adminState.moderationMode;
+      autoApproveMaxRisk = adminState.autoApproveMaxRisk || 25;
+      const activePrompt = adminState.systemPrompts.find((p) => p.is_active) || adminState.systemPrompts[0];
+      if (activePrompt) {
+        systemPromptText = activePrompt.prompt_text;
+        promptVersionId = activePrompt.id;
+      }
+      directApiKey = (import.meta.env.VITE_GEMINI_API_KEY || adminState.geminiApiKey || '').trim();
+    } else {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const myChildIds = childrenList.length > 0 ? childrenList.map((c) => c.id) : [childId];
+
+      const [
+        { data: settingsRows },
+        { data: rulesRows },
+        { data: activePromptRow },
+        { count: dbTodayCount },
+      ] = await Promise.all([
+        supabase.from('app_settings').select('key, value'),
+        supabase.from('safety_rules').select('*').eq('is_active', true),
+        supabase.from('system_prompts').select('*').eq('is_active', true).maybeSingle(),
+        supabase
+          .from('stories')
+          .select('id', { count: 'exact', head: true })
+          .in('child_id', myChildIds)
+          .gte('created_at', todayStart.toISOString()),
+      ]);
+
+      const settingsMap = new Map<string, string>(
+        ((settingsRows || []) as Array<{ key: string; value: string }>).map((s) => [s.key, s.value])
+      );
+
+      globalDailyLimit = parseInt(settingsMap.get('daily_story_limit') || '5', 10) || 5;
+      todayCount = dbTodayCount ?? 0;
+      activeRules = (rulesRows || []) as SafetyRule[];
+      strictDrawingCheck = (settingsMap.get('strict_drawing_check') ?? 'true') === 'true';
+      moderationMode = settingsMap.get('moderation_mode') === 'manual_all' ? 'manual_all' : 'auto';
+      autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10) || 25;
+      if ((activePromptRow as { prompt_text?: string } | null)?.prompt_text) {
+        systemPromptText = (activePromptRow as { prompt_text: string }).prompt_text;
+      }
+      promptVersionId = (activePromptRow as { id?: string } | null)?.id || null;
+      directApiKey = (
+        import.meta.env.VITE_GEMINI_API_KEY ||
+        settingsMap.get('gemini_api_key') ||
+        ''
+      ).trim();
+    }
+
+    const effectiveLimit = Math.min(profile.daily_quota ?? 5, globalDailyLimit);
+
+    if (todayCount >= effectiveLimit) {
+      throw new StoryPipelineError(
+        'QUOTA_EXCEEDED',
+        `Gia đình đã đạt giới hạn ${effectiveLimit} truyện trong ngày hôm nay. Hẹn bé ngày mai tiếp tục sáng tác nhé!`
+      );
+    }
+
+    // 2. Compress Drawing (compact Data URL in Demo Session, Supabase Storage in Production)
+    const compressedBlob = await this.compressImage(
+      drawingFile,
+      inDemoSession ? 350 * 1024 : 1.5 * 1024 * 1024
+    );
+    const storagePath = `${childId}/${Date.now()}.jpg`;
+    let finalImageUrl = drawingPreviewUrl;
+    let uploadedToStorage = false;
+
+    if (inDemoSession) {
+      finalImageUrl = await blobToDataUrl(compressedBlob);
+    } else {
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('drawings')
+        .upload(storagePath, compressedBlob, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new StoryPipelineError(
+          'STORAGE_ERROR',
+          `Không thể tải tranh vẽ lên hệ thống lưu trữ (${uploadError.message}). Vui lòng kiểm tra cấu hình Supabase.`
+        );
+      }
+
+      if (uploadData) {
+        uploadedToStorage = true;
+        const { data: pubData } = supabase.storage.from('drawings').getPublicUrl(uploadData.path);
+        if (pubData?.publicUrl) {
+          finalImageUrl = pubData.publicUrl;
+        }
+      }
+    }
+
+    const cleanupUploadedDrawing = async () => {
+      if (uploadedToStorage) {
+        await supabase.storage.from('drawings').remove([storagePath]).catch(() => {});
+      }
+    };
+
     // ---------------------------------------------------------
-    // OFFLINE DEMO / MOCK MODE ONLY (VITE_USE_MOCK=true)
+    // DEMO SESSION FALLBACK WHEN GEMINI API KEY IS NOT SET YET
     // ---------------------------------------------------------
-    if (isDemoMode) {
-      onStageChange?.(1);
-      await new Promise((r) => setTimeout(r, 700));
+    if (inDemoSession && !directApiKey) {
+      await new Promise((r) => setTimeout(r, 600));
 
       const lowerName = (drawingFile.name || '').toLowerCase();
       if (
@@ -451,6 +587,20 @@ export class StoryGenerationService {
         lowerName.includes('screenshot') ||
         lowerName.includes('photo')
       ) {
+        useAdminStore.getState().recordLocalAiLog({
+          id: 'log-' + Date.now(),
+          user_id: profile.id,
+          story_id: null,
+          action: 'layer1_input_safety_blocked',
+          model: 'gemini-2.5-flash-demo',
+          input_tokens: 310,
+          output_tokens: 85,
+          latency_ms: Date.now() - pipelineStart,
+          estimated_cost_usd: 0.000049,
+          status: 'error',
+          error_code: 'NOT_A_DRAWING',
+          created_at: new Date().toISOString(),
+        });
         throw new StoryPipelineError(
           'NOT_A_DRAWING',
           'Mình chưa thấy nét vẽ của bé trên giấy, thử chụp lại tranh vẽ nhé!'
@@ -458,16 +608,18 @@ export class StoryGenerationService {
       }
 
       onStageChange?.(2);
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 550));
       onStageChange?.(3);
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 750));
       onStageChange?.(4);
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 450));
 
       const storyId = generateUuid();
       const drawingId = generateUuid();
       const shareToken = generateUuid().replace(/-/g, '');
+      const nowIso = new Date().toISOString();
       const demoObjects = ['ngôi nhà nhỏ', 'ông mặt trời', 'bông hoa', 'đám mây'];
+      const resolvedStatus = moderationMode === 'manual_all' ? 'pending_review' : 'auto_approved';
 
       const demoPages: StoryPage[] = [
         {
@@ -478,7 +630,7 @@ export class StoryGenerationService {
           emotion: 'hân hoan',
           focus_region: { x: 35, y: 45, zoom: 1.2 },
           grounded_objects: ['ngôi nhà nhỏ', 'bông hoa'],
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
         },
         {
           id: generateUuid(),
@@ -488,7 +640,7 @@ export class StoryGenerationService {
           emotion: 'vui tươi',
           focus_region: { x: 65, y: 28, zoom: 1.25 },
           grounded_objects: ['ông mặt trời', 'đám mây'],
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
         },
         {
           id: generateUuid(),
@@ -498,7 +650,7 @@ export class StoryGenerationService {
           emotion: 'thích thú',
           focus_region: { x: 50, y: 60, zoom: 1.3 },
           grounded_objects: ['bông hoa'],
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
         },
         {
           id: generateUuid(),
@@ -508,7 +660,7 @@ export class StoryGenerationService {
           emotion: 'ấm áp',
           focus_region: { x: 45, y: 50, zoom: 1.15 },
           grounded_objects: ['ngôi nhà nhỏ'],
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
         },
       ];
 
@@ -517,9 +669,9 @@ export class StoryGenerationService {
         child_id: childId,
         drawing_id: drawingId,
         title: `Ngôi Nhà Nhỏ Dưới Nắng Của Bé ${childNickname}`,
-        summary: `Câu chuyện cổ tích ấm áp lấy cảm hứng từ bức vẽ của bé ${childNickname} (${childAge} tuổi) ở chế độ dùng thử.`,
+        summary: `Câu chuyện cổ tích ấm áp lấy cảm hứng từ bức vẽ của bé ${childNickname} (${childAge} tuổi).`,
         moral: 'Tình yêu thương gia đình và thiên nhiên quanh con luôn làm cuộc sống rạng ngời sắc màu.',
-        status: 'auto_approved',
+        status: resolvedStatus,
         risk_score: 5,
         faithfulness_score: 95,
         generation_stage: 'done' as GenerationStage,
@@ -529,20 +681,21 @@ export class StoryGenerationService {
         reviewed_at: null,
         share_token: shareToken,
         is_shared: false,
-        prompt_version_id: 'f0000000-0000-0000-0000-000000000001',
+        prompt_version_id: promptVersionId,
         model: 'gemini-2.5-flash-demo',
         next_drawing_ideas: [
           'Vẽ thêm một chú cún nhỏ trước hiên ngôi nhà',
           'Vẽ dải cầu vồng bắc ngang qua đám mây',
           'Vẽ đàn bướm bay quanh khóm bông hoa',
         ],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_at: nowIso,
+        updated_at: nowIso,
         pages: demoPages,
+        child: matchedChild,
         drawing: {
           id: drawingId,
           child_id: childId,
-          image_path: drawingPreviewUrl,
+          image_path: finalImageUrl,
           ai_analysis: {
             is_drawing: true,
             image_type: 'child_drawing',
@@ -555,106 +708,30 @@ export class StoryGenerationService {
             mood: 'ấm áp và vui tươi',
             characters: [childNickname],
           },
-          created_at: new Date().toISOString(),
+          created_at: nowIso,
         },
       };
+
+      useAdminStore.getState().recordLocalAiLog({
+        id: 'log-' + Date.now(),
+        user_id: profile.id,
+        story_id: storyId,
+        action: 'generate_story_3_layers',
+        model: 'gemini-2.5-flash-demo',
+        input_tokens: 1420,
+        output_tokens: 680,
+        latency_ms: Date.now() - pipelineStart,
+        estimated_cost_usd: 0.000311,
+        status: 'success',
+        error_code: null,
+        created_at: nowIso,
+      });
 
       return { story: demoStory, pages: demoPages };
     }
 
-    // ---------------------------------------------------------
-    // LIVE PRODUCTION MODE (SUPABASE + REAL GEMINI 3-LAYER AI)
-    // ---------------------------------------------------------
-    const { profile, childrenList } = useAuthStore.getState();
-    if (!profile) {
-      throw new StoryPipelineError('UNAUTHORIZED', 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-    }
-    if (profile.is_locked) {
-      throw new StoryPipelineError(
-        'ACCOUNT_LOCKED',
-        'Tài khoản của bạn đang bị tạm khóa bởi Quản trị viên.'
-      );
-    }
-
-    onStageChange?.(1);
-
-    // 1. Load live App Settings, Active Safety Rules, Active System Prompt & Today's Quota Count
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const myChildIds = childrenList.length > 0 ? childrenList.map((c) => c.id) : [childId];
-
-    const [
-      { data: settingsRows },
-      { data: rulesRows },
-      { data: activePromptRow },
-      { count: todayCount },
-    ] = await Promise.all([
-      supabase.from('app_settings').select('key, value'),
-      supabase.from('safety_rules').select('*').eq('is_active', true),
-      supabase.from('system_prompts').select('*').eq('is_active', true).maybeSingle(),
-      supabase
-        .from('stories')
-        .select('id', { count: 'exact', head: true })
-        .in('child_id', myChildIds)
-        .gte('created_at', todayStart.toISOString()),
-    ]);
-
-    const settingsMap = new Map<string, string>(
-      ((settingsRows || []) as Array<{ key: string; value: string }>).map((s) => [s.key, s.value])
-    );
-
-    const globalDailyLimit = parseInt(settingsMap.get('daily_story_limit') || '5', 10) || 5;
-    const effectiveLimit = Math.min(profile.daily_quota ?? 5, globalDailyLimit);
-
-    if ((todayCount ?? 0) >= effectiveLimit) {
-      throw new StoryPipelineError(
-        'QUOTA_EXCEEDED',
-        `Gia đình đã đạt giới hạn ${effectiveLimit} truyện trong ngày hôm nay. Hẹn bé ngày mai tiếp tục sáng tác nhé!`
-      );
-    }
-
-    // 2. Compress & Upload Drawing to Supabase Storage
-    const compressedBlob = await this.compressImage(drawingFile);
-    const storagePath = `${childId}/${Date.now()}.jpg`;
-    let finalImageUrl = drawingPreviewUrl;
-    let uploadedToStorage = false;
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('drawings')
-      .upload(storagePath, compressedBlob, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-
-    if (uploadError) {
-      throw new StoryPipelineError(
-        'STORAGE_ERROR',
-        `Không thể tải tranh vẽ lên hệ thống lưu trữ (${uploadError.message}). Vui lòng kiểm tra cấu hình Supabase.`
-      );
-    }
-
-    if (uploadData) {
-      uploadedToStorage = true;
-      const { data: pubData } = supabase.storage.from('drawings').getPublicUrl(uploadData.path);
-      if (pubData?.publicUrl) {
-        finalImageUrl = pubData.publicUrl;
-      }
-    }
-
-    const cleanupUploadedDrawing = async () => {
-      if (uploadedToStorage) {
-        await supabase.storage.from('drawings').remove([storagePath]).catch(() => {});
-      }
-    };
-
-    // 3. Try Supabase Edge Function first if no client key override is set
-    const directApiKey = (
-      import.meta.env.VITE_GEMINI_API_KEY ||
-      settingsMap.get('gemini_api_key') ||
-      ''
-    ).trim();
-
-    if (!directApiKey) {
+    // 3. Try Supabase Edge Function first if no client key override is set (Production Mode)
+    if (!inDemoSession && !directApiKey) {
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.access_token) {
         try {
@@ -673,6 +750,7 @@ export class StoryGenerationService {
             if (fnJson?.data) {
               const storyObj: Story = {
                 ...fnJson.data,
+                child: fnJson.data.child || matchedChild,
                 drawing: fnJson.data.drawing
                   ? { ...fnJson.data.drawing, image_path: finalImageUrl }
                   : undefined,
@@ -708,10 +786,6 @@ export class StoryGenerationService {
     // DIRECT 3-LAYER GEMINI 2.5 FLASH STRUCTURED PIPELINE
     // ---------------------------------------------------------
     const base64Image = await blobToBase64(compressedBlob);
-    const activeRules = ((rulesRows || []) as SafetyRule[]);
-    const strictDrawingCheck = (settingsMap.get('strict_drawing_check') ?? 'true') === 'true';
-    const moderationMode = settingsMap.get('moderation_mode') === 'manual_all' ? 'manual_all' : 'auto';
-    const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10) || 25;
 
     // LAYER 1: MULTIMODAL DRAWING INSPECTION & INPUT SAFETY
     const layer1Prompt = `Hãy quan sát thật kỹ bức ảnh này và phân tích trung thực theo JSON Schema:
@@ -754,18 +828,35 @@ export class StoryGenerationService {
 
     if (!safetyVerdict.isSafe) {
       await cleanupUploadedDrawing();
-      await supabase.from('ai_logs').insert({
-        user_id: profile.id,
-        story_id: null,
-        action: 'layer1_input_safety_blocked',
-        model: layer1Result.model,
-        input_tokens: layer1Result.inputTokens,
-        output_tokens: layer1Result.outputTokens,
-        latency_ms: layer1Result.latencyMs,
-        estimated_cost_usd: layer1Result.estimatedCostUsd,
-        status: 'error',
-        error_code: safetyVerdict.code || 'UNSAFE_INPUT',
-      });
+      if (inDemoSession) {
+        useAdminStore.getState().recordLocalAiLog({
+          id: 'log-' + Date.now(),
+          user_id: profile.id,
+          story_id: null,
+          action: 'layer1_input_safety_blocked',
+          model: layer1Result.model,
+          input_tokens: layer1Result.inputTokens,
+          output_tokens: layer1Result.outputTokens,
+          latency_ms: layer1Result.latencyMs,
+          estimated_cost_usd: layer1Result.estimatedCostUsd,
+          status: 'error',
+          error_code: safetyVerdict.code || 'UNSAFE_INPUT',
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        await supabase.from('ai_logs').insert({
+          user_id: profile.id,
+          story_id: null,
+          action: 'layer1_input_safety_blocked',
+          model: layer1Result.model,
+          input_tokens: layer1Result.inputTokens,
+          output_tokens: layer1Result.outputTokens,
+          latency_ms: layer1Result.latencyMs,
+          estimated_cost_usd: layer1Result.estimatedCostUsd,
+          status: 'error',
+          error_code: safetyVerdict.code || 'UNSAFE_INPUT',
+        });
+      }
       throw new StoryPipelineError(
         safetyVerdict.code || 'UNSAFE_INPUT',
         safetyVerdict.message || 'Bức ảnh chưa vượt qua cổng kiểm duyệt an toàn trẻ em.'
@@ -774,10 +865,6 @@ export class StoryGenerationService {
 
     // Stage 3: LAYER 2 — AGE-ADAPTIVE GROUNDED STORY GENERATION
     onStageChange?.(3);
-    const systemPromptText =
-      (activePromptRow as { prompt_text?: string } | null)?.prompt_text ||
-      'Bạn là Bác Gấu Kể Chuyện - tác giả truyện tranh thiếu nhi Việt Nam giàu tình yêu thương.';
-    const promptVersionId = (activePromptRow as { id?: string } | null)?.id || null;
 
     const rulesContext = activeRules
       .map((r) => `- [${r.action.toUpperCase()}] ${r.category}: ${r.description}`)
@@ -910,55 +997,11 @@ Chấm điểm trung thực:
       rejectionReason = 'Cần kiểm duyệt thủ công do điểm bám sát tranh thấp.';
     }
 
-    // 5. Persist Drawing, Story, Pages & AI Telemetry to Supabase
+    // 5. Persist Drawing, Story, Pages & AI Telemetry
     const drawingId = generateUuid();
     const storyId = generateUuid();
     const shareToken = generateUuid().replace(/-/g, '');
     const nowIso = new Date().toISOString();
-
-    const { error: drawingErr } = await supabase.from('drawings').insert({
-      id: drawingId,
-      child_id: childId,
-      image_path: finalImageUrl,
-      ai_analysis: inspection,
-    });
-
-    if (drawingErr) {
-      await cleanupUploadedDrawing();
-      throw new StoryPipelineError(
-        'DB_ERROR',
-        `Không thể lưu dữ liệu tranh vẽ: ${drawingErr.message}`
-      );
-    }
-
-    const { error: storyErr } = await supabase.from('stories').insert({
-      id: storyId,
-      child_id: childId,
-      drawing_id: drawingId,
-      title: generatedDraft.title,
-      summary: generatedDraft.summary,
-      moral: generatedDraft.moral,
-      status: finalStatus,
-      risk_score: Math.min(100, Math.max(0, Math.round(judgment.risk_score))),
-      faithfulness_score: Math.min(100, Math.max(0, Math.round(judgment.faithfulness_score))),
-      generation_stage: 'done',
-      risk_reasons: judgment.violation_reasons || [],
-      rejection_reason: rejectionReason,
-      share_token: shareToken,
-      is_shared: false,
-      prompt_version_id: promptVersionId,
-      model: layer2Result.model,
-      next_drawing_ideas: generatedDraft.next_drawing_ideas || [],
-    });
-
-    if (storyErr) {
-      await supabase.from('drawings').delete().eq('id', drawingId);
-      await cleanupUploadedDrawing();
-      throw new StoryPipelineError(
-        'DB_ERROR',
-        `Không thể lưu câu chuyện vào cơ sở dữ liệu: ${storyErr.message}`
-      );
-    }
 
     const generatedPages: StoryPage[] = generatedDraft.pages.map((p, idx) => ({
       id: generateUuid(),
@@ -975,22 +1018,6 @@ Chấm điểm trung thực:
       created_at: nowIso,
     }));
 
-    const { error: pagesErr } = await supabase.from('story_pages').insert(
-      generatedPages.map((p) => ({
-        id: p.id,
-        story_id: storyId,
-        page_number: p.page_number,
-        text_content: p.text_content,
-        emotion: p.emotion,
-        focus_region: p.focus_region,
-        grounded_objects: p.grounded_objects,
-      }))
-    );
-
-    if (pagesErr) {
-      console.error('Insert story_pages error:', pagesErr);
-    }
-
     const totalInputTokens =
       layer1Result.inputTokens + layer2Result.inputTokens + layer3Result.inputTokens;
     const totalOutputTokens =
@@ -1004,18 +1031,95 @@ Chấm điểm trung thực:
     );
     const totalLatencyMs = Date.now() - pipelineStart;
 
-    await supabase.from('ai_logs').insert({
-      user_id: profile.id,
-      story_id: storyId,
-      action: 'generate_story_3_layers',
-      model: layer2Result.model,
-      input_tokens: totalInputTokens,
-      output_tokens: totalOutputTokens,
-      latency_ms: totalLatencyMs,
-      estimated_cost_usd: totalCostUsd,
-      status: 'success',
-      error_code: null,
-    });
+    if (inDemoSession) {
+      useAdminStore.getState().recordLocalAiLog({
+        id: 'log-' + Date.now(),
+        user_id: profile.id,
+        story_id: storyId,
+        action: 'generate_story_3_layers',
+        model: layer2Result.model,
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+        latency_ms: totalLatencyMs,
+        estimated_cost_usd: totalCostUsd,
+        status: 'success',
+        error_code: null,
+        created_at: nowIso,
+      });
+    } else {
+      const { error: drawingErr } = await supabase.from('drawings').insert({
+        id: drawingId,
+        child_id: childId,
+        image_path: finalImageUrl,
+        ai_analysis: inspection,
+      });
+
+      if (drawingErr) {
+        await cleanupUploadedDrawing();
+        throw new StoryPipelineError(
+          'DB_ERROR',
+          `Không thể lưu dữ liệu tranh vẽ: ${drawingErr.message}`
+        );
+      }
+
+      const { error: storyErr } = await supabase.from('stories').insert({
+        id: storyId,
+        child_id: childId,
+        drawing_id: drawingId,
+        title: generatedDraft.title,
+        summary: generatedDraft.summary,
+        moral: generatedDraft.moral,
+        status: finalStatus,
+        risk_score: Math.min(100, Math.max(0, Math.round(judgment.risk_score))),
+        faithfulness_score: Math.min(100, Math.max(0, Math.round(judgment.faithfulness_score))),
+        generation_stage: 'done',
+        risk_reasons: judgment.violation_reasons || [],
+        rejection_reason: rejectionReason,
+        share_token: shareToken,
+        is_shared: false,
+        prompt_version_id: promptVersionId,
+        model: layer2Result.model,
+        next_drawing_ideas: generatedDraft.next_drawing_ideas || [],
+      });
+
+      if (storyErr) {
+        await supabase.from('drawings').delete().eq('id', drawingId);
+        await cleanupUploadedDrawing();
+        throw new StoryPipelineError(
+          'DB_ERROR',
+          `Không thể lưu câu chuyện vào cơ sở dữ liệu: ${storyErr.message}`
+        );
+      }
+
+      const { error: pagesErr } = await supabase.from('story_pages').insert(
+        generatedPages.map((p) => ({
+          id: p.id,
+          story_id: storyId,
+          page_number: p.page_number,
+          text_content: p.text_content,
+          emotion: p.emotion,
+          focus_region: p.focus_region,
+          grounded_objects: p.grounded_objects,
+        }))
+      );
+
+      if (pagesErr) {
+        console.error('Insert story_pages error:', pagesErr);
+      }
+
+      await supabase.from('ai_logs').insert({
+        user_id: profile.id,
+        story_id: storyId,
+        action: 'generate_story_3_layers',
+        model: layer2Result.model,
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+        latency_ms: totalLatencyMs,
+        estimated_cost_usd: totalCostUsd,
+        status: 'success',
+        error_code: null,
+      });
+    }
 
     const persistedStory: Story = {
       id: storyId,
@@ -1040,6 +1144,7 @@ Chấm điểm trung thực:
       created_at: nowIso,
       updated_at: nowIso,
       pages: generatedPages,
+      child: matchedChild,
       drawing: {
         id: drawingId,
         child_id: childId,
@@ -1062,9 +1167,43 @@ Chấm điểm trung thực:
     params: PlaygroundTestParams
   ): Promise<PlaygroundTestResult> {
     const { promptText, sampleNickname, sampleAge, sampleDetails } = params;
+    const inDemoSession = isUsingDemoSession();
 
-    if (isDemoMode) {
+    let directApiKey = (
+      import.meta.env.VITE_GEMINI_API_KEY ||
+      useAdminStore.getState().geminiApiKey ||
+      ''
+    ).trim();
+
+    if (!inDemoSession && !directApiKey) {
+      const { data: settingsRows } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .eq('key', 'gemini_api_key')
+        .maybeSingle();
+
+      directApiKey = ((settingsRows as { value?: string } | null)?.value || '').trim();
+    }
+
+    if (inDemoSession && !directApiKey) {
       await new Promise((r) => setTimeout(r, 700));
+      const { profile } = useAuthStore.getState();
+      if (profile) {
+        useAdminStore.getState().recordLocalAiLog({
+          id: 'log-' + Date.now(),
+          user_id: profile.id,
+          story_id: null,
+          action: 'admin_prompt_playground',
+          model: 'gemini-2.5-flash-demo',
+          input_tokens: 420,
+          output_tokens: 310,
+          latency_ms: 700,
+          estimated_cost_usd: 0.000125,
+          status: 'success',
+          error_code: null,
+          created_at: new Date().toISOString(),
+        });
+      }
       return {
         title: `Hành Trình Diệu Kỳ Của Bé ${sampleNickname}`,
         summary: `Bản chạy thử chế độ Demo cho bé ${sampleAge} tuổi với chi tiết: ${sampleDetails}.`,
@@ -1100,18 +1239,6 @@ Chấm điểm trung thực:
         },
       };
     }
-
-    const { data: settingsRows } = await supabase
-      .from('app_settings')
-      .select('key, value')
-      .eq('key', 'gemini_api_key')
-      .maybeSingle();
-
-    const directApiKey = (
-      import.meta.env.VITE_GEMINI_API_KEY ||
-      (settingsRows as { value?: string } | null)?.value ||
-      ''
-    ).trim();
 
     if (!directApiKey) {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1161,17 +1288,34 @@ Hãy sáng tác câu chuyện 4 trang tiếng Việt (30-50 từ/trang) bám sá
 
     const { profile } = useAuthStore.getState();
     if (profile) {
-      await supabase.from('ai_logs').insert({
-        user_id: profile.id,
-        story_id: null,
-        action: 'admin_prompt_playground',
-        model: result.model,
-        input_tokens: result.inputTokens,
-        output_tokens: result.outputTokens,
-        latency_ms: result.latencyMs,
-        estimated_cost_usd: result.estimatedCostUsd,
-        status: 'success',
-      });
+      if (inDemoSession) {
+        useAdminStore.getState().recordLocalAiLog({
+          id: 'log-' + Date.now(),
+          user_id: profile.id,
+          story_id: null,
+          action: 'admin_prompt_playground',
+          model: result.model,
+          input_tokens: result.inputTokens,
+          output_tokens: result.outputTokens,
+          latency_ms: result.latencyMs,
+          estimated_cost_usd: result.estimatedCostUsd,
+          status: 'success',
+          error_code: null,
+          created_at: new Date().toISOString(),
+        });
+      } else {
+        await supabase.from('ai_logs').insert({
+          user_id: profile.id,
+          story_id: null,
+          action: 'admin_prompt_playground',
+          model: result.model,
+          input_tokens: result.inputTokens,
+          output_tokens: result.outputTokens,
+          latency_ms: result.latencyMs,
+          estimated_cost_usd: result.estimatedCostUsd,
+          status: 'success',
+        });
+      }
     }
 
     return {

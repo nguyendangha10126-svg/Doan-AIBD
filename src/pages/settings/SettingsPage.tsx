@@ -13,9 +13,9 @@ import {
   Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { vi } from '@/lib/i18n/vi';
 import { Child } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -202,7 +202,7 @@ export const SettingsPage: React.FC = () => {
       toast.error('Vui lòng nhập mật khẩu tài khoản để xác thực.');
       return;
     }
-    if (!isDemoMode && profile?.email) {
+    if (!isUsingDemoSession() && profile?.email) {
       const { error: verifyErr } = await supabase.auth.signInWithPassword({
         email: profile.email,
         password: currentPassword,

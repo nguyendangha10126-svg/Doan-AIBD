@@ -18,7 +18,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export const LoginPage: React.FC = () => {
-  const { login, isLoading } = useAuthStore();
+  const { login, loginDemo, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,7 +26,6 @@ export const LoginPage: React.FC = () => {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -54,14 +53,21 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickFill = (type: 'user' | 'admin') => {
+  const handleInstantDemoLogin = async (role: 'user' | 'admin') => {
     setAuthError(null);
-    if (type === 'admin') {
-      setValue('email', 'admin@drawtostory.vn', { shouldValidate: true });
-      setValue('password', 'Admin@123', { shouldValidate: true });
+    const success = await loginDemo(role);
+    if (success) {
+      if (role === 'admin') {
+        toast.success('Đã vào ngay cổng Quản trị viên An toàn!');
+        navigate('/admin');
+      } else {
+        toast.success('Chào mừng Mẹ Thu Hà đã trở lại!');
+        navigate('/');
+      }
     } else {
-      setValue('email', 'me@phuhuynh.vn', { shouldValidate: true });
-      setValue('password', 'Parent@123', { shouldValidate: true });
+      const storeErr = useAuthStore.getState().error;
+      setAuthError(storeErr || 'Không thể đăng nhập tài khoản dùng thử lúc này.');
+      toast.error(storeErr || 'Đăng nhập không thành công');
     }
   };
 
@@ -84,6 +90,51 @@ export const LoginPage: React.FC = () => {
           {authError}
         </div>
       )}
+
+      {/* Instant 1-Click Demo Entry */}
+      <div className="mb-6 p-4 rounded-2xl bg-surface-2 border border-ink/10 space-y-3">
+        <div className="text-center">
+          <p className="text-xs font-heading font-extrabold text-ink uppercase tracking-wide">
+            Vào nhanh 1 chạm (Chế độ Demo 2 tài khoản)
+          </p>
+          <p className="text-[11px] text-ink-soft mt-0.5">
+            Chỉ cần nhấn là vào ngay — chưa cần cấu hình xác thực ngoài
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            isLoading={isLoading}
+            onClick={() => handleInstantDemoLogin('user')}
+            leftIcon={<Sparkles className="w-4 h-4" />}
+            className="w-full text-xs sm:text-sm"
+          >
+            Mẹ Thu Hà
+          </Button>
+          <Button
+            type="button"
+            variant="accent"
+            size="md"
+            isLoading={isLoading}
+            onClick={() => handleInstantDemoLogin('admin')}
+            leftIcon={<Shield className="w-4 h-4" />}
+            className="w-full text-xs sm:text-sm"
+          >
+            Quản trị Admin
+          </Button>
+        </div>
+      </div>
+
+      <div className="relative flex items-center py-1 mb-4">
+        <div className="flex-grow border-t border-ink/10" />
+        <span className="shrink-0 mx-3 text-[11px] font-heading font-bold text-ink-soft uppercase tracking-wider">
+          Hoặc nhập tài khoản
+        </span>
+        <div className="flex-grow border-t border-ink/10" />
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input
@@ -125,7 +176,7 @@ export const LoginPage: React.FC = () => {
 
         <Button
           type="submit"
-          variant="primary"
+          variant="secondary"
           size="lg"
           className="w-full"
           isLoading={isLoading}
@@ -134,35 +185,6 @@ export const LoginPage: React.FC = () => {
           {vi.auth.submitLogin}
         </Button>
       </form>
-
-      {/* Quick Fill Shortcuts for Reviewers */}
-      <div className="mt-6 pt-5 border-t border-ink/10">
-        <p className="text-[11px] text-center text-ink-soft font-heading font-bold uppercase tracking-wider mb-3">
-          Điền nhanh tài khoản khởi tạo trên CSDL
-        </p>
-        <div className="grid grid-cols-2 gap-2.5">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => handleQuickFill('user')}
-            leftIcon={<Sparkles className="w-3.5 h-3.5 text-brand-600" />}
-            className="text-xs"
-          >
-            Mẹ Thu Hà
-          </Button>
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            onClick={() => handleQuickFill('admin')}
-            leftIcon={<Shield className="w-3.5 h-3.5" />}
-            className="text-xs"
-          >
-            Quản trị Admin
-          </Button>
-        </div>
-      </div>
 
       <div className="text-center mt-6">
         <p className="text-xs text-ink-soft">

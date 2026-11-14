@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { Story, Badge, UserBadge, ReadingEvent } from '@/types/database';
-import { supabase, isDemoMode } from '@/lib/supabase';
-import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
 import { soundEffects } from '@/lib/sound';
 
 export interface StoryState {
@@ -20,6 +20,7 @@ export interface StoryState {
   fetchStoryById: (storyId: string) => Promise<Story | null>;
   addStory: (story: Story) => Promise<void>;
   deleteStory: (storyId: string) => Promise<boolean>;
+  removeStoriesByChildId: (childId: string) => void;
   updateStoryStatus: (
     storyId: string,
     status: Story['status'],
@@ -123,32 +124,28 @@ export const useStoryStore = create<StoryState>()(
 
         if (!profile) {
           set({
-            stories: [],
-            userBadges: [],
-            readingEvents: [],
             creativeStreak: 0,
             isLoading: false,
           });
           return;
         }
 
-        if (isDemoMode) {
+        if (isUsingDemoSession()) {
           const currentStories = get().stories;
           set({
             creativeStreak: calculateStreakFromStories(currentStories, selectedChildId),
+            isLoading: false,
           });
           return;
         }
 
         set({ isLoading: true, error: null });
         try {
-          // Sync badge catalog
           const { data: dbBadges } = await supabase.from('badges').select('*');
           if (dbBadges && dbBadges.length > 0) {
             set({ badges: dbBadges as Badge[] });
           }
 
-          // Admin fetches all stories across platform for Moderation Queue
           if (profile.role === 'admin') {
             let adminQuery = supabase
               .from('stories')
@@ -171,7 +168,6 @@ export const useStoryStore = create<StoryState>()(
             return;
           }
 
-          // Regular parent: strict isolation to own childrenList
           const myChildIds = childrenList.map((c) => c.id);
           if (myChildIds.length === 0) {
             set({
@@ -229,11 +225,16 @@ export const useStoryStore = create<StoryState>()(
       },
 
       fetchStoryById: async (storyId: string) => {
+        const { profile, childrenList } = useAuthStore.getState();
         const existing = get().stories.find((s) => s.id === storyId);
         if (existing && existing.pages && existing.pages.length > 0) {
+          if (profile && profile.role !== 'admin') {
+            const ownsChild = childrenList.some((c) => c.id === existing.child_id);
+            if (!ownsChild) return null;
+          }
           return existing;
         }
-        if (isDemoMode) return existing || null;
+        if (isUsingDemoSession()) return null;
 
         try {
           const { data, error } = await supabase
@@ -244,10 +245,8 @@ export const useStoryStore = create<StoryState>()(
 
           if (error || !data) return null;
 
-          const { profile, childrenList } = useAuthStore.getState();
           const fetched = normalizeStory(data as Story);
 
-          // Ensure parent can only open own child's story via private reader route
           if (profile && profile.role !== 'admin') {
             const ownsChild = childrenList.some((c) => c.id === fetched.child_id);
             if (!ownsChild) return null;
@@ -278,8 +277,7 @@ export const useStoryStore = create<StoryState>()(
       deleteStory: async (storyId: string) => {
         const target = get().stories.find((s) => s.id === storyId);
         try {
-          if (!isDemoMode) {
-            // Remove storage file first if present
+          if (!isUsingDemoSession()) {
             const storagePath = extractStoragePathFromUrl(target?.drawing?.image_path);
             if (storagePath) {
               await supabase.storage.from('drawings').remove([storagePath]).catch(() => {});
@@ -291,7 +289,6 @@ export const useStoryStore = create<StoryState>()(
               return false;
             }
 
-            // Also remove parent drawing row so no orphan drawing remains
             if (target?.drawing_id) {
               await supabase.from('drawings').delete().eq('id', target.drawing_id);
             }
@@ -312,6 +309,19 @@ export const useStoryStore = create<StoryState>()(
         }
       },
 
+      removeStoriesByChildId: (childId: string) => {
+        const { selectedChildId } = useAuthStore.getState();
+        set((state) => {
+          const remaining = state.stories.filter((s) => s.child_id !== childId);
+          return {
+            stories: remaining,
+            userBadges: state.userBadges.filter((ub) => ub.child_id !== childId),
+            readingEvents: state.readingEvents.filter((re) => re.child_id !== childId),
+            creativeStreak: calculateStreakFromStories(remaining, selectedChildId),
+          };
+        });
+      },
+
       updateStoryStatus: async (
         storyId: string,
         status: Story['status'],
@@ -320,7 +330,7 @@ export const useStoryStore = create<StoryState>()(
       ) => {
         try {
           const reviewedAt = new Date().toISOString();
-          if (!isDemoMode && !skipRemoteUpdate) {
+          if (!isUsingDemoSession() && !skipRemoteUpdate) {
             const { error } = await supabase
               .from('stories')
               .update({
@@ -350,7 +360,7 @@ export const useStoryStore = create<StoryState>()(
 
       toggleStoryShare: async (storyId: string, isShared: boolean) => {
         try {
-          if (!isDemoMode) {
+          if (!isUsingDemoSession()) {
             const { error } = await supabase
               .from('stories')
               .update({ is_shared: isShared, updated_at: new Date().toISOString() })
@@ -375,7 +385,7 @@ export const useStoryStore = create<StoryState>()(
       reportStory: async (storyId: string, reason: string) => {
         try {
           const formattedReason = `[Phụ huynh báo cáo]: ${reason}`;
-          if (!isDemoMode) {
+          if (!isUsingDemoSession()) {
             const { error } = await supabase
               .from('stories')
               .update({
@@ -418,7 +428,7 @@ export const useStoryStore = create<StoryState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data } = await supabase
             .from('reading_events')
             .insert({
@@ -458,7 +468,7 @@ export const useStoryStore = create<StoryState>()(
           badge,
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data, error } = await supabase
             .from('user_badges')
             .upsert(
@@ -520,13 +530,18 @@ export const useStoryStore = create<StoryState>()(
       },
 
       getTodayStoryCount: () => {
+        const { childrenList } = useAuthStore.getState();
+        const myChildIds = new Set(childrenList.map((c) => c.id));
         const todayKey = toLocalDateKey(new Date().toISOString());
-        return get().stories.filter((s) => toLocalDateKey(s.created_at) === todayKey).length;
+        return get().stories.filter(
+          (s) => myChildIds.has(s.child_id) && toLocalDateKey(s.created_at) === todayKey
+        ).length;
       },
 
       exportUserDataJson: () => {
         const { stories, readingEvents, userBadges } = get();
         const { profile, childrenList } = useAuthStore.getState();
+        const myChildIds = new Set(childrenList.map((c) => c.id));
         return JSON.stringify(
           {
             exportedAt: new Date().toISOString(),
@@ -534,9 +549,9 @@ export const useStoryStore = create<StoryState>()(
               ? { id: profile.id, email: profile.email, fullName: profile.full_name }
               : null,
             children: childrenList,
-            stories,
-            readingEvents,
-            userBadges,
+            stories: stories.filter((s) => myChildIds.has(s.child_id)),
+            readingEvents: readingEvents.filter((e) => myChildIds.has(e.child_id)),
+            userBadges: userBadges.filter((ub) => myChildIds.has(ub.child_id)),
           },
           null,
           2
@@ -544,20 +559,34 @@ export const useStoryStore = create<StoryState>()(
       },
 
       clearAllUserData: () => {
-        set({
-          stories: [],
-          userBadges: [],
-          readingEvents: [],
+        const { childrenList } = useAuthStore.getState();
+        const myChildIds = new Set(childrenList.map((c) => c.id));
+        set((state) => ({
+          stories: state.stories.filter((s) => !myChildIds.has(s.child_id)),
+          userBadges: state.userBadges.filter((ub) => !myChildIds.has(ub.child_id)),
+          readingEvents: state.readingEvents.filter((e) => !myChildIds.has(e.child_id)),
           creativeStreak: 0,
           error: null,
-        });
+        }));
       },
     }),
     {
       name: 'drawtostory-stories-storage',
       partialize: (state) => ({
+        stories: state.stories,
         badges: state.badges,
+        userBadges: state.userBadges,
+        readingEvents: state.readingEvents,
       }),
     }
   )
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('drawtostory:child-deleted', (ev: Event) => {
+    const customEv = ev as CustomEvent<{ childId?: string }>;
+    if (customEv.detail?.childId) {
+      useStoryStore.getState().removeStoriesByChildId(customEv.detail.childId);
+    }
+  });
+}

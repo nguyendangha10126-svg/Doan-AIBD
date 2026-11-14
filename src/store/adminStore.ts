@@ -10,8 +10,13 @@ import {
   RiskReason,
   isStoryApproved,
 } from '@/types/database';
-import { supabase, isDemoMode } from '@/lib/supabase';
-import { DEFAULT_ADMIN_PROFILE, DEFAULT_USER_PROFILE, useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
+import {
+  DEFAULT_ADMIN_PROFILE,
+  DEFAULT_USER_PROFILE,
+  useAuthStore,
+  isUsingDemoSession,
+} from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
 
 export interface AdminKpis {
@@ -59,6 +64,10 @@ export interface AdminState {
 
   // Actions
   fetchAdminData: () => Promise<void>;
+  recomputeLocalMetrics: () => void;
+  recordLocalAiLog: (log: AiLog) => void;
+  upsertLocalUser: (user: Profile) => void;
+
   toggleSafetyRule: (ruleId: string) => Promise<boolean>;
   addSafetyRule: (rule: Omit<SafetyRule, 'id' | 'created_at'>) => Promise<boolean>;
   deleteSafetyRule: (ruleId: string) => Promise<boolean>;
@@ -118,6 +127,144 @@ function toLocalDayKey(isoString?: string | null): string {
 const CLEAN_CHART_7D = buildEmptyDays(7).map((b) => b.point);
 const CLEAN_CHART_30D = buildEmptyDays(30).map((b) => b.point);
 
+const ERROR_CODE_LABELS: Record<string, string> = {
+  NOT_A_DRAWING: 'Ảnh không phải tranh vẽ',
+  REAL_FACE_DETECTED: 'Khuôn mặt người thật',
+  PII_DETECTED: 'Thông tin cá nhân (PII)',
+  UNSAFE_INPUT: 'Vi phạm an toàn đầu vào',
+  IMAGE_TOO_BLURRY: 'Ảnh mờ / thiếu nét',
+  IMAGE_TOO_DARK: 'Ảnh thiếu sáng',
+};
+
+function computeMetricsFromCollections(params: {
+  allStories: Array<{
+    id: string;
+    status: string;
+    risk_score: number;
+    risk_reasons: RiskReason[] | null;
+    rejection_reason: string | null;
+    created_at: string;
+  }>;
+  allLogs: AiLog[];
+  allReviews: ModerationReview[];
+  maxRiskThreshold: number;
+  budgetUsd: number;
+}): {
+  chartData: DailyChartPoint[];
+  chartData30d: DailyChartPoint[];
+  rejectionCategories: RejectionCategoryPoint[];
+  kpis: AdminKpis;
+  hasReviewedStories: boolean;
+} {
+  const { allStories, allLogs, allReviews, maxRiskThreshold, budgetUsd } = params;
+
+  const buckets = buildEmptyDays(30);
+  const bucketMap = new Map(buckets.map((b) => [b.isoKey, b.point]));
+  const latencyCounter = new Map<string, { sum: number; count: number }>();
+
+  for (const st of allStories) {
+    const key = toLocalDayKey(st.created_at);
+    const bucket = bucketMap.get(key);
+    if (bucket) {
+      bucket.stories += 1;
+      if (isStoryApproved(st.status)) bucket.approved += 1;
+      if (st.status === 'rejected') bucket.rejected += 1;
+    }
+  }
+
+  for (const lg of allLogs) {
+    const key = toLocalDayKey(lg.created_at);
+    const bucket = bucketMap.get(key);
+    if (bucket) {
+      bucket.tokens += (Number(lg.input_tokens) || 0) + (Number(lg.output_tokens) || 0);
+      bucket.cost = Number((bucket.cost + (Number(lg.estimated_cost_usd) || 0)).toFixed(6));
+      if (lg.latency_ms > 0) {
+        const prev = latencyCounter.get(key) || { sum: 0, count: 0 };
+        latencyCounter.set(key, { sum: prev.sum + lg.latency_ms, count: prev.count + 1 });
+      }
+    }
+  }
+
+  for (const [key, lat] of latencyCounter.entries()) {
+    const bucket = bucketMap.get(key);
+    if (bucket && lat.count > 0) {
+      bucket.avgLatency = Math.round(lat.sum / lat.count);
+    }
+  }
+
+  const computed30d = buckets.map((b) => b.point);
+  const computed7d = computed30d.slice(-7);
+
+  const catCounts = new Map<string, number>();
+  for (const st of allStories) {
+    if (st.status === 'rejected') {
+      const reasons = Array.isArray(st.risk_reasons) ? st.risk_reasons : [];
+      if (reasons.length > 0) {
+        for (const r of reasons) {
+          if (r.category) {
+            catCounts.set(r.category, (catCounts.get(r.category) || 0) + 1);
+          }
+        }
+      } else {
+        catCounts.set('Từ chối kiểm duyệt', (catCounts.get('Từ chối kiểm duyệt') || 0) + 1);
+      }
+    }
+  }
+  for (const lg of allLogs) {
+    if (lg.status === 'error' && lg.error_code && ERROR_CODE_LABELS[lg.error_code]) {
+      const label = ERROR_CODE_LABELS[lg.error_code];
+      catCounts.set(label, (catCounts.get(label) || 0) + 1);
+    }
+  }
+  const rejectionCategories = Array.from(catCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  const todayKey = toLocalDayKey(new Date().toISOString());
+  const storiesToday = allStories.filter((s) => toLocalDayKey(s.created_at) === todayKey).length;
+  const pendingCount = allStories.filter((s) => s.status === 'pending_review').length;
+  const rejectedCount = allStories.filter((s) => s.status === 'rejected').length;
+  const inputBlockedCount = allLogs.filter(
+    (l) => l.action === 'layer1_input_safety_blocked'
+  ).length;
+  const totalAttempts = allStories.length + inputBlockedCount;
+  const blockedRate =
+    totalAttempts > 0
+      ? Number((((rejectedCount + inputBlockedCount) / totalAttempts) * 100).toFixed(1))
+      : 0;
+
+  const currentMonthPrefix = new Date().toISOString().substring(0, 7);
+  const monthlyCostUsd = allLogs
+    .filter((l) => (l.created_at || '').startsWith(currentMonthPrefix))
+    .reduce((acc, curr) => acc + (Number(curr.estimated_cost_usd) || 0), 0);
+
+  let agreementPercent = 100;
+  if (allReviews.length > 0) {
+    const agreed = allReviews.filter(
+      (r) =>
+        (r.decision === 'rejected' && r.ai_risk_score_at_review > maxRiskThreshold) ||
+        (r.decision === 'approved' && r.ai_risk_score_at_review <= 60)
+    ).length;
+    agreementPercent = Math.round((agreed / allReviews.length) * 100);
+  }
+
+  return {
+    chartData30d: computed30d,
+    chartData: computed7d,
+    rejectionCategories,
+    hasReviewedStories: allReviews.length > 0,
+    kpis: {
+      storiesToday,
+      blockedRatePercent: blockedRate,
+      pendingQueueCount: pendingCount,
+      monthlyCostUsd: Number(monthlyCostUsd.toFixed(4)),
+      monthlyBudgetUsd: budgetUsd,
+      aiAdminAgreementPercent: agreementPercent,
+    },
+  };
+}
+
 const INITIAL_SAFETY_RULES: SafetyRule[] = [
   { id: 'e0000001-0000-0000-0000-000000000001', category: 'Bạo lực & Vũ khí', description: 'Tranh vẽ hoặc văn bản chứa súng đạn, đao kiếm gây thương tích đẫm máu.', severity: 5, action: 'block', is_active: true, created_at: new Date().toISOString() },
   { id: 'e0000002-0000-0000-0000-000000000002', category: 'Nội dung người lớn', description: 'Mọi yếu tố không phù hợp với thuần phong mỹ tục lứa tuổi thiếu nhi.', severity: 5, action: 'block', is_active: true, created_at: new Date().toISOString() },
@@ -152,15 +299,6 @@ QUY TẮC BẮT BUỘC:
   },
 ];
 
-const ERROR_CODE_LABELS: Record<string, string> = {
-  NOT_A_DRAWING: 'Ảnh không phải tranh vẽ',
-  REAL_FACE_DETECTED: 'Khuôn mặt người thật',
-  PII_DETECTED: 'Thông tin cá nhân (PII)',
-  UNSAFE_INPUT: 'Vi phạm an toàn đầu vào',
-  IMAGE_TOO_BLURRY: 'Ảnh mờ / thiếu nét',
-  IMAGE_TOO_DARK: 'Ảnh thiếu sáng',
-};
-
 export const useAdminStore = create<AdminState>()(
   persist(
     (set, get) => ({
@@ -189,8 +327,52 @@ export const useAdminStore = create<AdminState>()(
       geminiApiKey: '',
       isLoading: false,
 
+      recomputeLocalMetrics: () => {
+        const { aiLogs, moderationReviews, autoApproveMaxRisk, kpis } = get();
+        const localStories = useStoryStore.getState().stories;
+        const metrics = computeMetricsFromCollections({
+          allStories: localStories.map((s) => ({
+            id: s.id,
+            status: s.status,
+            risk_score: s.risk_score,
+            risk_reasons: s.risk_reasons,
+            rejection_reason: s.rejection_reason,
+            created_at: s.created_at,
+          })),
+          allLogs: aiLogs,
+          allReviews: moderationReviews,
+          maxRiskThreshold: autoApproveMaxRisk,
+          budgetUsd: kpis.monthlyBudgetUsd || 50.0,
+        });
+        set(metrics);
+      },
+
+      recordLocalAiLog: (log: AiLog) => {
+        set((state) => ({
+          aiLogs: [log, ...state.aiLogs].slice(0, 500),
+        }));
+        get().recomputeLocalMetrics();
+      },
+
+      upsertLocalUser: (user: Profile) => {
+        set((state) => {
+          const exists = state.usersList.some((u) => u.id === user.id);
+          if (exists) {
+            return {
+              usersList: state.usersList.map((u) => (u.id === user.id ? { ...u, ...user } : u)),
+            };
+          }
+          return {
+            usersList: [user, ...state.usersList],
+          };
+        });
+      },
+
       fetchAdminData: async () => {
-        if (isDemoMode) return;
+        if (isUsingDemoSession()) {
+          get().recomputeLocalMetrics();
+          return;
+        }
         set({ isLoading: true });
         try {
           const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
@@ -217,7 +399,7 @@ export const useAdminStore = create<AdminState>()(
 
           const stateUpdates: Partial<AdminState> = {};
 
-          if (profiles) {
+          if (profiles && profiles.length > 0) {
             stateUpdates.usersList = profiles as Profile[];
           }
 
@@ -234,7 +416,6 @@ export const useAdminStore = create<AdminState>()(
 
           const allReviews = (reviews as ModerationReview[]) || [];
           stateUpdates.moderationReviews = allReviews;
-          stateUpdates.hasReviewedStories = allReviews.length > 0;
 
           if (audits) {
             stateUpdates.auditLogs = audits as AdminAuditLog[];
@@ -267,11 +448,6 @@ export const useAdminStore = create<AdminState>()(
             });
           }
 
-          // Build 30-day & 7-day real charts
-          const buckets = buildEmptyDays(30);
-          const bucketMap = new Map(buckets.map((b) => [b.isoKey, b.point]));
-          const latencyCounter = new Map<string, { sum: number; count: number }>();
-
           const allStories = (stories || []) as Array<{
             id: string;
             status: string;
@@ -281,106 +457,18 @@ export const useAdminStore = create<AdminState>()(
             created_at: string;
           }>;
 
-          for (const st of allStories) {
-            const key = toLocalDayKey(st.created_at);
-            const bucket = bucketMap.get(key);
-            if (bucket) {
-              bucket.stories += 1;
-              if (isStoryApproved(st.status)) bucket.approved += 1;
-              if (st.status === 'rejected') bucket.rejected += 1;
-            }
-          }
+          const computed = computeMetricsFromCollections({
+            allStories,
+            allLogs,
+            allReviews,
+            maxRiskThreshold,
+            budgetUsd,
+          });
 
-          for (const lg of allLogs) {
-            const key = toLocalDayKey(lg.created_at);
-            const bucket = bucketMap.get(key);
-            if (bucket) {
-              bucket.tokens += (Number(lg.input_tokens) || 0) + (Number(lg.output_tokens) || 0);
-              bucket.cost = Number((bucket.cost + (Number(lg.estimated_cost_usd) || 0)).toFixed(6));
-              if (lg.latency_ms > 0) {
-                const prev = latencyCounter.get(key) || { sum: 0, count: 0 };
-                latencyCounter.set(key, { sum: prev.sum + lg.latency_ms, count: prev.count + 1 });
-              }
-            }
-          }
-
-          for (const [key, lat] of latencyCounter.entries()) {
-            const bucket = bucketMap.get(key);
-            if (bucket && lat.count > 0) {
-              bucket.avgLatency = Math.round(lat.sum / lat.count);
-            }
-          }
-
-          const computed30d = buckets.map((b) => b.point);
-          stateUpdates.chartData30d = computed30d;
-          stateUpdates.chartData = computed30d.slice(-7);
-
-          // Build real rejection / block categories
-          const catCounts = new Map<string, number>();
-          for (const st of allStories) {
-            if (st.status === 'rejected') {
-              const reasons = Array.isArray(st.risk_reasons) ? st.risk_reasons : [];
-              if (reasons.length > 0) {
-                for (const r of reasons) {
-                  if (r.category) {
-                    catCounts.set(r.category, (catCounts.get(r.category) || 0) + 1);
-                  }
-                }
-              } else {
-                catCounts.set('Từ chối kiểm duyệt', (catCounts.get('Từ chối kiểm duyệt') || 0) + 1);
-              }
-            }
-          }
-          for (const lg of allLogs) {
-            if (lg.status === 'error' && lg.error_code && ERROR_CODE_LABELS[lg.error_code]) {
-              const label = ERROR_CODE_LABELS[lg.error_code];
-              catCounts.set(label, (catCounts.get(label) || 0) + 1);
-            }
-          }
-          stateUpdates.rejectionCategories = Array.from(catCounts.entries())
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 6);
-
-          // Compute Real KPIs
-          const todayKey = toLocalDayKey(new Date().toISOString());
-          const storiesToday = allStories.filter((s) => toLocalDayKey(s.created_at) === todayKey).length;
-          const pendingCount = allStories.filter((s) => s.status === 'pending_review').length;
-          const rejectedCount = allStories.filter((s) => s.status === 'rejected').length;
-          const inputBlockedCount = allLogs.filter(
-            (l) => l.action === 'layer1_input_safety_blocked'
-          ).length;
-          const totalAttempts = allStories.length + inputBlockedCount;
-          const blockedRate =
-            totalAttempts > 0
-              ? Number((((rejectedCount + inputBlockedCount) / totalAttempts) * 100).toFixed(1))
-              : 0;
-
-          const currentMonthPrefix = new Date().toISOString().substring(0, 7);
-          const monthlyCostUsd = allLogs
-            .filter((l) => (l.created_at || '').startsWith(currentMonthPrefix))
-            .reduce((acc, curr) => acc + (Number(curr.estimated_cost_usd) || 0), 0);
-
-          let agreementPercent = 100;
-          if (allReviews.length > 0) {
-            const agreed = allReviews.filter(
-              (r) =>
-                (r.decision === 'rejected' && r.ai_risk_score_at_review > maxRiskThreshold) ||
-                (r.decision === 'approved' && r.ai_risk_score_at_review <= 60)
-            ).length;
-            agreementPercent = Math.round((agreed / allReviews.length) * 100);
-          }
-
-          stateUpdates.kpis = {
-            storiesToday,
-            blockedRatePercent: blockedRate,
-            pendingQueueCount: pendingCount,
-            monthlyCostUsd: Number(monthlyCostUsd.toFixed(4)),
-            monthlyBudgetUsd: budgetUsd,
-            aiAdminAgreementPercent: agreementPercent,
-          };
-
-          set(stateUpdates);
+          set({
+            ...stateUpdates,
+            ...computed,
+          });
         } catch (err) {
           console.error('fetchAdminData error:', err);
         } finally {
@@ -393,7 +481,7 @@ export const useAdminStore = create<AdminState>()(
         if (!rule) return false;
         const nextActive = !rule.is_active;
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase
             .from('safety_rules')
             .update({ is_active: nextActive })
@@ -420,7 +508,7 @@ export const useAdminStore = create<AdminState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data, error } = await supabase
             .from('safety_rules')
             .insert(rule)
@@ -441,7 +529,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       deleteSafetyRule: async (ruleId: string) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('safety_rules').delete().eq('id', ruleId);
           if (error) {
             console.error('deleteSafetyRule error:', error);
@@ -457,7 +545,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       updateSafetyRule: async (rule: SafetyRule) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase
             .from('safety_rules')
             .update({
@@ -500,7 +588,7 @@ export const useAdminStore = create<AdminState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data, error } = await supabase
             .from('system_prompts')
             .insert({
@@ -527,7 +615,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       setActiveSystemPrompt: async (promptId: string) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error: offError } = await supabase
             .from('system_prompts')
             .update({ is_active: false })
@@ -571,7 +659,7 @@ export const useAdminStore = create<AdminState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data: revData, error: revErr } = await supabase
             .from('moderation_reviews')
             .insert({
@@ -611,11 +699,8 @@ export const useAdminStore = create<AdminState>()(
         set((state) => ({
           moderationReviews: [createdReview, ...state.moderationReviews],
           hasReviewedStories: true,
-          kpis: {
-            ...state.kpis,
-            pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1),
-          },
         }));
+        get().recomputeLocalMetrics();
         await get().logAudit('APPROVE_STORY', 'stories', storyId, { reason, riskAtReview });
         return true;
       },
@@ -635,7 +720,7 @@ export const useAdminStore = create<AdminState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data: revData, error: revErr } = await supabase
             .from('moderation_reviews')
             .insert({
@@ -675,11 +760,8 @@ export const useAdminStore = create<AdminState>()(
         set((state) => ({
           moderationReviews: [createdReview, ...state.moderationReviews],
           hasReviewedStories: true,
-          kpis: {
-            ...state.kpis,
-            pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - 1),
-          },
         }));
+        get().recomputeLocalMetrics();
         await get().logAudit('REJECT_STORY', 'stories', storyId, { reason, riskAtReview });
         return true;
       },
@@ -692,7 +774,7 @@ export const useAdminStore = create<AdminState>()(
 
         for (const sId of storyIds) {
           const riskAtReview = storiesMap.get(sId)?.risk_score ?? (decision === 'approved' ? 15 : 60);
-          if (!isDemoMode) {
+          if (!isUsingDemoSession()) {
             const { error: revErr } = await supabase.from('moderation_reviews').insert({
               story_id: sId,
               admin_id: resolvedAdminId,
@@ -742,11 +824,8 @@ export const useAdminStore = create<AdminState>()(
         set((state) => ({
           moderationReviews: [...newReviews, ...state.moderationReviews],
           hasReviewedStories: true,
-          kpis: {
-            ...state.kpis,
-            pendingQueueCount: Math.max(0, state.kpis.pendingQueueCount - storyIds.length),
-          },
         }));
+        get().recomputeLocalMetrics();
         await get().logAudit('BATCH_MODERATION', 'stories', storyIds.join(','), {
           count: storyIds.length,
           decision,
@@ -755,7 +834,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       updateModerationSettings: async (mode: 'auto' | 'manual_all', maxRisk: number) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert([
             { key: 'moderation_mode', value: mode, updated_at: new Date().toISOString() },
             { key: 'auto_approve_max_risk', value: maxRisk.toString(), updated_at: new Date().toISOString() },
@@ -775,7 +854,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       setStrictDrawingCheck: async (val: boolean) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert({
             key: 'strict_drawing_check',
             value: val ? 'true' : 'false',
@@ -795,7 +874,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       updateGlobalDailyLimit: async (limit: number) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert({
             key: 'daily_story_limit',
             value: limit.toString(),
@@ -813,7 +892,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       updateMonthlyBudget: async (budgetUsd: number) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert({
             key: 'monthly_budget_usd',
             value: budgetUsd.toFixed(2),
@@ -834,7 +913,7 @@ export const useAdminStore = create<AdminState>()(
 
       updateGeminiApiKey: async (apiKey: string) => {
         const cleanKey = apiKey.trim();
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert({
             key: 'gemini_api_key',
             value: cleanKey,
@@ -858,7 +937,7 @@ export const useAdminStore = create<AdminState>()(
         if (!user) return false;
         const nextLock = !user.is_locked;
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase
             .from('profiles')
             .update({ is_locked: nextLock, updated_at: new Date().toISOString() })
@@ -879,7 +958,7 @@ export const useAdminStore = create<AdminState>()(
       },
 
       updateUserQuota: async (userId: string, quota: number) => {
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { error } = await supabase
             .from('profiles')
             .update({ daily_quota: quota, updated_at: new Date().toISOString() })
@@ -911,7 +990,7 @@ export const useAdminStore = create<AdminState>()(
           created_at: new Date().toISOString(),
         };
 
-        if (!isDemoMode) {
+        if (!isUsingDemoSession()) {
           const { data } = await supabase
             .from('admin_audit_logs')
             .insert({
@@ -927,7 +1006,7 @@ export const useAdminStore = create<AdminState>()(
         }
 
         set((state) => ({
-          auditLogs: [audit, ...state.auditLogs],
+          auditLogs: [audit, ...state.auditLogs].slice(0, 200),
         }));
       },
 
@@ -963,11 +1042,29 @@ export const useAdminStore = create<AdminState>()(
     {
       name: 'drawtostory-admin-storage',
       partialize: (state) => ({
+        kpis: state.kpis,
+        hasReviewedStories: state.hasReviewedStories,
+        safetyRules: state.safetyRules,
+        systemPrompts: state.systemPrompts,
+        aiLogs: state.aiLogs,
+        moderationReviews: state.moderationReviews,
+        auditLogs: state.auditLogs,
+        usersList: state.usersList,
         moderationMode: state.moderationMode,
         autoApproveMaxRisk: state.autoApproveMaxRisk,
         globalDailyLimit: state.globalDailyLimit,
         strictDrawingCheck: state.strictDrawingCheck,
+        geminiApiKey: state.geminiApiKey,
       }),
     }
   )
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('drawtostory:profile-updated', (ev: Event) => {
+    const customEv = ev as CustomEvent<{ profile?: Profile }>;
+    if (customEv.detail?.profile) {
+      useAdminStore.getState().upsertLocalUser(customEv.detail.profile);
+    }
+  });
+}

@@ -8,7 +8,8 @@ import {
   HeartHandshake
 } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
-import { supabase, isDemoMode } from '@/lib/supabase';
+import { isUsingDemoSession } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import { isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -25,7 +26,7 @@ export const TrustPage: React.FC = () => {
 
   useEffect(() => {
     async function loadRealStats() {
-      if (!isDemoMode) {
+      if (!isUsingDemoSession()) {
         try {
           const { count: totalCount } = await supabase
             .from('stories')

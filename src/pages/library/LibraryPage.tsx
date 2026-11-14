@@ -33,8 +33,13 @@ export const LibraryPage: React.FC = () => {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
 
-  // Filter logic
+  const myChildIds = new Set(childrenList.map((c) => c.id));
+
+  // Filter logic (strictly scoped to own children)
   const filteredStories = stories.filter((story) => {
+    if (!myChildIds.has(story.child_id)) {
+      return false;
+    }
     // Child filter
     if (selectedChildFilter !== 'all' && story.child_id !== selectedChildFilter) {
       return false;
