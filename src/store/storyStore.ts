@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { Story, Badge, UserBadge, ReadingEvent } from '@/types/database';
-import { supabase } from '@/lib/supabase';
+import { supabase, isDemoMode } from '@/lib/supabase';
+import { toLocalDateKey } from '@/lib/utils';
 import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
 import { soundEffects } from '@/lib/sound';
 
@@ -46,14 +47,6 @@ export const INITIAL_BADGES: Badge[] = [
   { id: 'b5555555-0000-0000-0000-000000000005', slug: 'master_storyteller', title: 'Đại Sứ Kể Chuyện', description: 'Bé hoàn thành 10 cuốn sách tranh rực rỡ.', icon: '👑', criteria: 'Đạt 10 truyện' },
 ];
 
-function toLocalDateKey(isoString: string): string {
-  const d = new Date(isoString);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 export function calculateStreakFromStories(stories: Story[], childId?: string | null): number {
   const filtered = childId ? stories.filter((s) => s.child_id === childId) : stories;
   if (filtered.length === 0) return 0;
@@ -64,8 +57,8 @@ export function calculateStreakFromStories(stories: Story[], childId?: string | 
 
   if (uniqueDates.length === 0) return 0;
 
-  const todayKey = toLocalDateKey(new Date().toISOString());
-  const yesterdayKey = toLocalDateKey(new Date(Date.now() - 86400000).toISOString());
+  const todayKey = toLocalDateKey(new Date());
+  const yesterdayKey = toLocalDateKey(new Date(Date.now() - 86400000));
 
   if (uniqueDates[0] !== todayKey && uniqueDates[0] !== yesterdayKey) {
     return 0;
@@ -124,6 +117,9 @@ export const useStoryStore = create<StoryState>()(
 
         if (!profile) {
           set({
+            stories: [],
+            userBadges: [],
+            readingEvents: [],
             creativeStreak: 0,
             isLoading: false,
           });
@@ -131,9 +127,13 @@ export const useStoryStore = create<StoryState>()(
         }
 
         if (isUsingDemoSession()) {
-          const currentStories = get().stories;
+          const myChildIds = new Set(childrenList.map((c) => c.id));
+          const scopedStories =
+            profile.role === 'admin'
+              ? get().stories
+              : get().stories.filter((s) => myChildIds.has(s.child_id));
           set({
-            creativeStreak: calculateStreakFromStories(currentStories, selectedChildId),
+            creativeStreak: calculateStreakFromStories(scopedStories, selectedChildId),
             isLoading: false,
           });
           return;
@@ -179,22 +179,17 @@ export const useStoryStore = create<StoryState>()(
             return;
           }
 
-          let storyQuery = supabase
-            .from('stories')
-            .select('*, pages:story_pages(*), drawing:drawings(*), child:children(*)')
-            .in('child_id', myChildIds)
-            .order('created_at', { ascending: false });
-
-          if (childId && myChildIds.includes(childId)) {
-            storyQuery = storyQuery.eq('child_id', childId);
-          }
-
+          // Fetch all stories across parent's children so switching active child never hides or loses data in store
           const [
             { data: storiesData, error: storiesError },
             { data: ubData },
             { data: reData },
           ] = await Promise.all([
-            storyQuery,
+            supabase
+              .from('stories')
+              .select('*, pages:story_pages(*), drawing:drawings(*), child:children(*)')
+              .in('child_id', myChildIds)
+              .order('created_at', { ascending: false }),
             supabase
               .from('user_badges')
               .select('*, badge:badges(*)')
@@ -207,15 +202,14 @@ export const useStoryStore = create<StoryState>()(
               .order('created_at', { ascending: false }),
           ]);
 
-          const normalizedStories = !storiesError && storiesData
-            ? (storiesData as Story[]).map(normalizeStory)
-            : [];
+          const normalizedStories =
+            !storiesError && storiesData ? (storiesData as Story[]).map(normalizeStory) : [];
 
           set({
             stories: normalizedStories,
             userBadges: (ubData as UserBadge[]) || [],
             readingEvents: (reData as ReadingEvent[]) || [],
-            creativeStreak: calculateStreakFromStories(normalizedStories, selectedChildId),
+            creativeStreak: calculateStreakFromStories(normalizedStories, childId || selectedChildId),
           });
         } catch (err) {
           console.error('fetchStories error:', err);
@@ -532,7 +526,7 @@ export const useStoryStore = create<StoryState>()(
       getTodayStoryCount: () => {
         const { childrenList } = useAuthStore.getState();
         const myChildIds = new Set(childrenList.map((c) => c.id));
-        const todayKey = toLocalDateKey(new Date().toISOString());
+        const todayKey = toLocalDateKey(new Date());
         return get().stories.filter(
           (s) => myChildIds.has(s.child_id) && toLocalDateKey(s.created_at) === todayKey
         ).length;
@@ -559,25 +553,29 @@ export const useStoryStore = create<StoryState>()(
       },
 
       clearAllUserData: () => {
-        const { childrenList } = useAuthStore.getState();
-        const myChildIds = new Set(childrenList.map((c) => c.id));
-        set((state) => ({
-          stories: state.stories.filter((s) => !myChildIds.has(s.child_id)),
-          userBadges: state.userBadges.filter((ub) => !myChildIds.has(ub.child_id)),
-          readingEvents: state.readingEvents.filter((e) => !myChildIds.has(e.child_id)),
+        set({
+          stories: [],
+          userBadges: [],
+          readingEvents: [],
           creativeStreak: 0,
           error: null,
-        }));
+        });
       },
     }),
     {
       name: 'drawtostory-stories-storage',
-      partialize: (state) => ({
-        stories: state.stories,
-        badges: state.badges,
-        userBadges: state.userBadges,
-        readingEvents: state.readingEvents,
-      }),
+      // Only persist mock stories in local DEV mode; in production all stories come from Supabase per authenticated user
+      partialize: (state) =>
+        isDemoMode
+          ? {
+              stories: state.stories,
+              badges: state.badges,
+              userBadges: state.userBadges,
+              readingEvents: state.readingEvents,
+            }
+          : {
+              badges: state.badges,
+            },
     }
   )
 );
@@ -588,5 +586,9 @@ if (typeof window !== 'undefined') {
     if (customEv.detail?.childId) {
       useStoryStore.getState().removeStoriesByChildId(customEv.detail.childId);
     }
+  });
+
+  window.addEventListener('drawtostory:logged-out', () => {
+    useStoryStore.getState().clearAllUserData();
   });
 }

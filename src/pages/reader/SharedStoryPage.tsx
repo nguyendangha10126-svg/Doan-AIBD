@@ -4,6 +4,7 @@ import { Sparkles, ChevronLeft, ChevronRight, Play, Pause, BookOpen, Heart } fro
 import { useStoryStore } from '@/store/storyStore';
 import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
 import { Story, isStoryApproved } from '@/types/database';
+import { formatChildName } from '@/lib/utils';
 import { vi } from '@/lib/i18n/vi';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -220,7 +221,7 @@ export const SharedStoryPage: React.FC = () => {
             {story.title}
           </h1>
           <p className="text-xs sm:text-sm font-heading font-bold text-brand-600">
-            Tác giả nét vẽ: Bé {story.child?.nickname || 'Bé yêu'}
+            Tác giả nét vẽ: {formatChildName(story.child?.nickname, 'Bé yêu')}
             {story.child?.age ? ` (${story.child.age} tuổi)` : ''}
           </p>
         </div>
@@ -243,7 +244,7 @@ export const SharedStoryPage: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2.5">
-                Nét vẽ nguyên bản của Bé {story.child?.nickname || 'Bé'}
+                Nét vẽ nguyên bản của {formatChildName(story.child?.nickname)}
               </p>
             </div>
           </div>

@@ -5,80 +5,49 @@
 
 ---
 
-## 1. TRIẾT LÝ THIẾT KẾ: "ADMIN CÓ VAI TRÒ THỰC THỤ" & GIAO DIỆN ĐỒNG NHẤT
+## 1. TỔNG QUAN CỔNG QUẢN TRỊ 8 TRANG (LAZY-LOADED & RECHARTS 3)
 
-Trong một ứng dụng Trí Tuệ Nhân Tạo phục vụ trẻ nhỏ, **Quản trị viên là mắt xích sống còn trong chu trình Responsible AI (Human-in-the-loop Governance)**. Toàn bộ **8 trang Quản trị viên** trong `AdminLayout` được thiết kế đồng bộ 100% theo hệ thống token **Modern Storybook** (`bg`, `surface`, `ink`, `brand`, `magic`, `shadow-card`), loại bỏ hoàn toàn các lớp màu cũ và đảm bảo kiểm tra phản hồi lỗi trên mọi thao tác ghi cơ sở dữ liệu:
-1. **Tổng quan vận hành thời gian thực (`/admin`)**: Biểu đồ lưu lượng tạo truyện chuyển đổi linh hoạt **7 ngày / 30 ngày**, tỷ lệ đồng thuận AI – Admin trung thực và thống kê phân loại lý do từ chối động từ dữ liệu thật.
-2. **Kiểm duyệt nội dung trực quan (`/admin/moderation`)**: Thẩm định các câu chuyện chờ duyệt hoặc bị báo cáo qua giao diện Split View và phím tắt tốc độ cao `A` / `R`.
-3. **Cấu hình Kiểm duyệt & Khóa Gemini API (`/admin/settings`)**: Bật/tắt kiểm tra tranh vẽ nghiêm ngặt, chỉnh ngưỡng tự động duyệt và **lưu trực tiếp khóa Google Gemini 2.5 Flash API Key** để vận hành AI thật ngay lập tức.
-4. **Quản trị quy tắc an toàn động (`/admin/safety-rules`)**: Thêm, sửa, xóa hoặc bật/tắt tức thì 10+ quy tắc phòng hộ tâm lý trẻ em mà không cần sửa mã nguồn.
-5. **Phòng thí nghiệm System Prompt (`/admin/prompts`)**: Quản lý phiên bản prompt, kích hoạt phiên bản đang chạy và **chạy thử nghiệm trực tiếp với Gemini 2.5 Flash** kèm đo lường token, độ trễ, chi phí USD.
-6. **Giám sát tài chính & Ngân sách (`/admin/costs`)**: Theo dõi chi phí từng lệnh gọi AI từ `ai_logs`, cập nhật hạn mức ngân sách tháng (`monthly_budget_usd`) và xuất báo cáo CSV.
-7. **Quản lý người dùng & Hạn mức (`/admin/users`)**: Tìm kiếm theo tên/email, điều chỉnh `daily_quota` từng gia đình và khóa/mở khóa tài khoản (có cơ chế bảo vệ chống Admin tự khóa chính mình).
-8. **Nhật ký kiểm toán (`/admin/audit`)**: Hậu kiểm toàn bộ thao tác quản trị, tự động ánh xạ tên hiển thị của Admin thực hiện và bộ lọc tìm kiếm nhanh.
+Toàn bộ phân hệ Quản trị viên (`AdminLayout` và 8 trang chuyên biệt) được tải lười (`React.lazy`) chỉ khi tài khoản có `role = 'admin'` đã xác thực qua `AdminRoute`, đồng bộ 100% theo thiết kế **Modern Storybook** và tích hợp sẵn **Bảng Hướng dẫn Sử dụng Quản trị 4 bước (`UserGuideModal`)** khi vừa đăng nhập cũng như ngay phía trên nút **Đăng xuất**:
 
----
-
-## 2. HÀNG CHỜ KIỂM DUYỆT TRỰC QUAN (`ModerationQueuePage.tsx`)
-
-### 2.1. Đồng Bộ Dữ Liệu Thật & Giao Diện Chia Đôi (Split View)
-- Tự động gọi đồng thời `fetchStories()` và `fetchAdminData()` ngay khi mở trang để luôn hiển thị danh sách truyện mới nhất từ Supabase.
-- **Cột trái**: Tranh vẽ gốc của bé đặt trong khung giấy chuẩn (`object-contain`), hiển thị danh sách vật thể AI trích xuất được (`grounded_objects`).
-- **Cột phải**: Điểm rủi ro (`risk_score`), độ trung thực (`faithfulness_score`), các cờ cảnh báo từ Lớp 3, bài học đạo đức (Moral) và nội dung chi tiết từng trang truyện.
-
-### 2.2. Phím Tắt Phê Duyệt Nhanh & Ghi Nhận Khóa Ngoại Chuẩn
-- Bấm phím <kbd>A</kbd>: Phê duyệt tức thì (`approved`), gắn đúng `profile.id` thực tế của Quản trị viên đang đăng nhập, cập nhật trạng thái truyện nguyên tử (không ghi trùng lặp) và lưu lịch sử vào `moderation_reviews` + `admin_audit_logs`.
-- Bấm phím <kbd>R</kbd>: Mở hộp thoại từ chối (`rejected`), chọn nhanh 4 lý do sư phạm tích cực hoặc nhập phản hồi riêng cho phụ huynh.
-- Hỗ trợ chọn nhiều mục để phê duyệt hàng loạt (**Batch Approve**) với thanh bộ lọc `flex-wrap` không tràn viền trên màn hình nhỏ.
+1. **Tổng quan & KPI (`/admin`)**: Hiển thị 5 chỉ số KPI thời gian thực và 3 biểu đồ tương tác **Recharts 3** (Lưu lượng truyện Đã duyệt vs Bị chặn, Chi phí USD & Độ trễ TB, Phân bổ nguyên nhân từ chối) với bộ chuyển đổi **7 ngày / 30 ngày**.
+2. **Hàng chờ kiểm duyệt (`/admin/queue`)**: Giao diện Split View đối chiếu tranh gốc của bé (`grounded_objects`) với nội dung từng trang truyện, điểm trung thực `faithfulness_score`, điểm rủi ro `risk_score`, hỗ trợ phím tắt duyệt nhanh `A` / `R` và duyệt hàng loạt.
+3. **Bộ quy tắc an toàn (`/admin/rules`)**: Quản trị trực tiếp (Thêm/Sửa/Xóa/Bật/Tắt) các quy tắc phòng vệ tâm lý thiếu nhi trong `public.safety_rules`.
+4. **System Prompt Studio (`/admin/prompts`)**: Quản lý lịch sử phiên bản System Prompt, kích hoạt phiên bản đang chạy và thử nghiệm trực tiếp trên máy chủ qua Edge Function `admin-test-prompt`.
+5. **Chi phí & Hạn mức (`/admin/costs`)**: Giám sát từng lời gọi Gemini từ bảng `public.ai_logs`, cảnh báo ngưỡng ngân sách tháng (`monthly_budget_usd`), điều chỉnh hạn mức ngày toàn cục và xuất báo cáo CSV.
+6. **Quản lý người dùng (`/admin/users`)**: Tra cứu gia đình, tùy chỉnh `daily_quota` riêng và Khóa/Mở khóa tài khoản vi phạm (có chốt chặn an toàn không cho phép Admin tự khóa chính mình).
+7. **Cài đặt kiểm duyệt & Bảo mật Secrets (`/admin/settings`)**: Điều chỉnh chế độ kiểm duyệt (`auto` / `manual_all`), ngưỡng tự duyệt `auto_approve_max_risk`, công tắc `strict_drawing_check` và bảng hướng dẫn cấu hình khóa bí mật `GEMINI_API_KEY` trên Supabase Secrets.
+8. **Nhật ký kiểm toán (`/admin/audit`)**: Lưu vết đầy đủ mọi hành động quản trị từ `public.admin_audit_logs`.
 
 ---
 
-## 3. CẤU HÌNH KHÓA GEMINI AI & CÀI ĐẶT KIỂM DUYỆT (`ModerationSettingsPage.tsx`)
+## 2. ĐỒNG BỘ SỐ LIỆU THỐNG KÊ NHẤT QUÁN 100% (`adminStore.ts`)
 
-Tại `/admin/settings`, Quản trị viên kiểm soát trực tiếp trái tim của Pipeline AI thông qua bảng `public.app_settings`:
-- **Thẻ Cấu hình Google Gemini 2.5 Flash API Key**:
-  - Cho phép nhập, ẩn/hiện (`rightIcon`) và lưu khóa API Gemini trực tiếp vào `app_settings.gemini_api_key`.
-  - Giúp hệ thống kích hoạt ngay Pipeline AI 3 lớp thật và Phòng thí nghiệm Prompt mà không bắt buộc phải cấu hình lại biến môi trường hay redeploy Edge Functions.
-- **Công tắc Kiểm tra tranh vẽ nghiêm ngặt (`strict_drawing_check`)**:
-  - Khi bật: Lớp 1 kiên quyết từ chối logo (`logo_graphic`), ảnh chụp người/vật thật (`photo`), ảnh chụp màn hình (`screenshot_text`) với mã lỗi `NOT_A_DRAWING`.
-- **Chế độ kiểm duyệt (`moderation_mode`) & Ngưỡng rủi ro (`auto_approve_max_risk`)**:
-  - Chuyển đổi giữa Tự động duyệt thông minh (`auto`, duyệt ngay khi `risk_score <= auto_approve_max_risk`) và Kiểm duyệt thủ công toàn phần (`manual_all`).
+Để đảm bảo số liệu giữa các thẻ KPI và biểu đồ 7 ngày / 30 ngày luôn khớp tuyệt đối:
+- **Loại bỏ lưu trữ đệm KPI cũ trong `localStorage`**: Mọi chỉ số KPI (`storiesToday`, `blockedRatePercent`, `pendingQueueCount`, `monthlyCostUsd`, `aiAdminAgreementPercent`) và mảng dữ liệu biểu đồ (`chartData`, `chartData30d`) đều được tính toán đồng thời trong cùng một chu kỳ `computeMetricsFromCollections(stories, aiLogs, reviews)` trực tiếp từ cơ sở dữ liệu Supabase.
+- **Chuẩn hóa khóa ngày theo múi giờ địa phương (`toLocalDateKey`)**: Thay vì cắt chuỗi UTC `toISOString().slice(0, 10)` (dễ làm truyện tạo buổi sáng theo giờ Việt Nam `UTC+7` bị lệch ngày với biểu đồ), hệ thống đồng nhất quy đổi mọi mốc thời gian sang `YYYY-MM-DD` theo giờ địa phương trên cả thẻ KPI lẫn trục thời gian biểu đồ.
 
 ---
 
-## 4. KIẾN TRÚC BẢO MẬT RLS CHỐNG ĐỆ QUY TRÊN SUPABASE POSTGRESQL
+## 3. BẢO MẬT KHÓA AI SERVER-ONLY & NÂNG QUYỀN QUẢN TRỊ AN TOÀN
 
-Trong `supabase/full_setup.sql`, toàn bộ **14 bảng dữ liệu** và `storage.objects` đều kích hoạt **Row Level Security (RLS)** chặt chẽ, loại bỏ triệt để mọi điều kiện `or auth.uid() is null` hoặc nhận diện quyền qua chuỗi email.
+### 3.1. Loại Bỏ Hoàn Toàn Khóa Gemini Khỏi Trình Duyệt & Bảng `app_settings`
+- Khóa `gemini_api_key` đã được loại bỏ triệt để khỏi `public.app_settings`, khỏi giao diện nhập liệu client và khỏi mọi biến môi trường `VITE_*`.
+- Cả luồng sinh truyện của phụ huynh (`generate-story`) lẫn luồng thử nghiệm của Admin (`admin-test-prompt`) đều chạy độc quyền trên Supabase Edge Functions, sử dụng `Deno.env.get('GEMINI_API_KEY')` ở phía máy chủ. Nhờ đó, người dùng thông thường mở DevTools/Network không bao giờ đọc được khóa API của hệ thống.
 
-Để ngăn chặn lỗi đệ quy vô hạn (*infinite recursion*) khi chính sách RLS trên bảng `profiles` tự truy vấn lại `profiles`, hệ thống xây dựng bộ hàm `plpgsql SECURITY DEFINER` tối ưu:
-
-```sql
-create or replace function public.is_admin()
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-stable
-as $$
-declare
-  v_is_admin boolean;
-begin
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and role = 'admin' and is_locked = false
-  ) into v_is_admin;
-  return coalesce(v_is_admin, false);
-end;
-$$;
-```
-
-Cùng các hàm bổ trợ bảo mật đồng bộ:
-- `public.is_active_user()`: Đảm bảo người dùng đã xác thực và **chưa bị khóa (`is_locked = false`)** trước khi cho phép đọc/ghi dữ liệu gia đình.
-- `public.get_my_role()` & `public.get_my_quota()`: Khóa chặt cột `role`, `is_locked` và `daily_quota` trong chính sách `profiles_update_own`, ngăn chặn tuyệt đối việc người dùng thường tự nâng quyền lên `admin` hoặc tự tăng hạn mức qua API client.
-- `public.is_drawing_in_shared_story(uuid)` & `public.is_child_in_shared_story(uuid)`: Chỉ cho phép khách vãng lai tại `/shared/:token` đọc đúng thông tin bức tranh và biệt danh bé của những cuốn truyện đã duyệt và đang bật `is_shared = true`.
+### 3.2. Cơ Chế Cấp Quyền Quản Trị Viên Không Mật Khẩu Mẫu (`promote_to_admin`)
+- Các tệp `supabase/seed.sql` và `supabase/full_setup.sql` tuyệt đối **không chèn tài khoản hay mật khẩu mặc định** vào `auth.users` để loại bỏ nguy cơ lộ thông tin đăng nhập trên kho mã nguồn công khai.
+- Thay vào đó, schema cung cấp hàm bảo mật dành riêng cho chủ sở hữu cơ sở dữ liệu:
+  ```sql
+  select public.promote_to_admin('admin_cua_ban@domain.com');
+  ```
+- Hàm này được thu hồi quyền thực thi từ mọi role phía ứng dụng (`revoke execute on function public.promote_to_admin(text) from public, anon, authenticated;`), đảm bảo chỉ quản trị viên nắm quyền truy cập Supabase SQL Editor / `service_role` mới có thể thăng cấp tài khoản.
 
 ---
 
-## 5. PHÒNG THÍ NGHIỆM PROMPT & QUẢN TRỊ CHI PHÍ THỰC TẾ
-- **System Prompt Studio (`/admin/prompts`)**: Tích hợp `StoryGenerationService.runPromptPlayground()` gửi trực tiếp prompt thử nghiệm lên Gemini 2.5 Flash, trả về bản xem trước câu chuyện hoàn chỉnh cùng số liệu đo đạc thực tế (`tokens_input`, `tokens_output`, `latency_ms`, `cost_usd`).
-- **Chi phí & Hạn mức (`/admin/costs`)**: Tổng hợp chi phí thời gian thực từ `public.ai_logs` và view `v_cost_by_day`, cho phép Admin điều chỉnh ngân sách mục tiêu hàng tháng (`updateMonthlyBudget`) và xuất toàn bộ nhật ký ra tệp CSV chuẩn UTF-8.
+## 4. KIẾN TRÚC RLS CHỐNG ĐỆ QUY TRÊN 14 BẢNG POSTGRESQL
+
+Toàn bộ **14 bảng dữ liệu** và bucket `storage.objects` đều bật **Row Level Security (RLS)** nghiêm ngặt với bộ hàm `plpgsql SECURITY DEFINER`:
+- `public.is_admin()`: Kiểm tra người dùng hiện tại có `role = 'admin'` và `is_locked = false` mà không gây đệ quy vô hạn trên `public.profiles`.
+- `public.is_active_user()`: Chặn tức thì mọi truy vấn đọc/ghi của tài khoản đã bị Admin khóa (`is_locked = true`).
+- `public.get_my_role()` & `public.get_my_quota()`: Ngăn chặn tuyệt đối người dùng tự sửa cột `role`, `is_locked` hoặc `daily_quota` thông qua chính sách `profiles_update_own`.
+- `public.is_drawing_in_shared_story(uuid)` & `public.is_child_in_shared_story(uuid)`: Chỉ cho phép trang chia sẻ công khai `/shared/:token` truy xuất đúng bức tranh và biệt danh bé của những cuốn truyện đã được duyệt và đang bật `is_shared = true`.

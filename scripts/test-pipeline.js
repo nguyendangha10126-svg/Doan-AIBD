@@ -1,59 +1,20 @@
 /**
- * Automated Verification Script for DrawToStory AI Pipeline Fixtures
- * Tests:
- * 1. Image classification (child_drawing, artwork, logo_graphic, photo, screenshot_text, other)
- * 2. Input safety checks (blocking of non-drawings, real faces, PII)
- * 3. Grounded storytelling constraints (grounded_objects must be subset of objects)
- * 4. Faithfulness score thresholding (retry if < 60, pending_review if still < 60)
+ * Automated Verification Script for DrawToStory AI Pipeline & Business Rules
+ * Imports real production modules directly from src/features/ai/utils/pipelineRules.js:
+ * 1. Image classification & Input safety checks (blocking non-drawings, real faces, PII, block rules)
+ * 2. Strict drawing setting toggle (strict_drawing_check = true vs false)
+ * 3. Layer 3 Output Judge final status resolution (risk_score, faithfulness_score, manual_all mode)
+ * 4. Child name normalization (preventing duplicate "Bé Bé Hà" prefix)
  */
 
 import fs from 'fs';
 import path from 'path';
-
-function evaluateInputSafety(inspection, activeRules = [], strictDrawingCheck = true) {
-  const allowedTypes = strictDrawingCheck
-    ? ['child_drawing']
-    : ['child_drawing', 'artwork'];
-
-  const isEligibleDrawing = inspection.is_drawing && allowedTypes.includes(inspection.image_type);
-
-  if (!isEligibleDrawing) {
-    return {
-      isSafe: false,
-      errorCode: 'NOT_A_DRAWING',
-      errorMessage: 'Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé',
-    };
-  }
-
-  if (inspection.contains_real_person_face) {
-    return {
-      isSafe: false,
-      errorCode: 'REAL_FACE_DETECTED',
-      errorMessage: 'Phát hiện khuôn mặt người thật trong ảnh. Để bảo vệ an toàn và quyền riêng tư cho bé, vui lòng chỉ chụp phần giấy vẽ.',
-    };
-  }
-
-  if (inspection.pii_detected) {
-    return {
-      isSafe: false,
-      errorCode: 'PII_DETECTED',
-      errorMessage: 'Phát hiện thông tin cá nhân trên giấy vẽ.',
-    };
-  }
-
-  const blockedRules = (activeRules || []).filter(
-    (rule) => rule.action === 'block' && (inspection.risk_categories || []).includes(rule.category)
-  );
-  if (blockedRules.length > 0) {
-    return {
-      isSafe: false,
-      errorCode: 'CUSTOM_RULE_VIOLATION',
-      errorMessage: `Ảnh vi phạm quy tắc: ${blockedRules[0].description}`,
-    };
-  }
-
-  return { isSafe: true };
-}
+import {
+  evaluateInputSafety,
+  computeModerationDecision,
+  formatChildName,
+  stripChildPrefix,
+} from '../src/features/ai/utils/pipelineRules.js';
 
 function runFixtureTests() {
   const fixturesDir = path.resolve(process.cwd(), 'tests', 'fixtures');
@@ -63,7 +24,7 @@ function runFixtureTests() {
   }
 
   const files = fs.readdirSync(fixturesDir).filter((f) => f.endsWith('.json'));
-  console.log('=== AI PIPELINE FIXTURE VERIFICATION ===');
+  console.log('=== AI PIPELINE & BUSINESS LOGIC VERIFICATION (PRODUCTION MODULE) ===');
   console.log(`Found ${files.length} test fixtures in tests/fixtures/\n`);
 
   let allPassed = true;
@@ -102,7 +63,7 @@ function runFixtureTests() {
 
   console.table(resultsTable);
 
-  // Test demo mode toggle (strictDrawingCheck = false allows artwork)
+  // 2. Test strict_drawing_check toggle
   const artworkTestInspection = {
     is_drawing: true,
     image_type: 'artwork',
@@ -112,26 +73,80 @@ function runFixtureTests() {
   };
 
   const strictBlock = evaluateInputSafety(artworkTestInspection, [], true);
-  const demoAllow = evaluateInputSafety(artworkTestInspection, [], false);
+  const relaxedAllow = evaluateInputSafety(artworkTestInspection, [], false);
 
-  console.log('\n--- Strict Mode Setting Toggle Check ---');
-  console.log(`strict_drawing_check = true  (Strict):  artwork can proceed? -> ${demoAllow.isSafe === false ? 'YES' : 'NO'} (${strictBlock.errorCode})`);
-  console.log(`strict_drawing_check = false (Demo):    artwork can proceed? -> ${demoAllow.isSafe ? 'YES (ALLOWED)' : 'NO'}`);
+  console.log('\n--- Strict Drawing Check Toggle ---');
+  console.log(
+    `strict_drawing_check = true  -> artwork blocked? ${strictBlock.isSafe === false ? 'YES' : 'NO'} (${strictBlock.errorCode})`
+  );
+  console.log(
+    `strict_drawing_check = false -> artwork allowed? ${relaxedAllow.isSafe === true ? 'YES' : 'NO'}`
+  );
 
-  if (strictBlock.isSafe === false && demoAllow.isSafe === true) {
-    console.log('✓ Strict drawing setting toggle verified correctly.\n');
-  } else {
-    console.error('✗ Strict drawing setting toggle failed.\n');
+  if (strictBlock.isSafe !== false || relaxedAllow.isSafe !== true) {
+    console.error('✗ Strict drawing setting toggle failed.');
     allPassed = false;
   }
 
+  // 3. Test Layer 3 Judge Moderation Thresholds
+  const safeDecision = computeModerationDecision(
+    { risk_score: 8, faithfulness_score: 92, recommended_action: 'auto_approved' },
+    { moderationMode: 'auto', autoApproveMaxRisk: 25 }
+  );
+  const lowFaithfulnessDecision = computeModerationDecision(
+    { risk_score: 10, faithfulness_score: 48, recommended_action: 'auto_approved' },
+    { moderationMode: 'auto', autoApproveMaxRisk: 25 }
+  );
+  const highRiskDecision = computeModerationDecision(
+    {
+      risk_score: 75,
+      faithfulness_score: 90,
+      recommended_action: 'rejected',
+      pedagogical_feedback: 'Có chi tiết bạo lực.',
+    },
+    { moderationMode: 'auto', autoApproveMaxRisk: 25 }
+  );
+
+  if (
+    safeDecision.finalStatus !== 'auto_approved' ||
+    lowFaithfulnessDecision.finalStatus !== 'pending_review' ||
+    lowFaithfulnessDecision.rejectionReason !== 'LOW_FAITHFULNESS' ||
+    highRiskDecision.finalStatus !== 'rejected'
+  ) {
+    console.error('✗ Layer 3 moderation decision test failed.');
+    allPassed = false;
+  } else {
+    console.log('✓ Layer 3 moderation thresholds (auto_approved / LOW_FAITHFULNESS / rejected) verified.');
+  }
+
+  // 4. Test Child Name Formatting (No "Bé Bé Hà")
+  const nameCases = [
+    ['Hà', 'Bé Hà'],
+    ['Bé Hà', 'Bé Hà'],
+    ['bé   Bé Hà ', 'Bé Hà'],
+    ['Bơ', 'Bé Bơ'],
+    ['', 'Bé yêu'],
+  ];
+  for (const [input, expected] of nameCases) {
+    const actual = formatChildName(input);
+    if (actual !== expected) {
+      console.error(`✗ formatChildName(${JSON.stringify(input)}) = ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
+      allPassed = false;
+    }
+  }
+  if (stripChildPrefix('Bé Hà') !== 'Hà') {
+    console.error('✗ stripChildPrefix failed.');
+    allPassed = false;
+  } else {
+    console.log('✓ Child nickname normalization (no duplicate "Bé Bé ...") verified.\n');
+  }
+
   if (!allPassed) {
-    console.error('Pipeline fixture tests failed!');
+    console.error('Pipeline & business logic tests failed!');
     process.exit(1);
   } else {
-    console.log('All pipeline fixture tests passed successfully!');
+    console.log('All pipeline & business logic tests passed successfully!');
   }
 }
 
 runFixtureTests();
-

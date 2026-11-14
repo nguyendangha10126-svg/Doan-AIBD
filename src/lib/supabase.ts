@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Default Supabase project credentials
+// Default public Supabase project endpoint & publishable anon key (protected by strict RLS)
 const DEFAULT_SUPABASE_URL = 'https://htvslxbytqoteyimtcxg.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_0M7XpzEBfVsKECDTkRVpKA_PgCpJiGc';
 
@@ -16,7 +16,8 @@ if (!rawKey || rawKey.includes('your_anon_key_here')) {
   rawKey = DEFAULT_SUPABASE_ANON_KEY;
 }
 
-export const isMockEnabled = import.meta.env.VITE_USE_MOCK === 'true';
+// SECURITY: Mock/Demo mode is strictly restricted to local development (import.meta.env.DEV)
+export const isMockEnabled = Boolean(import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === 'true');
 
 export const hasValidSupabaseConfig = Boolean(
   rawUrl &&
@@ -25,8 +26,7 @@ export const hasValidSupabaseConfig = Boolean(
   !rawKey.includes('your_anon_key_here')
 );
 
-// Backward compatibility: isDemoMode is true when mock is forced OR when real config is missing
-export const isDemoMode = isMockEnabled || !hasValidSupabaseConfig;
+export const isDemoMode = isMockEnabled;
 
 export const supabaseUrl = hasValidSupabaseConfig ? rawUrl : 'https://dummy-project.supabase.co';
 export const supabaseAnonKey = hasValidSupabaseConfig ? rawKey : 'dummy-anon-key';

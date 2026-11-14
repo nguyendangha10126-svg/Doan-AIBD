@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Sparkles,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
+import { formatChildName } from '@/lib/utils';
 import { vi } from '@/lib/i18n/vi';
 import { Story, isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -19,7 +20,6 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { BookCover } from '@/components/ui/BookCover';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { OnboardingModal } from '@/features/onboarding/components/OnboardingModal';
 import { toast } from 'sonner';
 
 export const DashboardPage: React.FC = () => {
@@ -36,14 +36,8 @@ export const DashboardPage: React.FC = () => {
   } = useStoryStore();
   const navigate = useNavigate();
 
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
   useEffect(() => {
     fetchStories();
-    const hasSeen = localStorage.getItem('has_seen_onboarding');
-    if (!hasSeen) {
-      setShowOnboarding(true);
-    }
   }, [fetchStories]);
 
   const currentChild = childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
@@ -148,12 +142,6 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-10">
-      {/* Onboarding Dialog */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onClose={() => setShowOnboarding(false)}
-      />
-
       {/* 1. Hero Split (Modern Storybook with Polaroid Stage) */}
       <div className="relative rounded-[32px] bg-surface-2 border border-ink/10 p-6 md:p-10 overflow-hidden shadow-card">
         <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-peach/40 blur-3xl pointer-events-none" />
@@ -181,7 +169,7 @@ export const DashboardPage: React.FC = () => {
                 <>
                   Đang mở góc sáng tạo của{' '}
                   <strong className="text-ink font-bold">
-                    {currentChild.nickname} ({currentChild.age} tuổi)
+                    {formatChildName(currentChild.nickname)} ({currentChild.age} tuổi)
                   </strong>
                   . Chụp bức tranh vẽ trên giấy, AI sẽ nhận diện đồ vật thật và dệt nên câu chuyện tranh tuyệt đẹp.
                 </>
@@ -246,7 +234,7 @@ export const DashboardPage: React.FC = () => {
                     {latestStory?.title || 'Sẵn sàng dệt truyện mới'}
                   </span>
                   <span className="text-[10px] text-ink-faint block mt-0.5">
-                    {currentChild ? `${currentChild.nickname} • ${currentChild.age} tuổi` : 'Chưa có hồ sơ bé'}
+                    {currentChild ? `${formatChildName(currentChild.nickname)} • ${currentChild.age} tuổi` : 'Chưa có hồ sơ bé'}
                   </span>
                 </div>
               </div>
@@ -294,7 +282,7 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <div className="overflow-hidden">
                   <span className="font-heading font-extrabold text-xs text-ink block truncate">
-                    {kid.nickname}
+                    {formatChildName(kid.nickname)}
                   </span>
                   <span className="text-[11px] text-ink-faint block">
                     {kid.age} tuổi • {count} truyện
@@ -363,7 +351,7 @@ export const DashboardPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-heading font-extrabold text-ink flex items-center gap-2">
             <Award className="w-5 h-5 text-amber-500" />
-            <span>Huy hiệu sáng tạo {currentChild ? `của ${currentChild.nickname}` : 'của bé'}</span>
+            <span>Huy hiệu sáng tạo {currentChild ? `của ${formatChildName(currentChild.nickname)}` : 'của bé'}</span>
           </h2>
           <span className="text-xs font-heading font-bold text-ink-soft">
             {childUserBadges.length} / {badges.length} đã đạt được
@@ -435,7 +423,7 @@ export const DashboardPage: React.FC = () => {
             </h2>
             <p className="text-xs text-ink-soft">
               {currentChild
-                ? `Các ấn bản sách tranh mới nhất của ${currentChild.nickname}`
+                ? `Các ấn bản sách tranh mới nhất của ${formatChildName(currentChild.nickname)}`
                 : 'Thêm hồ sơ cho bé để bắt đầu lưu giữ những cuốn sách cổ tích đầu tiên'}
             </p>
           </div>
@@ -453,7 +441,7 @@ export const DashboardPage: React.FC = () => {
 
         {childStories.length === 0 ? (
           <EmptyState
-            title={currentChild ? `Chưa có cuốn sách nào của ${currentChild.nickname}` : 'Chưa có hồ sơ bé nào'}
+            title={currentChild ? `Chưa có cuốn sách nào của ${formatChildName(currentChild.nickname)}` : 'Chưa có hồ sơ bé nào'}
             description={
               currentChild
                 ? 'Chỉ mất 30 giây để biến nét vẽ đầu tiên của con thành cuốn sách tranh cổ tích tuyệt đẹp!'

@@ -29,7 +29,7 @@ export const SystemPromptsPage: React.FC = () => {
   }, [activePrompt, selectedPromptId]);
 
   // Playground state
-  const [sampleNickname, setSampleNickname] = useState('Bé Bơ');
+  const [sampleNickname, setSampleNickname] = useState('Bơ');
   const [sampleAge, setSampleAge] = useState(5);
   const [sampleDetails, setSampleDetails] = useState('Ngôi nhà mái đỏ dưới ông mặt trời mỉm cười và khóm hoa hướng dương');
   const [isTesting, setIsTesting] = useState(false);
@@ -256,7 +256,7 @@ export const SystemPromptsPage: React.FC = () => {
             </h2>
           </div>
           <Badge variant="magic" size="sm">
-            Gọi Gemini 2.5 Flash trực tiếp (Không tạo sách thừa)
+            Thực thi bảo mật qua Edge Function Server (Không tạo sách thừa)
           </Badge>
         </div>
 

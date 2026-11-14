@@ -40,7 +40,7 @@ create table public.profiles (
   role text not null default 'user' check (role in ('user', 'admin')),
   is_locked boolean not null default false,
   daily_quota integer not null default 5 check (daily_quota >= 0),
-  parental_pin_hash text default '001627dbf308f962',
+  parental_pin_hash text default null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -150,6 +150,7 @@ create table public.stories (
   risk_score integer not null default 0 check (risk_score between 0 and 100),
   faithfulness_score integer not null default 100 check (faithfulness_score between 0 and 100),
   generation_stage text not null default 'done',
+  grounded_objects jsonb not null default '[]'::jsonb,
   risk_reasons jsonb not null default '[]'::jsonb,
   rejection_reason text,
   reviewed_by uuid references public.profiles(id) on delete set null,
@@ -569,14 +570,33 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(coalesce(new.email, 'Phụ Huynh Mới'), '@', 1)),
-    case when new.id = 'a0000000-0000-0000-0000-000000000001'::uuid then 'admin' else 'user' end,
-    case when new.id = 'a0000000-0000-0000-0000-000000000001'::uuid then 100 else 5 end,
-    '001627dbf308f962'
+    'user',
+    5,
+    nullif(new.raw_user_meta_data->>'parental_pin_hash', '')
   )
   on conflict (id) do update set
     email = excluded.email,
     full_name = coalesce(public.profiles.full_name, excluded.full_name);
   return new;
+end;
+$$;
+
+-- Owner-only helper to promote a registered user to Admin from Supabase SQL Editor
+create or replace function public.promote_to_admin(target_email text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.profiles
+  set role = 'admin',
+      daily_quota = greatest(daily_quota, 100),
+      updated_at = now()
+  where lower(email) = lower(trim(target_email));
+
+  if not found then
+    raise exception 'Không tìm thấy tài khoản với email: % (Hãy đăng ký tài khoản trước)', target_email;
+  end if;
 end;
 $$;
 
@@ -667,4 +687,8 @@ grant usage on schema public to anon, authenticated;
 grant all on all tables in schema public to anon, authenticated;
 grant all on all sequences in schema public to anon, authenticated;
 grant all on all routines in schema public to anon, authenticated;
+
+-- Restrict promote_to_admin strictly to SQL Editor (postgres) & service_role
+revoke execute on function public.promote_to_admin(text) from public, anon, authenticated;
+grant execute on function public.promote_to_admin(text) to postgres, service_role;
 

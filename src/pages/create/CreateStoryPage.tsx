@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
 import { useAdminStore } from '@/store/adminStore';
+import { formatChildName } from '@/lib/utils';
 import { Story, StoryPage } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -86,7 +87,7 @@ export const CreateStoryPage: React.FC = () => {
       setSelectedChildId(created.id);
       setIsAddingChild(false);
       setNewNickname('');
-      toast.success(`Đã thêm bé ${created.nickname}! Chuẩn bị bước vào bàn vẽ.`);
+      toast.success(`Đã thêm ${formatChildName(created.nickname)}! Chuẩn bị bước vào bàn vẽ.`);
       setCurrentStep(2);
     } catch {
       toast.error('Có lỗi xảy ra khi tạo hồ sơ cho bé.');
@@ -568,7 +569,7 @@ export const CreateStoryPage: React.FC = () => {
                       </div>
                       <div className="flex-1 overflow-hidden">
                         <span className="font-heading font-extrabold text-base text-ink block truncate">
-                          {kid.nickname}
+                          {formatChildName(kid.nickname)}
                         </span>
                         <span className="text-xs text-brand-600 font-bold block mt-0.5">
                           {kid.age} tuổi
@@ -600,7 +601,7 @@ export const CreateStoryPage: React.FC = () => {
 
               <div className="pt-4 flex items-center justify-between border-t border-ink/10">
                 <span className="text-xs text-ink-soft">
-                  Đang chọn: <strong className="text-brand-600">{selectedChild?.nickname || 'Chưa chọn'}</strong>
+                  Đang chọn: <strong className="text-brand-600">{selectedChild ? formatChildName(selectedChild.nickname) : 'Chưa chọn'}</strong>
                 </span>
                 <Button
                   variant="primary"
@@ -622,7 +623,7 @@ export const CreateStoryPage: React.FC = () => {
         <main className="flex-1 flex flex-col justify-center space-y-6">
           <div className="text-center space-y-1">
             <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-ink tracking-tight">
-              Đặt bức tranh của {selectedChild?.nickname || 'bé'} lên bàn vẽ
+              Đặt bức tranh của {selectedChild ? formatChildName(selectedChild.nickname) : 'bé'} lên bàn vẽ
             </h1>
             <p className="text-xs sm:text-sm text-ink-soft">
               Chụp ảnh hoặc tải lên tranh vẽ tay của bé để chuẩn bị cho khoảnh khắc thần kỳ.
@@ -818,7 +819,7 @@ export const CreateStoryPage: React.FC = () => {
                     )}
                   </div>
                   <div className="mt-2 text-xs font-heading font-extrabold text-ink truncate">
-                    Nét vẽ của {selectedChild?.nickname}
+                    Nét vẽ của {formatChildName(selectedChild?.nickname)}
                   </div>
                 </div>
 
@@ -909,8 +910,8 @@ export const CreateStoryPage: React.FC = () => {
                   Cuốn sách tranh đã sẵn sàng! 🎉
                 </h2>
                 <p className="text-xs sm:text-sm text-ink-soft leading-relaxed">
-                  Câu chuyện cổ tích 4 trang được dệt nên chuẩn mực từ nét vẽ của bé{' '}
-                  <strong className="text-ink">{selectedChild?.nickname}</strong>.
+                  Câu chuyện cổ tích 4 trang được dệt nên chuẩn mực từ nét vẽ của{' '}
+                  <strong className="text-ink">{formatChildName(selectedChild?.nickname)}</strong>.
                 </p>
               </div>
 
@@ -974,7 +975,7 @@ export const CreateStoryPage: React.FC = () => {
                       size="md"
                       onClick={() => navigate('/admin/settings')}
                     >
-                      Cấu hình Gemini API Key
+                      Hướng dẫn cấu hình Supabase Secrets
                     </Button>
                   )}
 

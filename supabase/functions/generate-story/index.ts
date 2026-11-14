@@ -1,6 +1,6 @@
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { getSupabaseAdmin } from '../_shared/supabase-admin.ts';
-import { callGeminiStructured, GeminiError } from '../_shared/gemini.ts';
+import { callGeminiStructured, formatChildDisplayName, GeminiError } from '../_shared/gemini.ts';
 import {
   Layer1JsonSchema,
   Layer1Inspection,
@@ -89,7 +89,6 @@ Deno.serve(async (req: Request) => {
     const moderationMode = settingsMap.get('moderation_mode') || 'auto';
     const autoApproveMaxRisk = parseInt(settingsMap.get('auto_approve_max_risk') || '25', 10);
     const globalDailyLimit = Math.max(1, parseInt(settingsMap.get('daily_story_limit') || '5', 10));
-    const dbGeminiKey = settingsMap.get('gemini_api_key') || '';
 
     // 5. Check Account Lock & Family Daily Story Limit
     const { data: profile } = await supabase
@@ -181,7 +180,6 @@ Deno.serve(async (req: Request) => {
 10. risk_categories: danh mục nhạy cảm nếu có (bạo lực, rùng rợn).`;
 
     const layer1Result = await callGeminiStructured<Layer1Inspection>({
-      apiKeyOverride: dbGeminiKey,
       contents: [
         {
           role: 'user',
@@ -261,8 +259,10 @@ Deno.serve(async (req: Request) => {
       .map((r: SafetyRuleRow) => `- [${r.action.toUpperCase()}] ${r.category}: ${r.description}`)
       .join('\n');
 
+    const cleanChildDisplayName = formatChildDisplayName(child.nickname);
+
     const layer2UserPrompt = `Thông tin bé yêu:
-- Biệt danh: "${child.nickname}"
+- Tên gọi thân mật: "${cleanChildDisplayName}" (Lưu ý: tuyệt đối KHÔNG lặp chữ "Bé Bé ...", chỉ gọi là "${cleanChildDisplayName}")
 - Độ tuổi: ${child.age} tuổi
 
 SỰ THẬT TỪ TRANH VẼ CỦA BÉ (BẮT BUỘC PHẢI BÁM SÁT 100%, TUYỆT ĐỐI KHÔNG BỊA ĐẶT RA NGOÀI):
@@ -276,14 +276,13 @@ ${rulesContext}
 
 YÊU CẦU SÁNG TÁC BẮT BUỘC:
 1. TIÊU ĐỀ: Bắt buộc phải chứa ít nhất một nhân vật hoặc đồ vật thật có trong nét vẽ của con (ví dụ nếu có bông hoa thì tiêu đề phải có "bông hoa").
-2. CỐT TRUYỆN: Lấy cảm hứng trực tiếp từ các nét vẽ trên. Tuyệt đối KHÔNG tự ý sáng tác ra nhân vật chính không có trong tranh. Biệt danh của bé "${child.nickname}" được dùng làm người kể hoặc nhân vật đồng hành.
+2. CỐT TRUYỆN: Lấy cảm hứng trực tiếp từ các nét vẽ trên. Tuyệt đối KHÔNG tự ý sáng tác ra nhân vật chính không có trong tranh. Tên gọi "${cleanChildDisplayName}" được dùng làm người kể hoặc nhân vật đồng hành (không lặp từ "Bé").
 3. TỪNG TRANG: Viết câu chuyện 4 đến 5 trang, mỗi trang đúng 30-50 từ tiếng Việt phù hợp lứa tuổi ${child.age}.
 4. MỖI TRANG CÓ 'grounded_objects': danh sách các đồ vật/nhân vật xuất hiện trong trang (BẮT BUỘC là tập con của [${validatedInspection.objects.join(', ')}]).
 5. MỖI TRANG CÓ 'focus_region': {x, y, zoom} với x, y từ 0-100 và zoom tối đa 1.35 để không bị crop mất nội dung bức tranh.
 6. Kết thúc có hậu với bài học đạo đức 'moral' và đúng 3 gợi ý 'next_drawing_ideas'.`;
 
     let storyGenerationResult = await callGeminiStructured<Layer2Story>({
-      apiKeyOverride: dbGeminiKey,
       systemInstruction: systemPromptText,
       contents: [{ role: 'user', parts: [{ text: layer2UserPrompt }] }],
       responseSchema: Layer2JsonSchema,
@@ -323,7 +322,6 @@ Yêu cầu chấm điểm:
 5. pedagogical_feedback: nhận xét ngắn gọn mang tính xây dựng.`;
 
     let judgeResult = await callGeminiStructured<Layer3Judge>({
-      apiKeyOverride: dbGeminiKey,
       contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
       responseSchema: Layer3JsonSchema,
       temperature: 0.1,
@@ -338,7 +336,6 @@ Yêu cầu chấm điểm:
         `\n\nLƯU Ý ĐẶC BIỆT TỪ GIÁM ĐỊNH VIÊN: Câu chuyện vừa viết chưa bám sát các chi tiết thật trong tranh vẽ (Điểm bám sát chỉ đạt ${judgment.faithfulness_score}/100). Góp ý: ${judgment.pedagogical_feedback}. Hãy viết lại câu chuyện mới bám thật sát các đồ vật: ${validatedInspection.objects.join(', ')}.`;
 
       storyGenerationResult = await callGeminiStructured<Layer2Story>({
-        apiKeyOverride: dbGeminiKey,
         systemInstruction: systemPromptText,
         contents: [{ role: 'user', parts: [{ text: retryPrompt }] }],
         responseSchema: Layer2JsonSchema,
@@ -347,7 +344,6 @@ Yêu cầu chấm điểm:
       generatedStory = Layer2StorySchema.parse(storyGenerationResult.data);
 
       judgeResult = await callGeminiStructured<Layer3Judge>({
-        apiKeyOverride: dbGeminiKey,
         contents: [{ role: 'user', parts: [{ text: buildJudgePrompt(generatedStory) }] }],
         responseSchema: Layer3JsonSchema,
         temperature: 0.1,
@@ -379,25 +375,26 @@ Yêu cầu chấm điểm:
     }
 
     // 7. Insert Story into Database
+    const storyPayload = {
+      child_id: childId,
+      drawing_id: drawingId,
+      title: generatedStory.title,
+      summary: generatedStory.summary,
+      moral: generatedStory.moral,
+      status: finalStatus,
+      risk_score: judgment.risk_score,
+      faithfulness_score: judgment.faithfulness_score,
+      generation_stage: 'done',
+      risk_reasons: judgment.violation_reasons,
+      rejection_reason: rejectionReason,
+      prompt_version_id: promptVersionId,
+      model: storyGenerationResult.model,
+      next_drawing_ideas: generatedStory.next_drawing_ideas,
+    };
+
     const { data: insertedStory, error: storyInsertError } = await supabase
       .from('stories')
-      .insert({
-        child_id: childId,
-        drawing_id: drawingId,
-        title: generatedStory.title,
-        summary: generatedStory.summary,
-        moral: generatedStory.moral,
-        status: finalStatus,
-        risk_score: judgment.risk_score,
-        faithfulness_score: judgment.faithfulness_score,
-        generation_stage: 'done',
-        grounded_objects: validatedInspection.objects,
-        risk_reasons: judgment.violation_reasons,
-        rejection_reason: rejectionReason,
-        prompt_version_id: promptVersionId,
-        model: storyGenerationResult.model,
-        next_drawing_ideas: generatedStory.next_drawing_ideas,
-      })
+      .insert(storyPayload)
       .select()
       .single();
 
@@ -449,6 +446,7 @@ Yêu cầu chấm điểm:
       JSON.stringify({
         data: {
           ...insertedStory,
+          grounded_objects: validatedInspection.objects,
           pages: persistedPages || generatedStory.pages,
           drawing: newDrawing,
         },

@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, User, KeyRound, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
@@ -16,6 +16,10 @@ const registerSchema = z
     email: z.string().email(vi.auth.errorInvalidEmail),
     password: z.string().min(6, vi.auth.errorShortPassword),
     confirmPassword: z.string().min(6, vi.auth.errorShortPassword),
+    parentalPin: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || /^\d{4}$/.test(v), 'Mã PIN phụ huynh cần gồm đúng 4 chữ số'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Mật khẩu xác nhận không khớp',
@@ -36,11 +40,23 @@ export const RegisterPage: React.FC = () => {
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
+    defaultValues: {
+      fullName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      parentalPin: '',
+    },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
     setAuthError(null);
-    const result = await registerUser(data.email, data.password, data.fullName);
+    const result = await registerUser(
+      data.email,
+      data.password,
+      data.fullName,
+      data.parentalPin || undefined
+    );
     if (result.success) {
       if (result.needsConfirmation) {
         setNeedsEmailConfirm(true);
@@ -100,6 +116,7 @@ export const RegisterPage: React.FC = () => {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
         <Input
           label={vi.auth.fullNameLabel}
+          autoComplete="name"
           placeholder={vi.auth.fullNamePlaceholder}
           leftIcon={<User className="w-4 h-4" />}
           error={errors.fullName?.message}
@@ -109,6 +126,7 @@ export const RegisterPage: React.FC = () => {
         <Input
           label={vi.auth.emailLabel}
           type="email"
+          autoComplete="email"
           placeholder={vi.auth.emailPlaceholder}
           leftIcon={<Mail className="w-4 h-4" />}
           error={errors.email?.message}
@@ -118,6 +136,7 @@ export const RegisterPage: React.FC = () => {
         <Input
           label={vi.auth.passwordLabel}
           type="password"
+          autoComplete="new-password"
           placeholder={vi.auth.passwordPlaceholder}
           leftIcon={<Lock className="w-4 h-4" />}
           error={errors.password?.message}
@@ -127,16 +146,29 @@ export const RegisterPage: React.FC = () => {
         <Input
           label="Xác nhận mật khẩu"
           type="password"
+          autoComplete="new-password"
           placeholder="Nhập lại mật khẩu"
           leftIcon={<Lock className="w-4 h-4" />}
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}
         />
 
+        <Input
+          label="Mã PIN Cổng Phụ Huynh 4 số (Tùy chọn)"
+          type="password"
+          inputMode="numeric"
+          maxLength={4}
+          placeholder="Đặt 4 chữ số bí mật cho Chế độ Bé"
+          leftIcon={<KeyRound className="w-4 h-4" />}
+          helperText="Dùng để khóa thoát Chế độ Bé. Bạn cũng có thể thiết lập hoặc đổi lại bất cứ lúc nào tại mục Cài đặt."
+          error={errors.parentalPin?.message}
+          {...register('parentalPin')}
+        />
+
         <div className="p-3.5 bg-mint/25 rounded-2xl border border-ink/10 flex items-start gap-2.5 text-xs text-ink mt-2">
           <ShieldCheck className="w-4 h-4 text-success shrink-0 mt-0.5" />
           <span className="leading-relaxed">
-            Cam kết an toàn dữ liệu trẻ em: Chỉ lưu biệt danh và độ tuổi của bé, mã PIN phụ huynh mặc định sau đăng ký là <strong>1234</strong>.
+            Cam kết an toàn dữ liệu trẻ em theo chuẩn GDPR: Chỉ lưu biệt danh thân mật và độ tuổi của bé, mã PIN phụ huynh được băm bảo mật riêng cho từng gia đình.
           </span>
         </div>
 

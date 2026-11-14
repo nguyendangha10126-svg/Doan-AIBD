@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Sparkles, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
@@ -18,7 +18,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export const LoginPage: React.FC = () => {
-  const { login, loginDemo, isLoading } = useAuthStore();
+  const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -30,8 +30,8 @@ export const LoginPage: React.FC = () => {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'me@phuhuynh.vn',
-      password: 'Parent@123',
+      email: '',
+      password: '',
     },
   });
 
@@ -50,24 +50,6 @@ export const LoginPage: React.FC = () => {
       const storeErr = useAuthStore.getState().error;
       setAuthError(storeErr || 'Email hoặc mật khẩu không chính xác.');
       toast.error('Đăng nhập không thành công');
-    }
-  };
-
-  const handleInstantDemoLogin = async (role: 'user' | 'admin') => {
-    setAuthError(null);
-    const success = await loginDemo(role);
-    if (success) {
-      if (role === 'admin') {
-        toast.success('Đã vào ngay cổng Quản trị viên An toàn!');
-        navigate('/admin');
-      } else {
-        toast.success('Chào mừng Mẹ Thu Hà đã trở lại!');
-        navigate('/');
-      }
-    } else {
-      const storeErr = useAuthStore.getState().error;
-      setAuthError(storeErr || 'Không thể đăng nhập tài khoản dùng thử lúc này.');
-      toast.error(storeErr || 'Đăng nhập không thành công');
     }
   };
 
@@ -91,55 +73,11 @@ export const LoginPage: React.FC = () => {
         </div>
       )}
 
-      {/* Instant 1-Click Demo Entry */}
-      <div className="mb-6 p-4 rounded-2xl bg-surface-2 border border-ink/10 space-y-3">
-        <div className="text-center">
-          <p className="text-xs font-heading font-extrabold text-ink uppercase tracking-wide">
-            Vào nhanh 1 chạm (Chế độ Demo 2 tài khoản)
-          </p>
-          <p className="text-[11px] text-ink-soft mt-0.5">
-            Chỉ cần nhấn là vào ngay — chưa cần cấu hình xác thực ngoài
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            isLoading={isLoading}
-            onClick={() => handleInstantDemoLogin('user')}
-            leftIcon={<Sparkles className="w-4 h-4" />}
-            className="w-full text-xs sm:text-sm"
-          >
-            Mẹ Thu Hà
-          </Button>
-          <Button
-            type="button"
-            variant="accent"
-            size="md"
-            isLoading={isLoading}
-            onClick={() => handleInstantDemoLogin('admin')}
-            leftIcon={<Shield className="w-4 h-4" />}
-            className="w-full text-xs sm:text-sm"
-          >
-            Quản trị Admin
-          </Button>
-        </div>
-      </div>
-
-      <div className="relative flex items-center py-1 mb-4">
-        <div className="flex-grow border-t border-ink/10" />
-        <span className="shrink-0 mx-3 text-[11px] font-heading font-bold text-ink-soft uppercase tracking-wider">
-          Hoặc nhập tài khoản
-        </span>
-        <div className="flex-grow border-t border-ink/10" />
-      </div>
-
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input
           label={vi.auth.emailLabel}
           type="email"
+          autoComplete="email"
           placeholder={vi.auth.emailPlaceholder}
           leftIcon={<Mail className="w-4 h-4" />}
           error={errors.email?.message}
@@ -149,6 +87,7 @@ export const LoginPage: React.FC = () => {
         <Input
           label={vi.auth.passwordLabel}
           type={showPassword ? 'text' : 'password'}
+          autoComplete="current-password"
           placeholder={vi.auth.passwordPlaceholder}
           leftIcon={<Lock className="w-4 h-4" />}
           rightIcon={
@@ -165,7 +104,11 @@ export const LoginPage: React.FC = () => {
           {...register('password')}
         />
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ink-soft">
+            <ShieldCheck className="w-3.5 h-3.5 text-success shrink-0" />
+            Xác thực bảo mật Supabase Auth
+          </span>
           <Link
             to="/forgot-password"
             className="text-xs font-heading font-bold text-accent hover:underline min-h-[36px] flex items-center"
@@ -176,7 +119,7 @@ export const LoginPage: React.FC = () => {
 
         <Button
           type="submit"
-          variant="secondary"
+          variant="primary"
           size="lg"
           className="w-full"
           isLoading={isLoading}

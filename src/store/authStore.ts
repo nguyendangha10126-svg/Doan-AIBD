@@ -1,89 +1,45 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Profile, Child } from '@/types/database';
-import { supabase, isDemoMode } from '@/lib/supabase';
-import { fastHashPin, generateUuid } from '@/lib/utils';
+import { supabase, supabaseUrl, isDemoMode } from '@/lib/supabase';
+import { fastHashPin, saltedHashPinSync, generateUuid, stripChildPrefix } from '@/lib/utils';
 
 export interface AuthState {
   profile: Profile | null;
   childrenList: Child[];
   selectedChildId: string | null;
-  isDemoSession: boolean;
-  demoChildrenByParent: Record<string, Child[]>;
   isInitialized: boolean;
   isLoading: boolean;
   error: string | null;
 
   // Actions
   initialize: () => Promise<void>;
-  loginDemo: (role: 'user' | 'admin') => Promise<boolean>;
-  login: (email: string, password?: string) => Promise<boolean>;
-  register: (email: string, password: string, fullName: string) => Promise<{ success: boolean; needsConfirmation?: boolean }>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (
+    email: string,
+    password: string,
+    fullName: string,
+    parentalPin?: string
+  ) => Promise<{ success: boolean; needsConfirmation?: boolean }>;
   logout: () => Promise<void>;
+  deleteAccount: (currentPassword: string) => Promise<{ success: boolean; error?: string }>;
   setSelectedChildId: (id: string | null) => void;
   setChildrenList: (children: Child[]) => void;
   addChild: (child: Omit<Child, 'id' | 'created_at' | 'parent_id'>) => Promise<Child | null>;
-  updateChild: (childId: string, updates: Partial<Omit<Child, 'id' | 'parent_id' | 'created_at'>>) => Promise<boolean>;
+  updateChild: (
+    childId: string,
+    updates: Partial<Omit<Child, 'id' | 'parent_id' | 'created_at'>>
+  ) => Promise<boolean>;
   deleteChild: (childId: string) => Promise<boolean>;
   updateProfileName: (fullName: string) => Promise<boolean>;
   updatePassword: (newPassword: string) => Promise<boolean>;
   requestPasswordReset: (email: string) => Promise<boolean>;
+  hasPinConfigured: () => boolean;
   updatePin: (pin: string) => Promise<boolean>;
   verifyPin: (pin: string) => boolean;
 }
 
-export const DEFAULT_ADMIN_PROFILE: Profile = {
-  id: 'a0000000-0000-0000-0000-000000000001',
-  email: 'admin@drawtostory.vn',
-  full_name: 'Quản Trị Viên An Toàn',
-  role: 'admin',
-  is_locked: false,
-  daily_quota: 100,
-  parental_pin_hash: fastHashPin('1234'),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-export const DEFAULT_USER_PROFILE: Profile = {
-  id: 'b0000000-0000-0000-0000-000000000002',
-  email: 'me@phuhuynh.vn',
-  full_name: 'Mẹ Thu Hà',
-  role: 'user',
-  is_locked: false,
-  daily_quota: 5,
-  parental_pin_hash: fastHashPin('1234'),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 let authListenerAttached = false;
-
-function readPersistedAdminUsers(): Profile[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem('drawtostory-admin-storage');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as { state?: { usersList?: Profile[] } };
-    return Array.isArray(parsed?.state?.usersList) ? parsed.state.usersList : [];
-  } catch {
-    return [];
-  }
-}
-
-function resolveSyncedDemoProfile(baseProfile: Profile): Profile {
-  const adminUsers = readPersistedAdminUsers();
-  const matched = adminUsers.find(
-    (u) =>
-      u.id === baseProfile.id ||
-      (u.email && baseProfile.email && u.email.toLowerCase() === baseProfile.email.toLowerCase())
-  );
-  if (!matched) return baseProfile;
-  return {
-    ...baseProfile,
-    ...matched,
-    role: baseProfile.role,
-  };
-}
 
 function emitProfileUpdated(profile: Profile) {
   if (typeof window !== 'undefined') {
@@ -94,6 +50,12 @@ function emitProfileUpdated(profile: Profile) {
 function emitChildDeleted(childId: string) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('drawtostory:child-deleted', { detail: { childId } }));
+  }
+}
+
+function emitLoggedOut() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('drawtostory:logged-out'));
   }
 }
 
@@ -117,59 +79,25 @@ function translateAuthError(rawMessage: string): string {
   return rawMessage;
 }
 
+function sanitizeNicknameInput(rawNickname: string): string {
+  const trimmed = rawNickname.trim().replace(/\s+/g, ' ');
+  const stripped = stripChildPrefix(trimmed);
+  return stripped || trimmed;
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       profile: null,
       childrenList: [],
       selectedChildId: null,
-      isDemoSession: false,
-      demoChildrenByParent: {},
       isInitialized: false,
       isLoading: false,
       error: null,
 
       initialize: async () => {
         try {
-          const currentState = get();
-
-          // Preserve active 1-click Demo Session across F5 page reloads
-          if (isDemoMode || (currentState.isDemoSession && currentState.profile)) {
-            if (currentState.profile) {
-              const synced = resolveSyncedDemoProfile(currentState.profile);
-              if (synced.is_locked) {
-                set({
-                  profile: null,
-                  childrenList: [],
-                  selectedChildId: null,
-                  isDemoSession: false,
-                  error: 'Tài khoản của bạn đã bị Quản trị viên tạm khóa.',
-                  isInitialized: true,
-                });
-                return;
-              }
-
-              const savedKids =
-                synced.role === 'admin'
-                  ? []
-                  : currentState.demoChildrenByParent[synced.id] ?? currentState.childrenList ?? [];
-              const prevSelected = currentState.selectedChildId;
-              const nextSelected =
-                savedKids.length > 0
-                  ? prevSelected && savedKids.some((k) => k.id === prevSelected)
-                    ? prevSelected
-                    : savedKids[0].id
-                  : null;
-
-              set({
-                profile: synced,
-                childrenList: savedKids,
-                selectedChildId: nextSelected,
-                isInitialized: true,
-              });
-              return;
-            }
-
+          if (isDemoMode) {
             set({ isInitialized: true });
             return;
           }
@@ -177,12 +105,13 @@ export const useAuthStore = create<AuthState>()(
           if (!authListenerAttached) {
             authListenerAttached = true;
             supabase.auth.onAuthStateChange((event) => {
-              if (event === 'SIGNED_OUT' && !get().isDemoSession) {
+              if (event === 'SIGNED_OUT') {
                 set({
                   profile: null,
                   childrenList: [],
                   selectedChildId: null,
                 });
+                emitLoggedOut();
               }
             });
           }
@@ -223,6 +152,7 @@ export const useAuthStore = create<AuthState>()(
               error: 'Tài khoản của bạn đã bị Quản trị viên tạm khóa.',
               isInitialized: true,
             });
+            emitLoggedOut();
             return;
           }
 
@@ -236,7 +166,6 @@ export const useAuthStore = create<AuthState>()(
               profile: resolvedProfile,
               childrenList: [],
               selectedChildId: null,
-              isDemoSession: false,
               isInitialized: true,
             });
             return;
@@ -261,7 +190,6 @@ export const useAuthStore = create<AuthState>()(
             profile: resolvedProfile,
             childrenList: validKids,
             selectedChildId: nextSelected,
-            isDemoSession: false,
             isInitialized: true,
           });
         } catch (err) {
@@ -270,86 +198,44 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      loginDemo: async (role: 'user' | 'admin') => {
-        set({ isLoading: true, error: null });
-        const baseProfile = role === 'admin' ? DEFAULT_ADMIN_PROFILE : DEFAULT_USER_PROFILE;
-        const resolved = resolveSyncedDemoProfile(baseProfile);
-
-        if (resolved.is_locked) {
-          set({
-            isLoading: false,
-            error: 'Tài khoản của bạn hiện đang bị tạm khóa bởi Quản trị viên.',
-          });
-          return false;
-        }
-
-        const savedKids =
-          role === 'admin' ? [] : get().demoChildrenByParent[resolved.id] || [];
-
-        set({
-          profile: resolved,
-          childrenList: savedKids,
-          selectedChildId: savedKids.length > 0 ? savedKids[0].id : null,
-          isDemoSession: true,
-          isInitialized: true,
-          isLoading: false,
-          error: null,
-        });
-        emitProfileUpdated(resolved);
-        return true;
-      },
-
-      login: async (email: string, password?: string) => {
+      login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         try {
           const cleanEmail = email.toLowerCase().trim();
-
-          // Instant 1-click / zero-friction Demo Login for the 2 default accounts
-          if (cleanEmail === 'admin@drawtostory.vn') {
-            return await get().loginDemo('admin');
-          }
-          if (cleanEmail === 'me@phuhuynh.vn') {
-            return await get().loginDemo('user');
+          if (!cleanEmail || !password) {
+            throw new Error('Vui lòng nhập đầy đủ Email và Mật khẩu.');
           }
 
-          // Check if this email was registered locally in Demo Mode
-          const localMatch = readPersistedAdminUsers().find(
-            (u) => u.email && u.email.toLowerCase() === cleanEmail
-          );
-          if (isDemoMode || localMatch) {
-            const targetProfile: Profile = localMatch || {
-              ...DEFAULT_USER_PROFILE,
-              id: generateUuid(),
+          if (isDemoMode) {
+            const mockId = generateUuid();
+            const isMockAdmin = cleanEmail.startsWith('admin@');
+            const mockProfile: Profile = {
+              id: mockId,
               email: cleanEmail,
-              full_name: cleanEmail.split('@')[0] || 'Phụ Huynh',
+              full_name: isMockAdmin ? 'Quản Trị Viên (Dev)' : cleanEmail.split('@')[0] || 'Phụ Huynh',
+              role: isMockAdmin ? 'admin' : 'user',
+              is_locked: false,
+              daily_quota: isMockAdmin ? 100 : 5,
+              parental_pin_hash: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             };
-            if (targetProfile.is_locked) {
-              set({
-                isLoading: false,
-                error: 'Tài khoản của bạn hiện đang bị tạm khóa bởi Quản trị viên.',
-              });
-              return false;
-            }
-            const savedKids =
-              targetProfile.role === 'admin'
-                ? []
-                : get().demoChildrenByParent[targetProfile.id] || [];
+            emitLoggedOut();
             set({
-              profile: targetProfile,
-              childrenList: savedKids,
-              selectedChildId: savedKids.length > 0 ? savedKids[0].id : null,
-              isDemoSession: true,
+              profile: mockProfile,
+              childrenList: [],
+              selectedChildId: null,
               isInitialized: true,
               isLoading: false,
               error: null,
             });
-            emitProfileUpdated(targetProfile);
+            emitProfileUpdated(mockProfile);
             return true;
           }
 
           const { data, error } = await supabase.auth.signInWithPassword({
             email: cleanEmail,
-            password: password || '',
+            password,
           });
 
           if (error || !data.user) {
@@ -363,6 +249,7 @@ export const useAuthStore = create<AuthState>()(
             .single();
 
           if (profError || !dbProfile) {
+            await supabase.auth.signOut();
             throw new Error('Không tìm thấy hồ sơ tài khoản trên hệ thống.');
           }
 
@@ -386,11 +273,14 @@ export const useAuthStore = create<AuthState>()(
             validKids = (kids as Child[]) || [];
           }
 
+          // Clear any previous in-memory story/admin state before activating new user
+          emitLoggedOut();
+
           set({
             profile: resolvedProfile,
             childrenList: validKids,
             selectedChildId: validKids.length > 0 ? validKids[0].id : null,
-            isDemoSession: false,
+            isInitialized: true,
             isLoading: false,
             error: null,
           });
@@ -402,39 +292,42 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email: string, password: string, fullName: string) => {
+      register: async (
+        email: string,
+        password: string,
+        fullName: string,
+        parentalPin?: string
+      ) => {
         set({ isLoading: true, error: null });
         try {
           const cleanEmail = email.toLowerCase().trim();
           const cleanName = fullName.trim();
+          const cleanPin = parentalPin && /^\d{4}$/.test(parentalPin.trim()) ? parentalPin.trim() : '';
 
-          const createDemoUser = () => {
+          if (isDemoMode) {
+            const mockId = generateUuid();
             const newProfile: Profile = {
-              id: generateUuid(),
+              id: mockId,
               email: cleanEmail,
               full_name: cleanName,
               role: 'user',
               is_locked: false,
               daily_quota: 5,
-              parental_pin_hash: fastHashPin('1234'),
+              parental_pin_hash: cleanPin ? saltedHashPinSync(cleanPin, mockId) : null,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
+            emitLoggedOut();
             set({
               profile: newProfile,
               childrenList: [],
               selectedChildId: null,
-              isDemoSession: true,
               isInitialized: true,
               isLoading: false,
               error: null,
             });
             emitProfileUpdated(newProfile);
             return { success: true };
-          };
-
-          if (isDemoMode) {
-            return createDemoUser();
           }
 
           const { data, error } = await supabase.auth.signUp({
@@ -446,38 +339,54 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (error) {
-            // Fallback cleanly to Demo Session if Supabase Auth is not yet configured for live signups
-            return createDemoUser();
+            throw new Error(error.message);
           }
 
           if (data.user && !data.session) {
-            return createDemoUser();
+            set({ isLoading: false });
+            return { success: true, needsConfirmation: true };
           }
 
           if (data.user && data.session) {
+            let pinHash: string | null = null;
+            if (cleanPin) {
+              pinHash = saltedHashPinSync(cleanPin, data.user.id);
+              await supabase
+                .from('profiles')
+                .update({ parental_pin_hash: pinHash, updated_at: new Date().toISOString() })
+                .eq('id', data.user.id);
+            }
+
             const { data: dbProfile } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', data.user.id)
-              .single();
+              .maybeSingle();
 
-            const fallbackProfile: Profile = (dbProfile as Profile) || {
-              id: data.user.id,
-              email: cleanEmail,
-              full_name: cleanName,
-              role: 'user',
-              is_locked: false,
-              daily_quota: 5,
-              parental_pin_hash: fastHashPin('1234'),
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
+            const resolvedProfile: Profile = dbProfile
+              ? {
+                  ...(dbProfile as Profile),
+                  email: (dbProfile as Profile).email || cleanEmail,
+                  parental_pin_hash: pinHash || (dbProfile as Profile).parental_pin_hash || null,
+                }
+              : {
+                  id: data.user.id,
+                  email: cleanEmail,
+                  full_name: cleanName,
+                  role: 'user',
+                  is_locked: false,
+                  daily_quota: 5,
+                  parental_pin_hash: pinHash,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
 
+            emitLoggedOut();
             set({
-              profile: { ...fallbackProfile, email: fallbackProfile.email || cleanEmail },
+              profile: resolvedProfile,
               childrenList: [],
               selectedChildId: null,
-              isDemoSession: !dbProfile,
+              isInitialized: true,
               isLoading: false,
             });
           }
@@ -492,16 +401,93 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        const wasDemo = isDemoMode || get().isDemoSession;
         set({
           profile: null,
           childrenList: [],
           selectedChildId: null,
-          isDemoSession: false,
           error: null,
         });
-        if (!wasDemo) {
+        emitLoggedOut();
+        if (!isDemoMode) {
           await supabase.auth.signOut().catch(() => {});
+        }
+      },
+
+      deleteAccount: async (currentPassword: string) => {
+        const { profile } = get();
+        if (!profile) {
+          return { success: false, error: 'Phiên đăng nhập không hợp lệ.' };
+        }
+
+        if (isDemoMode) {
+          await get().logout();
+          return { success: true };
+        }
+
+        if (!currentPassword) {
+          return { success: false, error: 'Vui lòng nhập mật khẩu hiện tại để xác thực xóa tài khoản.' };
+        }
+
+        try {
+          // 1. Re-authenticate user password before destructive GDPR deletion
+          if (profile.email) {
+            const { error: verifyErr } = await supabase.auth.signInWithPassword({
+              email: profile.email,
+              password: currentPassword,
+            });
+            if (verifyErr) {
+              return {
+                success: false,
+                error: 'Mật khẩu xác nhận không chính xác. Tài khoản chưa bị xóa.',
+              };
+            }
+          }
+
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) {
+            return { success: false, error: 'Không thể xác thực phiên làm việc hiện tại.' };
+          }
+
+          // 2. Call Server-Side Edge Function to erase Storage files + DB rows + auth.users
+          const fnRes = await fetch(`${supabaseUrl}/functions/v1/delete-account`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+
+          const fnJson = (await fnRes.json().catch(() => null)) as {
+            data?: { deleted?: boolean };
+            error?: { code?: string; message?: string };
+          } | null;
+
+          if (!fnRes.ok) {
+            if (fnRes.status === 404) {
+              return {
+                success: false,
+                error:
+                  'Edge Function delete-account chưa được triển khai trên Supabase. Vui lòng chạy: supabase functions deploy delete-account',
+              };
+            }
+            return {
+              success: false,
+              error: fnJson?.error?.message || 'Không thể xóa tài khoản từ máy chủ.',
+            };
+          }
+
+          // 3. Clean up local user guide preferences & sign out
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(`drawtostory_guide_never_${profile.id}`);
+            window.sessionStorage.removeItem(`drawtostory_guide_seen_session_${profile.id}`);
+          }
+
+          await get().logout();
+          return { success: true };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Lỗi kết nối khi xóa tài khoản.';
+          return { success: false, error: msg };
         }
       },
 
@@ -510,29 +496,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setChildrenList: (children: Child[]) => {
-        const { profile, isDemoSession, demoChildrenByParent } = get();
-        if (profile && (isDemoMode || isDemoSession)) {
-          set({
-            childrenList: children,
-            demoChildrenByParent: {
-              ...demoChildrenByParent,
-              [profile.id]: children,
-            },
-          });
-          return;
-        }
         set({ childrenList: children });
       },
 
       addChild: async (childData) => {
-        const { profile, childrenList, isDemoSession, demoChildrenByParent } = get();
+        const { profile, childrenList } = get();
         if (!profile) return null;
 
-        if (isDemoMode || isDemoSession) {
+        const normalizedNickname = sanitizeNicknameInput(childData.nickname);
+
+        if (isDemoMode) {
           const demoChild: Child = {
             id: generateUuid(),
             parent_id: profile.id,
-            nickname: childData.nickname.trim(),
+            nickname: normalizedNickname,
             age: childData.age,
             avatar_color: childData.avatar_color,
             avatar_emoji: childData.avatar_emoji,
@@ -542,10 +519,6 @@ export const useAuthStore = create<AuthState>()(
           set({
             childrenList: nextKids,
             selectedChildId: demoChild.id,
-            demoChildrenByParent: {
-              ...demoChildrenByParent,
-              [profile.id]: nextKids,
-            },
           });
           return demoChild;
         }
@@ -554,7 +527,7 @@ export const useAuthStore = create<AuthState>()(
           .from('children')
           .insert({
             parent_id: profile.id,
-            nickname: childData.nickname.trim(),
+            nickname: normalizedNickname,
             age: childData.age,
             avatar_color: childData.avatar_color,
             avatar_emoji: childData.avatar_emoji,
@@ -576,11 +549,18 @@ export const useAuthStore = create<AuthState>()(
       },
 
       updateChild: async (childId, updates) => {
-        const { profile, childrenList, isDemoSession, demoChildrenByParent } = get();
-        if (!isDemoMode && !isDemoSession) {
+        const { childrenList } = get();
+        const normalizedUpdates = {
+          ...updates,
+          ...(typeof updates.nickname === 'string'
+            ? { nickname: sanitizeNicknameInput(updates.nickname) }
+            : {}),
+        };
+
+        if (!isDemoMode) {
           const { error } = await supabase
             .from('children')
-            .update(updates)
+            .update(normalizedUpdates)
             .eq('id', childId);
           if (error) {
             console.error('updateChild error:', error);
@@ -588,21 +568,15 @@ export const useAuthStore = create<AuthState>()(
           }
         }
         const updatedList = childrenList.map((c) =>
-          c.id === childId ? { ...c, ...updates } : c
+          c.id === childId ? { ...c, ...normalizedUpdates } : c
         );
-        set({
-          childrenList: updatedList,
-          demoChildrenByParent:
-            profile && (isDemoMode || isDemoSession)
-              ? { ...demoChildrenByParent, [profile.id]: updatedList }
-              : demoChildrenByParent,
-        });
+        set({ childrenList: updatedList });
         return true;
       },
 
       deleteChild: async (childId) => {
-        const { profile, childrenList, selectedChildId, isDemoSession, demoChildrenByParent } = get();
-        if (!isDemoMode && !isDemoSession) {
+        const { childrenList, selectedChildId } = get();
+        if (!isDemoMode) {
           try {
             const { data: childFiles } = await supabase.storage
               .from('drawings')
@@ -627,22 +601,18 @@ export const useAuthStore = create<AuthState>()(
           childrenList: filtered,
           selectedChildId:
             selectedChildId === childId ? filtered[0]?.id || null : selectedChildId,
-          demoChildrenByParent:
-            profile && (isDemoMode || isDemoSession)
-              ? { ...demoChildrenByParent, [profile.id]: filtered }
-              : demoChildrenByParent,
         });
         emitChildDeleted(childId);
         return true;
       },
 
       updateProfileName: async (fullName: string) => {
-        const { profile, isDemoSession } = get();
+        const { profile } = get();
         if (!profile) return false;
         const cleanName = fullName.trim();
         if (!cleanName) return false;
 
-        if (!isDemoMode && !isDemoSession) {
+        if (!isDemoMode) {
           const { error } = await supabase
             .from('profiles')
             .update({ full_name: cleanName, updated_at: new Date().toISOString() })
@@ -665,7 +635,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       updatePassword: async (newPassword: string) => {
-        if (isDemoMode || get().isDemoSession) return true;
+        if (isDemoMode) return true;
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) {
           console.error('updatePassword error:', error);
@@ -675,15 +645,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       requestPasswordReset: async (email: string) => {
-        const clean = email.trim().toLowerCase();
-        if (
-          isDemoMode ||
-          get().isDemoSession ||
-          clean === 'me@phuhuynh.vn' ||
-          clean === 'admin@drawtostory.vn'
-        ) {
-          return true;
-        }
+        if (isDemoMode) return true;
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${window.location.origin}/settings`,
         });
@@ -694,12 +656,18 @@ export const useAuthStore = create<AuthState>()(
         return true;
       },
 
-      updatePin: async (pin: string) => {
-        const { profile, isDemoSession } = get();
-        if (!profile) return false;
+      hasPinConfigured: () => {
+        return Boolean(get().profile?.parental_pin_hash);
+      },
 
-        const hashed = fastHashPin(pin.trim());
-        if (!isDemoMode && !isDemoSession) {
+      updatePin: async (pin: string) => {
+        const { profile } = get();
+        if (!profile) return false;
+        const cleanPin = pin.trim();
+        if (!/^\d{4}$/.test(cleanPin)) return false;
+
+        const hashed = saltedHashPinSync(cleanPin, profile.id);
+        if (!isDemoMode) {
           const { error } = await supabase
             .from('profiles')
             .update({ parental_pin_hash: hashed, updated_at: new Date().toISOString() })
@@ -722,26 +690,39 @@ export const useAuthStore = create<AuthState>()(
       verifyPin: (pin: string) => {
         const { profile } = get();
         const stored = profile?.parental_pin_hash;
-        if (!stored) {
-          return pin.trim() === '1234';
+        // SECURITY: Never fall back to a public default PIN such as '1234'
+        if (!profile || !stored) {
+          return false;
         }
-        const hashed = fastHashPin(pin.trim());
-        return hashed === stored || pin.trim() === stored;
+        const cleanPin = pin.trim();
+        if (!/^\d{4}$/.test(cleanPin)) {
+          return false;
+        }
+        const salted = saltedHashPinSync(cleanPin, profile.id);
+        if (salted === stored) return true;
+        // Support custom PINs saved before v2 salt upgrade, except the insecure '1234' hash
+        const legacyHash = fastHashPin(cleanPin);
+        if (stored !== '001627dbf308f962' && legacyHash === stored) {
+          return true;
+        }
+        return false;
       },
     }),
     {
       name: 'drawtostory-auth-storage',
       partialize: (state) => ({
-        profile: state.profile,
-        childrenList: state.childrenList,
         selectedChildId: state.selectedChildId,
-        isDemoSession: state.isDemoSession,
-        demoChildrenByParent: state.demoChildrenByParent,
+        ...(isDemoMode
+          ? {
+              profile: state.profile,
+              childrenList: state.childrenList,
+            }
+          : {}),
       }),
     }
   )
 );
 
 export function isUsingDemoSession(): boolean {
-  return isDemoMode || useAuthStore.getState().isDemoSession;
+  return isDemoMode;
 }

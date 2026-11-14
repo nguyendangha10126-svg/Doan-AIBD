@@ -10,13 +10,9 @@ import {
   RiskReason,
   isStoryApproved,
 } from '@/types/database';
-import { supabase } from '@/lib/supabase';
-import {
-  DEFAULT_ADMIN_PROFILE,
-  DEFAULT_USER_PROFILE,
-  useAuthStore,
-  isUsingDemoSession,
-} from '@/store/authStore';
+import { supabase, isDemoMode } from '@/lib/supabase';
+import { toLocalDateKey } from '@/lib/utils';
+import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
 
 export interface AdminKpis {
@@ -59,7 +55,6 @@ export interface AdminState {
   autoApproveMaxRisk: number;
   globalDailyLimit: number;
   strictDrawingCheck: boolean;
-  geminiApiKey: string;
   isLoading: boolean;
 
   // Actions
@@ -78,17 +73,25 @@ export interface AdminState {
 
   approveStoryModeration: (storyId: string, adminId: string, reason?: string) => Promise<boolean>;
   rejectStoryModeration: (storyId: string, adminId: string, reason: string) => Promise<boolean>;
-  batchModeration: (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => Promise<boolean>;
+  batchModeration: (
+    storyIds: string[],
+    decision: 'approved' | 'rejected',
+    reason: string
+  ) => Promise<boolean>;
 
   updateModerationSettings: (mode: 'auto' | 'manual_all', maxRisk: number) => Promise<boolean>;
   setStrictDrawingCheck: (val: boolean) => Promise<boolean>;
   updateGlobalDailyLimit: (limit: number) => Promise<boolean>;
   updateMonthlyBudget: (budgetUsd: number) => Promise<boolean>;
-  updateGeminiApiKey: (apiKey: string) => Promise<boolean>;
   toggleUserLock: (userId: string) => Promise<boolean>;
   updateUserQuota: (userId: string, quota: number) => Promise<boolean>;
 
-  logAudit: (action: string, targetType: string, targetId: string, details?: Record<string, unknown>) => Promise<void>;
+  logAudit: (
+    action: string,
+    targetType: string,
+    targetId: string,
+    details?: Record<string, unknown>
+  ) => Promise<void>;
   exportAiLogsCsv: () => string;
 }
 
@@ -97,11 +100,8 @@ function buildEmptyDays(daysCount: number): Array<{ isoKey: string; point: Daily
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() - (daysCount - 1 - idx));
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
     return {
-      isoKey: `${year}-${month}-${day}`,
+      isoKey: toLocalDateKey(d),
       point: {
         date: `${d.getDate()}/${d.getMonth() + 1}`,
         stories: 0,
@@ -113,15 +113,6 @@ function buildEmptyDays(daysCount: number): Array<{ isoKey: string; point: Daily
       },
     };
   });
-}
-
-function toLocalDayKey(isoString?: string | null): string {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 const CLEAN_CHART_7D = buildEmptyDays(7).map((b) => b.point);
@@ -163,7 +154,8 @@ function computeMetricsFromCollections(params: {
   const latencyCounter = new Map<string, { sum: number; count: number }>();
 
   for (const st of allStories) {
-    const key = toLocalDayKey(st.created_at);
+    if (!st.created_at) continue;
+    const key = toLocalDateKey(st.created_at);
     const bucket = bucketMap.get(key);
     if (bucket) {
       bucket.stories += 1;
@@ -173,7 +165,8 @@ function computeMetricsFromCollections(params: {
   }
 
   for (const lg of allLogs) {
-    const key = toLocalDayKey(lg.created_at);
+    if (!lg.created_at) continue;
+    const key = toLocalDateKey(lg.created_at);
     const bucket = bucketMap.get(key);
     if (bucket) {
       bucket.tokens += (Number(lg.input_tokens) || 0) + (Number(lg.output_tokens) || 0);
@@ -221,8 +214,12 @@ function computeMetricsFromCollections(params: {
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
 
-  const todayKey = toLocalDayKey(new Date().toISOString());
-  const storiesToday = allStories.filter((s) => toLocalDayKey(s.created_at) === todayKey).length;
+  const todayKey = toLocalDateKey(new Date());
+  const currentMonthPrefix = todayKey.slice(0, 7);
+
+  const storiesToday = allStories.filter(
+    (s) => s.created_at && toLocalDateKey(s.created_at) === todayKey
+  ).length;
   const pendingCount = allStories.filter((s) => s.status === 'pending_review').length;
   const rejectedCount = allStories.filter((s) => s.status === 'rejected').length;
   const inputBlockedCount = allLogs.filter(
@@ -234,9 +231,8 @@ function computeMetricsFromCollections(params: {
       ? Number((((rejectedCount + inputBlockedCount) / totalAttempts) * 100).toFixed(1))
       : 0;
 
-  const currentMonthPrefix = new Date().toISOString().substring(0, 7);
   const monthlyCostUsd = allLogs
-    .filter((l) => (l.created_at || '').startsWith(currentMonthPrefix))
+    .filter((l) => l.created_at && toLocalDateKey(l.created_at).startsWith(currentMonthPrefix))
     .reduce((acc, curr) => acc + (Number(curr.estimated_cost_usd) || 0), 0);
 
   let agreementPercent = 100;
@@ -294,7 +290,7 @@ QUY TẮC BẮT BUỘC:
 5. Kết thúc và bài học (Moral): Câu chuyện luôn kết thúc có hậu, tràn đầy hy vọng.
 6. Vẽ tiếp gì nào: Đúng 3 gợi ý nét vẽ sáng tạo để bé tiếp tục vẽ bức tranh tiếp theo.`,
     is_active: true,
-    created_by: 'a0000000-0000-0000-0000-000000000001',
+    created_by: null,
     created_at: new Date().toISOString(),
   },
 ];
@@ -319,12 +315,11 @@ export const useAdminStore = create<AdminState>()(
       aiLogs: [],
       moderationReviews: [],
       auditLogs: [],
-      usersList: [DEFAULT_ADMIN_PROFILE, DEFAULT_USER_PROFILE],
+      usersList: [],
       moderationMode: 'auto',
       autoApproveMaxRisk: 25,
       globalDailyLimit: 5,
       strictDrawingCheck: true,
-      geminiApiKey: '',
       isLoading: false,
 
       recomputeLocalMetrics: () => {
@@ -375,7 +370,7 @@ export const useAdminStore = create<AdminState>()(
         }
         set({ isLoading: true });
         try {
-          const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+          const thirtyfiveDaysAgo = new Date(Date.now() - 35 * 86400000).toISOString();
 
           const [
             { data: profiles },
@@ -391,15 +386,26 @@ export const useAdminStore = create<AdminState>()(
             supabase.from('safety_rules').select('*').order('created_at', { ascending: true }),
             supabase.from('system_prompts').select('*').order('version', { ascending: false }),
             supabase.from('app_settings').select('*'),
-            supabase.from('ai_logs').select('*').gte('created_at', thirtyDaysAgo).order('created_at', { ascending: false }).limit(500),
-            supabase.from('stories').select('id, status, risk_score, risk_reasons, rejection_reason, created_at'),
+            supabase
+              .from('ai_logs')
+              .select('*')
+              .gte('created_at', thirtyfiveDaysAgo)
+              .order('created_at', { ascending: false })
+              .limit(1000),
+            supabase
+              .from('stories')
+              .select('id, status, risk_score, risk_reasons, rejection_reason, created_at'),
             supabase.from('moderation_reviews').select('*').order('created_at', { ascending: false }),
-            supabase.from('admin_audit_logs').select('*').order('created_at', { ascending: false }).limit(100),
+            supabase
+              .from('admin_audit_logs')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(100),
           ]);
 
           const stateUpdates: Partial<AdminState> = {};
 
-          if (profiles && profiles.length > 0) {
+          if (profiles) {
             stateUpdates.usersList = profiles as Profile[];
           }
 
@@ -441,9 +447,6 @@ export const useAdminStore = create<AdminState>()(
               }
               if (s.key === 'monthly_budget_usd') {
                 budgetUsd = parseFloat(s.value) || 50.0;
-              }
-              if (s.key === 'gemini_api_key') {
-                stateUpdates.geminiApiKey = s.value || '';
               }
             });
           }
@@ -524,7 +527,9 @@ export const useAdminStore = create<AdminState>()(
         set((state) => ({
           safetyRules: [createdRule, ...state.safetyRules],
         }));
-        await get().logAudit('CREATE_RULE', 'safety_rules', createdRule.id, { category: rule.category });
+        await get().logAudit('CREATE_RULE', 'safety_rules', createdRule.id, {
+          category: rule.category,
+        });
         return true;
       },
 
@@ -576,7 +581,7 @@ export const useAdminStore = create<AdminState>()(
         const { systemPrompts } = get();
         const maxVersion = systemPrompts.reduce((max, p) => Math.max(max, p.version || 0), 0);
         const nextVersion = maxVersion + 1;
-        const adminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+        const adminId = useAuthStore.getState().profile?.id || null;
 
         let createdPrompt: SystemPrompt = {
           id: 'f' + Date.now().toString(16).padStart(31, '0').substring(0, 31),
@@ -644,8 +649,13 @@ export const useAdminStore = create<AdminState>()(
         return true;
       },
 
-      approveStoryModeration: async (storyId: string, adminId: string, reason = 'Phê duyệt an toàn') => {
-        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId || DEFAULT_ADMIN_PROFILE.id;
+      approveStoryModeration: async (
+        storyId: string,
+        adminId: string,
+        reason = 'Phê duyệt an toàn'
+      ) => {
+        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId;
+        if (!resolvedAdminId) return false;
         const targetStory = useStoryStore.getState().stories.find((s) => s.id === storyId);
         const riskAtReview = targetStory?.risk_score ?? 0;
 
@@ -706,7 +716,8 @@ export const useAdminStore = create<AdminState>()(
       },
 
       rejectStoryModeration: async (storyId: string, adminId: string, reason: string) => {
-        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId || DEFAULT_ADMIN_PROFILE.id;
+        const resolvedAdminId = useAuthStore.getState().profile?.id || adminId;
+        if (!resolvedAdminId) return false;
         const targetStory = useStoryStore.getState().stories.find((s) => s.id === storyId);
         const riskAtReview = targetStory?.risk_score ?? 50;
 
@@ -766,14 +777,20 @@ export const useAdminStore = create<AdminState>()(
         return true;
       },
 
-      batchModeration: async (storyIds: string[], decision: 'approved' | 'rejected', reason: string) => {
-        const resolvedAdminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+      batchModeration: async (
+        storyIds: string[],
+        decision: 'approved' | 'rejected',
+        reason: string
+      ) => {
+        const resolvedAdminId = useAuthStore.getState().profile?.id;
+        if (!resolvedAdminId) return false;
         const storiesMap = new Map(useStoryStore.getState().stories.map((s) => [s.id, s]));
 
         const newReviews: ModerationReview[] = [];
 
         for (const sId of storyIds) {
-          const riskAtReview = storiesMap.get(sId)?.risk_score ?? (decision === 'approved' ? 15 : 60);
+          const riskAtReview =
+            storiesMap.get(sId)?.risk_score ?? (decision === 'approved' ? 15 : 60);
           if (!isUsingDemoSession()) {
             const { error: revErr } = await supabase.from('moderation_reviews').insert({
               story_id: sId,
@@ -837,7 +854,11 @@ export const useAdminStore = create<AdminState>()(
         if (!isUsingDemoSession()) {
           const { error } = await supabase.from('app_settings').upsert([
             { key: 'moderation_mode', value: mode, updated_at: new Date().toISOString() },
-            { key: 'auto_approve_max_risk', value: maxRisk.toString(), updated_at: new Date().toISOString() },
+            {
+              key: 'auto_approve_max_risk',
+              value: maxRisk.toString(),
+              updated_at: new Date().toISOString(),
+            },
           ]);
           if (error) {
             console.error('updateModerationSettings error:', error);
@@ -849,7 +870,10 @@ export const useAdminStore = create<AdminState>()(
           moderationMode: mode,
           autoApproveMaxRisk: maxRisk,
         });
-        await get().logAudit('UPDATE_SETTINGS', 'app_settings', 'moderation_mode', { mode, maxRisk });
+        await get().logAudit('UPDATE_SETTINGS', 'app_settings', 'moderation_mode', {
+          mode,
+          maxRisk,
+        });
         return true;
       },
 
@@ -907,27 +931,8 @@ export const useAdminStore = create<AdminState>()(
         set((state) => ({
           kpis: { ...state.kpis, monthlyBudgetUsd: budgetUsd },
         }));
-        await get().logAudit('UPDATE_MONTHLY_BUDGET', 'app_settings', 'monthly_budget_usd', { budgetUsd });
-        return true;
-      },
-
-      updateGeminiApiKey: async (apiKey: string) => {
-        const cleanKey = apiKey.trim();
-        if (!isUsingDemoSession()) {
-          const { error } = await supabase.from('app_settings').upsert({
-            key: 'gemini_api_key',
-            value: cleanKey,
-            updated_at: new Date().toISOString(),
-          });
-          if (error) {
-            console.error('updateGeminiApiKey error:', error);
-            return false;
-          }
-        }
-
-        set({ geminiApiKey: cleanKey });
-        await get().logAudit('UPDATE_AI_KEY', 'app_settings', 'gemini_api_key', {
-          configured: Boolean(cleanKey),
+        await get().logAudit('UPDATE_MONTHLY_BUDGET', 'app_settings', 'monthly_budget_usd', {
+          budgetUsd,
         });
         return true;
       },
@@ -979,7 +984,9 @@ export const useAdminStore = create<AdminState>()(
       },
 
       logAudit: async (action: string, targetType: string, targetId: string, details = {}) => {
-        const adminId = useAuthStore.getState().profile?.id || DEFAULT_ADMIN_PROFILE.id;
+        const adminId = useAuthStore.getState().profile?.id;
+        if (!adminId) return;
+
         let audit: AdminAuditLog = {
           id: 'aud-' + Date.now(),
           admin_id: adminId,
@@ -1041,21 +1048,22 @@ export const useAdminStore = create<AdminState>()(
     }),
     {
       name: 'drawtostory-admin-storage',
-      partialize: (state) => ({
-        kpis: state.kpis,
-        hasReviewedStories: state.hasReviewedStories,
-        safetyRules: state.safetyRules,
-        systemPrompts: state.systemPrompts,
-        aiLogs: state.aiLogs,
-        moderationReviews: state.moderationReviews,
-        auditLogs: state.auditLogs,
-        usersList: state.usersList,
-        moderationMode: state.moderationMode,
-        autoApproveMaxRisk: state.autoApproveMaxRisk,
-        globalDailyLimit: state.globalDailyLimit,
-        strictDrawingCheck: state.strictDrawingCheck,
-        geminiApiKey: state.geminiApiKey,
-      }),
+      // Only persist mock admin state in local DEV mode; in production all metrics & logs come live from Supabase
+      partialize: (state) =>
+        isDemoMode
+          ? {
+              safetyRules: state.safetyRules,
+              systemPrompts: state.systemPrompts,
+              aiLogs: state.aiLogs,
+              moderationReviews: state.moderationReviews,
+              auditLogs: state.auditLogs,
+              usersList: state.usersList,
+              moderationMode: state.moderationMode,
+              autoApproveMaxRisk: state.autoApproveMaxRisk,
+              globalDailyLimit: state.globalDailyLimit,
+              strictDrawingCheck: state.strictDrawingCheck,
+            }
+          : {},
     }
   )
 );
@@ -1065,6 +1073,20 @@ if (typeof window !== 'undefined') {
     const customEv = ev as CustomEvent<{ profile?: Profile }>;
     if (customEv.detail?.profile) {
       useAdminStore.getState().upsertLocalUser(customEv.detail.profile);
+    }
+  });
+
+  window.addEventListener('drawtostory:logged-out', () => {
+    if (!isDemoMode) {
+      useAdminStore.setState({
+        aiLogs: [],
+        moderationReviews: [],
+        auditLogs: [],
+        usersList: [],
+        chartData: buildEmptyDays(7).map((b) => b.point),
+        chartData30d: buildEmptyDays(30).map((b) => b.point),
+        rejectionCategories: [],
+      });
     }
   });
 }

@@ -23,6 +23,64 @@
     font-weight: 700;
     letter-spacing: -0.015em;
   }
+
+  /* Accessible keyboard focus ring (>= 3:1 contrast against cream surface) */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid #9B2142;
+    outline-offset: 2px;
+  }
+}
+
+/* Native Top-Layer Modal Dialog & Scroll Chaining Containment */
+dialog.dts-modal {
+  padding: 0;
+  border: 1px solid rgba(46, 37, 64, 0.1);
+  background-color: #FFFFFF;
+  color: #2E2540;
+  max-height: 90dvh;
+  overscroll-behavior: contain;
+}
+
+dialog.dts-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.dts-modal:modal {
+  overscroll-behavior: contain;
+}
+
+dialog.dts-modal::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgba(46, 37, 64, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+/* Native Swipeable Scroll-Snap Carousel Track */
+.guide-carousel-track {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  touch-action: manipulation;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.guide-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .guide-carousel-track {
+    scroll-behavior: smooth;
+  }
+}
+
+.guide-carousel-track > * {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
 }
 
 /* Story reading text font */

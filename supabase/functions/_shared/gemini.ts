@@ -1,5 +1,4 @@
 export interface GeminiCallParams {
-  apiKeyOverride?: string;
   systemInstruction?: string;
   contents: Array<{
     role: 'user' | 'model';
@@ -40,21 +39,30 @@ export function calculateCostUsd(inputTokens: number, outputTokens: number): num
   return Number((inputCost + outputCost).toFixed(6));
 }
 
+/**
+ * Normalize child nickname to avoid duplicate "Bé Bé ..." prefixes in AI prompts
+ */
+export function formatChildDisplayName(nickname?: string | null): string {
+  if (!nickname || !nickname.trim()) return 'Bé yêu';
+  const core = nickname.trim().replace(/\s+/g, ' ').replace(/^(bé\s+)+/i, '').trim();
+  return core ? `Bé ${core}` : 'Bé';
+}
+
 export async function callGeminiStructured<T>(
   params: GeminiCallParams
 ): Promise<GeminiCallResult<T>> {
-  const apiKey = (Deno.env.get('GEMINI_API_KEY') || params.apiKeyOverride || '').trim();
+  const apiKey = (Deno.env.get('GEMINI_API_KEY') || '').trim();
   const model = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
 
   if (!apiKey) {
     throw new GeminiError(
-      'Chưa cấu hình GEMINI_API_KEY trong Supabase secrets hoặc bảng app_settings',
+      'Chưa cấu hình GEMINI_API_KEY trong Supabase Edge Function Secrets (chạy: supabase secrets set GEMINI_API_KEY=...)',
       'MISSING_AI_KEY',
       500
     );
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const requestBody: Record<string, unknown> = {
     contents: params.contents,
@@ -83,7 +91,10 @@ export async function callGeminiStructured<T>(
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -93,7 +104,6 @@ export async function callGeminiStructured<T>(
       if (!response.ok) {
         const errorText = await response.text();
         if ((response.status === 429 || response.status >= 500) && attempt <= maxRetries) {
-          // Exponential backoff
           const delay = Math.pow(2, attempt) * 1000 + Math.random() * 500;
           await new Promise((res) => setTimeout(res, delay));
           continue;
@@ -103,7 +113,7 @@ export async function callGeminiStructured<T>(
           throw new GeminiError('Hệ thống AI đang bận (Quá tải yêu cầu). Vui lòng thử lại sau giây lát.', 'RATE_LIMITED', 429);
         }
 
-        throw new GeminiError(`Lỗi máy chủ AI (${response.status}): ${errorText.substring(0, 100)}`, 'AI_SERVICE_ERROR', response.status);
+        throw new GeminiError(`Lỗi máy chủ AI (${response.status}): ${errorText.substring(0, 120)}`, 'AI_SERVICE_ERROR', response.status);
       }
 
       const resJson = await response.json();
@@ -116,8 +126,8 @@ export async function callGeminiStructured<T>(
         throw new GeminiError('AI không trả về nội dung hợp lệ', 'EMPTY_RESPONSE', 502);
       }
 
-      const inputTokens = resJson.usageMetadata?.promptTokenCount ?? 750;
-      const outputTokens = resJson.usageMetadata?.candidatesTokenCount ?? 450;
+      const inputTokens = resJson.usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = resJson.usageMetadata?.candidatesTokenCount ?? 0;
       const estimatedCostUsd = calculateCostUsd(inputTokens, outputTokens);
 
       const parsedData = JSON.parse(partText) as T;
@@ -160,4 +170,3 @@ export async function callGeminiStructured<T>(
 
   throw new GeminiError('Quá số lần thử lại yêu cầu AI', 'RETRY_EXHAUSTED', 500);
 }
-

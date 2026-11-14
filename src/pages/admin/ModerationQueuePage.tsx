@@ -10,7 +10,8 @@ import {
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { useAdminStore } from '@/store/adminStore';
-import { useAuthStore, DEFAULT_ADMIN_PROFILE } from '@/store/authStore';
+import { useAuthStore } from '@/store/authStore';
+import { formatChildName } from '@/lib/utils';
 import { vi } from '@/lib/i18n/vi';
 import { Story, isStoryApproved } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -66,10 +67,14 @@ export const ModerationQueuePage: React.FC = () => {
     }
   }, [filteredStories, selectedStory]);
 
-  const adminId = profile?.id || DEFAULT_ADMIN_PROFILE.id;
+  const adminId = profile?.id || '';
 
   const handleApprove = useCallback(
     async (story: Story) => {
+      if (!adminId) {
+        toast.error('Không xác định được phiên Quản trị viên.');
+        return;
+      }
       const ok = await approveStoryModeration(
         story.id,
         adminId,
@@ -85,7 +90,7 @@ export const ModerationQueuePage: React.FC = () => {
   );
 
   const handleConfirmReject = async () => {
-    if (!selectedStory || !rejectReason.trim()) return;
+    if (!selectedStory || !rejectReason.trim() || !adminId) return;
     const ok = await rejectStoryModeration(selectedStory.id, adminId, rejectReason.trim());
     if (ok) {
       setIsRejectModalOpen(false);
@@ -261,7 +266,7 @@ export const ModerationQueuePage: React.FC = () => {
                   <div className="flex-1 overflow-hidden">
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-bold text-brand-600 truncate">
-                        {item.child?.nickname || 'Bé'} ({item.child?.age || 5}t)
+                        {formatChildName(item.child?.nickname)} ({item.child?.age || 5}t)
                       </span>
                       <Badge
                         variant={item.risk_score > 30 ? 'warning' : 'success'}
@@ -295,7 +300,7 @@ export const ModerationQueuePage: React.FC = () => {
                       {selectedStory.title}
                     </h2>
                     <p className="text-xs text-ink-soft mt-1">
-                      Tác giả: <strong className="text-ink">{selectedStory.child?.nickname || 'Bé'}</strong> ({selectedStory.child?.age || 5} tuổi) ·{' '}
+                      Tác giả: <strong className="text-ink">{formatChildName(selectedStory.child?.nickname)}</strong> ({selectedStory.child?.age || 5} tuổi) ·{' '}
                       Mô hình: <span className="font-mono text-brand-600 font-bold">{selectedStory.model}</span>
                     </p>
                   </div>
@@ -307,7 +312,7 @@ export const ModerationQueuePage: React.FC = () => {
                       onClick={() => handleApprove(selectedStory)}
                       leftIcon={<Check className="w-4 h-4" />}
                     >
-                      {vi.admin.queue.approveBtn} (A)
+                      {vi.admin.queue.approveBtn}
                     </Button>
                     <Button
                       variant="danger"
@@ -315,7 +320,7 @@ export const ModerationQueuePage: React.FC = () => {
                       onClick={() => setIsRejectModalOpen(true)}
                       leftIcon={<X className="w-4 h-4" />}
                     >
-                      {vi.admin.queue.rejectBtn} (R)
+                      {vi.admin.queue.rejectBtn}
                     </Button>
                   </div>
                 </div>

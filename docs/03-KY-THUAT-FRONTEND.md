@@ -5,90 +5,60 @@
 
 ---
 
-## 1. THIẾT KẾ ĐỊNH HƯỚNG: "MODERN STORYBOOK" ĐỒNG BỘ 100%
+## 1. NGÔN NGỮ THIẾT KẾ "MODERN STORYBOOK" & WCAG 2.1 AA
 
-Giao diện của **DrawToStory** được thiết kế và đồng bộ hóa toàn diện theo ngôn ngữ **Modern Storybook** xuyên suốt mọi phân hệ (Xác thực, Phụ huynh, Trẻ em, Chia sẻ công khai và cả **8 trang Quản trị viên**):
-- Mang lại cảm giác như bước vào một nhà xuất bản sách tranh đương đại: ấm áp, phân cấp thị giác rõ ràng, loại bỏ triệt để các biến màu cũ rời rạc (`cream`, `text-main`...).
-- **Nền kem ấm áp có nhiễu giấy siêu nhẹ** (`opacity: 3.5%`), kết hợp đốm màu blur mềm mại ở khu vực Hero.
-- **Bức tranh của bé luôn là nhân vật chính**: đặt trang trọng trong khung polaroid hoặc khung giấy dán băng keo, nghiêng nhẹ `1°–2°` với bóng đổ mềm nhiều lớp (`shadow-card`, `shadow-pop`).
-- **Màu "Ma thuật" (Gradient Tím – Hồng)** chỉ xuất hiện có chủ đích ở các khoảnh khắc AI (nút Thần kỳ hóa, trạng thái sinh truyện, huy hiệu AI), không lạm dụng cho điều hướng thông thường.
-
----
-
-## 2. DESIGN SYSTEM TOKENS & WCAG 2.1 AA ENFORCEMENT
-
-Toàn bộ hệ thống tokens được định nghĩa tập trung trong `tailwind.config.js`:
-- **Nền**: `bg #FFF9F0`, `surface #FFFFFF`, `surface-2 #FFF3E6`.
-- **Chữ**: `ink #2E2540` (chính), `ink-soft #5E5370` (phụ, tỷ lệ tương phản $\ge 6.5:1$), `ink-faint #8A7F99` (chú thích).
-- **Thương hiệu**: `brand-100 #FFE3EA`, `brand-400 #F0607F`, `brand-600 #D13A5E`, `brand-700 #B92F51`.
-- **Magic (AI)**: `magic-600 #6C5CE7`, gradient `linear-gradient(135deg, #8B7CF6, #F472B6)`.
-- **Pastel trang trí**: `mint #C9F0DD`, `sky #CDE7FF`, `lavender #E3D9FF`, `butter #FFF1B8`, `peach #FFD6BA`.
-- **Trạng thái đạt chuẩn tương phản cao**:
-  - Success: `#DDF6E9` / `#166E48` (tỷ lệ `5.49:1` $\ge$ `4.5:1`).
-  - Warning: `#FFF1B8` / `#8A5A00` (tỷ lệ `5.23:1`).
-  - Danger: `#FFE3EA` / `#B42343` (tỷ lệ `5.34:1`).
-  - Info: `#CDE7FF` / `#1F5FA8` (tỷ lệ `5.05:1`).
-- **Bóng & Bo góc**: Thẻ `28px`, Input `16px`, Nút `9999px`. Bóng mềm `shadow-card` và `shadow-pop`.
-- **Typography**: Tiêu đề `Quicksand 700`, Nội dung `Nunito 400/600/700` ($\ge 16\text{px}$), **Chữ truyện** dùng `Baloo 2` (`clamp(22px, 2.4vw, 32px)`, `line-height: 1.7`) hiển thị dấu tiếng Việt tròn trịa, dễ đọc.
-- **Tự động kiểm tra độ tương phản**: Kịch bản `scripts/check-contrast.js` chạy tự động trong `npm run build`, kiểm tra 19 cặp màu token và dừng build ngay nếu có bất kỳ cặp nào không đạt chuẩn WCAG 2.1 AA.
+Giao diện của **DrawToStory** được thiết kế đồng nhất theo phong cách **Modern Storybook** xuyên suốt mọi phân hệ (Xác thực, Phụ huynh, Trẻ em, Chia sẻ công khai và **8 trang Quản trị viên**):
+- **Bảng màu & Tokens (`tailwind.config.js`)**:
+  - Nền kem ấm áp `bg #FFF9F0` phủ nhiễu giấy nhẹ (`3.5%`), `surface #FFFFFF`, `surface-2 #FFF3E6`.
+  - Mực chữ tương phản cao: `ink #2E2540`, `ink-soft #5E5370` ($\ge 6.5:1$), `ink-faint #8A7F99`.
+  - Màu thương hiệu & phép thuật: `brand-600 #D13A5E`, `magic-600 #6C5CE7`, dải chuyển sắc ma thuật `#8B7CF6 → #F472B6`.
+  - Trạng thái ngữ nghĩa: Success `#166E48` (`5.49:1`), Warning `#8A5A00` (`5.23:1`), Danger `#B42343` (`5.34:1`), Info `#1F5FA8` (`5.05:1`).
+- **Kiểm định tương phản tự động**: Kịch bản `scripts/check-contrast.js` chạy tự động trước mỗi lần build (`npm run build`), xác nhận toàn bộ **19/19 cặp màu** đạt chuẩn WCAG 2.1 AA.
+- **Vòng tiêu điểm bàn phím chuẩn WCAG 1.4.11**: Quy tắc `:focus-visible` với đường viền tương phản cao (`2px solid #D13A5E`, `outline-offset: 3px`) đảm bảo điều hướng bàn phím rõ ràng trên mọi điều khiển mà không gây nhiễu khi nhấn chuột.
 
 ---
 
-## 3. THƯ VIỆN COMPONENT ĐỒNG BỘ (UI PRIMITIVES)
+## 2. HỆ THỐNG COMPONENT HIỆN ĐẠI: NATIVE `<dialog>` & CAROUSEL HƯỚNG DẪN
 
-1. **Button (`src/components/ui/Button.tsx`)**:
-   - Component nút chuẩn duy nhất toàn ứng dụng với các biến thể: `primary`, `magic`, `secondary`, `soft`, `ghost`, `danger`.
-   - Kích thước chuẩn: `sm 40px`, `md 48px`, `lg 56px` (đảm bảo vùng chạm tối thiểu `44px`).
-   - Phản hồi xúc giác qua Framer Motion (`scale(0.97)` khi nhấn), hỗ trợ `loading` spinner và `disabled`.
-2. **Input (`src/components/ui/Input.tsx`)**:
-   - Hỗ trợ đồng thời cả `leftIcon` và `rightIcon` (nút ẩn/hiện mật khẩu hoặc khóa Gemini API Key) với căn lề `pl-11` / `pr-11` chuẩn xác và viền `focus:ring-2` rõ nét.
-3. **Thẻ Bìa Sách (`src/components/ui/BookCover.tsx`)**:
-   - Tỷ lệ chuẩn `3:4` với gáy sách chuyển sắc dọc bên trái.
-   - Chỉ hiển thị hành động **Chia sẻ** khi truyện đã được phê duyệt (`isStoryApproved`), đồng thời tự động bật `is_shared = true` trên cơ sở dữ liệu ngay khi phụ huynh sao chép liên kết chia sẻ.
-   - Nút `Đọc` nổi bật cho truyện đã duyệt; nhãn chờ thẩm định cho `pending_review`; lý do sư phạm cho truyện `rejected`; menu `⋯` tích hợp hộp thoại xác nhận xóa an toàn.
-4. **Bảo Mật Mã PIN Phụ Huynh (`src/components/ui/OtpPinInput.tsx`)**:
-   - Băm mật mã bằng SHA-256 (`fastHashPin`), tuyệt đối không hiển thị PIN dạng văn bản rõ.
-   - Giao diện 4 ô số OTP mượt mà, tự động chuyển ô và xác minh khi thiết lập hoặc mở khóa.
-5. **Styleguide Route (`/dev/styleguide`)**:
-   - Màn hình trực quan hóa toàn bộ hệ thống bảng màu, biến thể nút, thẻ card, badges, modals, inputs và empty states để đối chiếu thiết kế.
+### 2.1. Hộp Thoại Chuẩn HTML5 `<dialog>` (`src/components/ui/Modal.tsx`)
+- Sử dụng phần tử `<dialog>` nguyên bản mở bằng `dialog.showModal()` (promotion lên Top Layer, tự động `inert` nền phía sau, hỗ trợ phím `Esc` và trả lại tiêu điểm cho nút kích hoạt).
+- **Chống tràn chiều dọc trên Desktop & Mobile**: Áp dụng `max-h-[90dvh]` kết hợp bố cục cột linh hoạt (`dialog.dts-modal[open] { display: flex }` với vùng nội dung `overflow-y-auto min-h-0 flex-1`), giúp các biểu mẫu dài như *Thêm hồ sơ bé* hiển thị trọn vẹn và cuộn mượt mà trên mọi độ phân giải.
+- **Khóa cuộn nền bằng CSS thuần**: Kết hợp `overscroll-behavior: contain` trên `dialog:modal` và `overflow: hidden; overscroll-behavior: contain` trên `dialog::backdrop` mà không can thiệp `document.body.style.overflow` (tránh giật bố cục thanh cuộn). Hỗ trợ đóng nhanh khi chạm ra ngoài bằng `closedby="any"` kèm fallback tọa độ con trỏ cho trình duyệt chưa hỗ trợ.
 
----
-
-## 4. BẢO VỆ PHIÊN ĐĂNG NHẬP (SESSION GUARDS) & FOCUS ROUTES
-
-- **Khôi phục phiên mượt mà khi nhấn F5 (`src/app/guards.tsx`)**:
-  - Sử dụng cờ `isInitialized` kết hợp màn hình chờ `AuthInitializingScreen` trong `ProtectedRoute`, `AdminRoute` và `PublicAuthRoute`. Khi người dùng tải lại trang trực tiếp tại `/admin/*` hoặc `/story/:id`, hệ thống chờ khôi phục phiên Supabase GoTrue và hồ sơ `profiles` hoàn tất trước khi định tuyến, triệt tiêu hoàn toàn lỗi văng nhầm về `/login` hoặc `/`.
-  - Kiểm tra tức thì cờ `profile.is_locked`: nếu tài khoản bị khóa, hệ thống tự động đăng xuất và hiển thị thông báo khóa tài khoản.
-- **Desktop Topbar & Mobile Bottom Nav (`UserLayout.tsx`)**:
-  - Topbar mảnh cố định với gạch chân trượt `layoutId` (*Trang chủ*, *Tủ sách*, *An toàn AI*), bộ chọn bé toàn cục đồng bộ `activeChildId`, nút *Tạo truyện* và *Chế độ bé*.
-  - Thanh điều hướng di động dưới chân với nút nổi trung tâm *Tạo*.
-- **Focus Routes**: Các đường dẫn `/create`, `/story/:id`, `/kid`, `/shared/:token` tự động ẩn toàn bộ thanh điều hướng ngoài để cha mẹ và bé tập trung trọn vẹn vào trải nghiệm sáng tác và đọc sách.
+### 2.2. Bảng Hướng Dẫn Sử Dụng Vuốt Ngang (`src/features/onboarding/components/UserGuideModal.tsx`)
+- **Tự động mở khi đăng nhập**: Ngay khi người dùng đăng nhập vào `UserLayout` hoặc `AdminLayout`, hộp thoại tự động hiển thị bộ **4 slide hướng dẫn chuyên biệt** theo đúng vai trò (*Phụ huynh* hoặc *Quản trị viên*).
+- **Carousel CSS Scroll-Snap Chuẩn Tiếp Cận**:
+  - Xây dựng trên thanh cuộn ngang tự nhiên (`display: flex; overflow-x: auto; scroll-snap-type: x mandatory; touch-action: manipulation`), cho phép lướt tay mượt mà trên điện thoại hoặc bấm nút Trước/Tiếp và các chấm chỉ mục (`aria-current="true"`).
+  - Đồng bộ chấm chỉ mục theo thời gian thực qua `requestAnimationFrame` và công bố slide hiện tại qua vùng `role="status" aria-live="polite"` sau sự kiện `scrollend` (kèm debounce fallback).
+- **Tùy chọn ẩn thông minh & Mở lại mọi lúc**:
+  - Nút **"Đóng"**: Ẩn trong phiên làm việc hiện tại (`sessionStorage`), sẽ hiển thị lại ở lần đăng nhập kế tiếp.
+  - Nút **"Tắt & Không hiện lại"**: Lưu cờ ẩn lâu dài theo `userId` trong `localStorage` (có nút bật lại ngay trong hộp thoại khi mở thủ công).
+  - Mục **"Hướng dẫn sử dụng"** được đặt cố định **ngay phía trên nút "Đăng xuất"** trong menu thả xuống tài khoản ở cả giao diện Phụ huynh và Quản trị viên.
 
 ---
 
-## 5. CÔNG NGHỆ CLIENT-SIDE ĐẶC THÙ
+## 3. KIẾN TRÚC ROUTER TẢI LƯỜI (`React.lazy`), CÔ LẬP DỮ LIỆU & TIÊU ĐỀ ĐỘNG
 
-### 5.1. Kiểm Tra Chất Lượng Ảnh & Hạn Mức Ngày (`CreateStoryPage.tsx`)
-- **Phân tích ảnh trên Canvas trước khi tải lên**:
-  - **Độ mờ**: Tính phương sai ma trận Laplacian trên ảnh xám (ngưỡng $> 45$ là rõ nét).
-  - **Độ sáng**: Tính độ chói trung bình Mean Luminance (ngưỡng $\ge 65$ là đủ sáng).
-  - Hỗ trợ chụp ảnh trực tiếp qua `navigator.mediaDevices.getUserMedia` và tạo hồ sơ bé ngay trong Bước 1 với kiểm tra lỗi đầy đủ.
-- **Hiển thị Hạn mức thông minh**: Hiển thị huy hiệu số lượt tạo truyện còn lại trong ngày (`Còn X/Y lượt hôm nay`) và điều hướng trực tiếp tới `/admin/settings` nếu Quản trị viên chưa cấu hình khóa Gemini API Key.
+### 3.1. Phân Tách Bundle Bằng `React.lazy` (`src/app/router.tsx`)
+- Tách riêng toàn bộ gói Quản trị (`AdminLayout`, 8 trang Admin và thư viện biểu đồ `Recharts 3`), `StoryReadingPage` (`react-pageflip`), `SharedStoryPage`, `CreateStoryPage` và `KidModePage` thành các dynamic chunks tải theo nhu cầu với `<Suspense>`.
+- Nhờ đó, phụ huynh truy cập trang Đăng nhập hoặc Tủ sách không phải tải mã nguồn quản trị hay thư viện biểu đồ nặng.
+- **Chuẩn hóa đường dẫn & Khóa Route Dev**:
+  - Chuyển hướng sạch các đường dẫn trùng lặp bằng `<Navigate replace />`: `/kid-mode` → `/kid`, `/admin/overview` → `/admin`, `/admin/moderation` → `/admin/queue`.
+  - Đường dẫn `/dev/styleguide` được bao bọc bởi `import.meta.env.DEV`, tự động loại bỏ hoàn toàn khỏi bản build Production.
+- **Tiêu đề & Thẻ OpenGraph Động (`RootDocumentMetaLayout`)**: Tự động cập nhật `document.title`, `og:title` và `twitter:title` tương ứng với từng trang đang mở.
 
-### 5.2. Trình Đọc Sách 2 Trang, Hộp Nhạc Ru Ngủ & Chia Sẻ Công Khai
-Trong `StoryReadingPage.tsx` và `SharedStoryPage.tsx`:
-- **Tải trực tiếp khi F5 (`fetchStoryById`)**: Hỗ trợ truy cập thẳng đường dẫn `/story/:id` mà không cần đi qua Tủ sách, không bao giờ fallback nhầm sang `stories[0]`.
-- **Sách lật hai trang chuẩn xác trên Desktop (`HTMLFlipBook`)**: Tính toán `pgSentences` và tọa độ `pgFocus` độc lập cho từng trang `pg` trong vòng lặp spread, đảm bảo mọi trang chẵn/lẻ hiển thị đúng nội dung và hiệu ứng lia máy của riêng trang đó.
-- **Chống cắt ảnh (No-Crop Guarantee)**: Tranh vẽ hiển thị bằng `object-fit: contain`, chuyển động Ken Burns kẹp mức phóng tối đa `1.35x` và tôn trọng `prefers-reduced-motion`.
-- **TTS Karaoke Tiếng Việt & Hộp Nhạc Ru Ngủ**: Đọc từng câu kèm highlight vàng sáng, nút bật/tắt nhạc hộp ru ngủ (`startLullaby` / `stopLullaby`), hẹn giờ tắt âm 15/30/45 phút và tự động trao huy hiệu `bedtime_reader` khi đọc xong ở Chế độ Ru ngủ.
-- **Trang Chia sẻ Công khai (`/shared/:token`)**: Xác thực chặt chẽ cả 3 điều kiện (`share_token` khớp + `is_shared = true` + `isStoryApproved`), sắp xếp trang đúng thứ tự, hiển thị bài học đạo đức và tích hợp bộ chọn giọng đọc `vi-VN`.
+### 3.2. Cô Lập Dữ Liệu Theo Tài Khoản & Từng Hồ Sơ Bé
+- Trong môi trường Production (`isDemoMode === false`), các Zustand stores (`authStore`, `storyStore`, `adminStore`) không lưu trữ danh sách truyện hay số liệu KPI cũ trong `localStorage` và tự động dọn sạch bộ nhớ đệm ngay khi phát sự kiện `drawtostory:logged-out`, triệt tiêu hoàn toàn hiện tượng rò rỉ dữ liệu giữa các tài khoản hoặc "biến mất truyện" khi chuyển đổi hồ sơ bé.
 
-### 5.3. Chế Độ Bé Cô Lập Hoàn Toàn (`KidModePage.tsx` & `?mode=kid`)
-- Tự động kích hoạt Toàn màn hình (Fullscreen API) và bẫy sự kiện Back trình duyệt (`history.pushState` + `popstate`).
-- Chỉ hiển thị những cuốn truyện đã duyệt thuộc đúng hồ sơ bé đang chọn (`activeChildId`) với nút chạm lớn $\ge 72\text{px}$.
-- **Khóa chặt luồng đọc `?mode=kid`**: Khi bé mở truyện từ `/kid`, đường dẫn chuyển sang `/story/:id?mode=kid` — tự động ẩn toàn bộ nút Chia sẻ, Xuất PDF/In ấn và Báo cáo vi phạm, đồng thời mọi nút *Quay lại / Đọc xong* đều đưa bé trở về thẳng `/kid` (không bao giờ thoát ra `/library` của phụ huynh).
-- **Cổng phụ huynh 3 cơ chế chuẩn xác**: Nhấn giữ nút góc 2 giây (có vòng tiến độ trực quan), hoặc mở hộp thoại xác thực chuyển đổi mượt mà giữa **Đố phép nhân ngẫu nhiên (`math`)** và **Mã PIN 4 số (`pin`)**.
+---
 
-### 5.4. Quản Lý Tài Khoản, Cô Lập Từng Bé & Chống Tràn Viền (`320px`–`1440px`)
-- **Cài đặt Gia đình toàn diện (`SettingsPage.tsx`)**: Cho phép phụ huynh cập nhật Họ tên hiển thị, xem Email & hạn mức ngày, đổi mật khẩu Supabase GoTrue, đổi mã PIN SHA-256, thêm/sửa/xóa bất kỳ hồ sơ bé nào (kể cả xóa về 0 bé với trạng thái rỗng rõ ràng), xuất dữ liệu JSON và xóa sạch toàn bộ dữ liệu gia đình + tệp ảnh Storage.
-- **Zero Overflow Guarantee**: Bố cục `overflow-x-hidden` trên toàn bộ Layout kết hợp lưới kệ sách linh hoạt (`grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4`), `flex-wrap` và `overflow-x-auto` cho bảng biểu giúp giao diện hiển thị gọn gàng 100% từ màn hình `320px` đến `1440px`.
+## 4. TRÌNH ĐỌC SÁCH CHỐNG CẮT CHỮ, KID MODE & QUYỀN RIÊNG TƯ GDPR
+
+1. **Trình Đọc Sách 2 Trang Chống Cắt Chữ (`StoryReadingPage.tsx`)**:
+   - Cân chỉnh thang cỡ chữ truyện (`sm`, `md`, `lg`) hài hòa với khung sách `500×620` của `HTMLFlipBook`, đồng thời bọc vùng văn bản trong khung cuộn độc lập (`flex-1 min-h-0 overflow-y-auto` + chặn lan truyền `onWheel`) và tắt lật trang ngẫu nhiên khi bấm chọn văn bản (`disableFlipByClick={true}`), đảm bảo trang sách không bao giờ bị tràn hoặc cắt mất dòng cuối trên Desktop.
+   - Giữ nguyên tỷ lệ bức tranh gốc của bé bằng `object-fit: contain` và giới hạn phóng đại Ken Burns $\le 1.35\times$.
+2. **Chế Độ Bé & Cổng Phụ Huynh Không Mật Mã Mặc Định (`KidModePage.tsx`)**:
+   - Xóa bỏ hoàn toàn gợi ý mã PIN `1234` công khai và bỏ cơ chế nhấn giữ 2 giây thoát tự do.
+   - Để rời khỏi `/kid`, phụ huynh bắt buộc nhập đúng **Mã PIN 4 số riêng của gia đình** (được băm kèm Salt riêng theo User ID qua `saltedHashPinSync`) hoặc giải đúng phép nhân hai chữ số dành cho người lớn (`12..19 × 6..9`).
+3. **Thực Thi Quyền Được Lãng Quên Thật (`SettingsPage.tsx`)**:
+   - Khi phụ huynh chọn **Xóa vĩnh viễn tài khoản**, hệ thống yêu cầu nhập lại **Mật khẩu tài khoản hiện tại** + gõ từ khóa xác nhận **`XOA`**, sau đó gọi Edge Function `delete-account` để xóa toàn bộ tệp ảnh trên Storage, xóa hồ sơ gia đình (cascade toàn bộ bé/truyện/huy hiệu) và xóa vĩnh viễn tài khoản khỏi `auth.users`.

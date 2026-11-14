@@ -1,6 +1,6 @@
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { getSupabaseAdmin } from '../_shared/supabase-admin.ts';
-import { callGeminiStructured } from '../_shared/gemini.ts';
+import { callGeminiStructured, formatChildDisplayName, GeminiError } from '../_shared/gemini.ts';
 import { Layer2JsonSchema, Layer2Story } from '../_shared/schemas.ts';
 
 Deno.serve(async (req: Request) => {
@@ -63,15 +63,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: keySetting } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'gemini_api_key')
-      .maybeSingle();
-    const dbGeminiKey = (keySetting as { value?: string } | null)?.value || '';
+    const cleanName = formatChildDisplayName(sampleNickname);
 
     const testUserPrompt = `Thông tin bé:
-- Biệt danh: "${sampleNickname}"
+- Tên gọi thân mật: "${cleanName}" (Không lặp chữ "Bé Bé ...")
 - Độ tuổi: ${sampleAge} tuổi
 
 Chi tiết tranh mẫu:
@@ -84,7 +79,6 @@ Yêu cầu sáng tác:
 - Kết thúc có bài học đạo đức moral và 3 next_drawing_ideas.`;
 
     const result = await callGeminiStructured<Layer2Story>({
-      apiKeyOverride: dbGeminiKey,
       systemInstruction: promptText,
       contents: [{ role: 'user', parts: [{ text: testUserPrompt }] }],
       responseSchema: Layer2JsonSchema,
@@ -101,6 +95,7 @@ Yêu cầu sáng tác:
       latency_ms: result.latencyMs,
       estimated_cost_usd: result.estimatedCostUsd,
       status: 'success',
+      error_code: null,
     });
 
     return new Response(
@@ -120,9 +115,11 @@ Yêu cầu sáng tác:
     );
   } catch (err: unknown) {
     const error = err as Error;
+    const code = (err as GeminiError)?.code || 'PROMPT_TEST_ERROR';
+    const status = (err as GeminiError)?.status || 500;
     return new Response(
-      JSON.stringify({ error: { code: 'PROMPT_TEST_ERROR', message: error.message } }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: { code, message: error.message } }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

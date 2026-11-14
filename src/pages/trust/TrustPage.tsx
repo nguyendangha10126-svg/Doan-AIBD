@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  ShieldCheck, 
-  Scan, 
-  BookOpenCheck, 
-  Scale, 
+import {
+  ShieldCheck,
+  Scan,
+  BookOpenCheck,
+  Scale,
   Lock,
-  HeartHandshake
+  HeartHandshake,
 } from 'lucide-react';
 import { useStoryStore } from '@/store/storyStore';
 import { isUsingDemoSession } from '@/store/authStore';
@@ -17,9 +17,14 @@ import { Badge } from '@/components/ui/Badge';
 export const TrustPage: React.FC = () => {
   const { stories } = useStoryStore();
 
-  const [stats, setStats] = useState({
-    approvalRate: 100,
-    avgReviewTime: '1.8s',
+  const [stats, setStats] = useState<{
+    approvalRateText: string;
+    avgReviewTimeText: string;
+    blockedCount: number;
+    totalStories: number;
+  }>({
+    approvalRateText: '—',
+    avgReviewTimeText: '—',
     blockedCount: 0,
     totalStories: 0,
   });
@@ -28,44 +33,57 @@ export const TrustPage: React.FC = () => {
     async function loadRealStats() {
       if (!isUsingDemoSession()) {
         try {
-          const { count: totalCount } = await supabase
-            .from('stories')
-            .select('*', { count: 'exact', head: true });
+          const [
+            { count: totalCount },
+            { count: approvedCount },
+            { count: rejectedCount },
+            { data: latencyLogs },
+          ] = await Promise.all([
+            supabase.from('stories').select('*', { count: 'exact', head: true }),
+            supabase
+              .from('stories')
+              .select('*', { count: 'exact', head: true })
+              .in('status', ['auto_approved', 'approved', 'parent_approved']),
+            supabase
+              .from('stories')
+              .select('*', { count: 'exact', head: true })
+              .eq('status', 'rejected'),
+            supabase
+              .from('ai_logs')
+              .select('latency_ms, action, status')
+              .limit(100),
+          ]);
 
-          const { count: approvedCount } = await supabase
-            .from('stories')
-            .select('*', { count: 'exact', head: true })
-            .in('status', ['auto_approved', 'approved', 'parent_approved']);
+          const total = totalCount ?? stories.length;
+          const approved =
+            approvedCount ?? stories.filter((s) => isStoryApproved(s.status)).length;
+          const rejected =
+            rejectedCount ?? stories.filter((s) => s.status === 'rejected').length;
 
-          const { count: blockedCount } = await supabase
-            .from('stories')
-            .select('*', { count: 'exact', head: true })
-            .eq('status', 'rejected');
+          const validLatencies = (latencyLogs || [])
+            .map((l) => Number((l as { latency_ms?: number }).latency_ms) || 0)
+            .filter((ms) => ms > 0);
 
-          const { data: latencyLogs } = await supabase
-            .from('ai_logs')
-            .select('latency_ms')
-            .limit(50);
+          const inputBlocked = (latencyLogs || []).filter(
+            (l) => (l as { action?: string }).action === 'layer1_input_safety_blocked'
+          ).length;
 
-          let avgLatency = 1800;
-          if (latencyLogs && latencyLogs.length > 0) {
-            const sum = latencyLogs.reduce((acc, log) => acc + (log.latency_ms || 1800), 0);
-            avgLatency = Math.round(sum / latencyLogs.length);
-          }
-
-          const total = totalCount || stories.length;
-          const approved = approvedCount ?? stories.filter(s => isStoryApproved(s.status)).length;
-          const rejected = blockedCount ?? stories.filter(s => s.status === 'rejected').length;
-          const rate = total > 0 ? Math.round((approved / total) * 100) : 100;
+          const avgLatencyText =
+            validLatencies.length > 0
+              ? `${(
+                  validLatencies.reduce((acc, ms) => acc + ms, 0) /
+                  validLatencies.length /
+                  1000
+                ).toFixed(1)}s`
+              : 'Chưa có dữ liệu';
 
           setStats({
-            approvalRate: rate,
-            avgReviewTime: `${(avgLatency / 1000).toFixed(1)}s`,
-            blockedCount: rejected,
+            approvalRateText: total > 0 ? `${Math.round((approved / total) * 100)}%` : 'Chưa có dữ liệu',
+            avgReviewTimeText: avgLatencyText,
+            blockedCount: rejected + inputBlocked,
             totalStories: total,
           });
         } catch {
-          // Fallback to local store
           computeFromStore();
         }
       } else {
@@ -75,13 +93,12 @@ export const TrustPage: React.FC = () => {
 
     function computeFromStore() {
       const total = stories.length;
-      const approved = stories.filter(s => isStoryApproved(s.status)).length;
-      const rejected = stories.filter(s => s.status === 'rejected').length;
-      const rate = total > 0 ? Math.round((approved / total) * 100) : 100;
+      const approved = stories.filter((s) => isStoryApproved(s.status)).length;
+      const rejected = stories.filter((s) => s.status === 'rejected').length;
 
       setStats({
-        approvalRate: rate,
-        avgReviewTime: '1.6s',
+        approvalRateText: total > 0 ? `${Math.round((approved / total) * 100)}%` : 'Chưa có dữ liệu',
+        avgReviewTimeText: 'Chưa có dữ liệu',
         blockedCount: rejected,
         totalStories: total,
       });
@@ -99,9 +116,9 @@ export const TrustPage: React.FC = () => {
       badge: 'Bảo vệ Đầu Vào',
       variant: 'mint' as const,
       description:
-        'Hệ thống phân tích thị giác xác định chính xác ảnh có phải tranh vẽ tay của bé hay không. Đồng thời phát hiện và che chắn khuôn mặt người thật ngoài đời, thông tin cá nhân (PII như số điện thoại, địa chỉ nhà) và loại bỏ ảnh đồ họa logo thương mại.',
+        'Hệ thống phân tích thị giác trên máy chủ xác định ảnh có phải tranh vẽ tay của bé hay không. Đồng thời phát hiện và từ chối ảnh chứa khuôn mặt người thật ngoài đời, thông tin cá nhân (PII như số điện thoại, địa chỉ nhà) hoặc ảnh logo thương mại.',
       example:
-        'Ví dụ: Ảnh chụp màn hình tài liệu hay ảnh logo công ty sẽ bị từ chối với thông điệp thân thiện: "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé".',
+        'Ví dụ: Ảnh chụp màn hình tài liệu hay ảnh logo công ty sẽ bị từ chối và xóa ngay khỏi kho lưu trữ tạm với thông điệp thân thiện: "Mình chưa thấy nét vẽ của bé, thử chụp lại tranh trên giấy nhé".',
     },
     {
       step: 'Lớp 2',
@@ -111,9 +128,9 @@ export const TrustPage: React.FC = () => {
       badge: 'Chống Bịa Đặt AI',
       variant: 'sky' as const,
       description:
-        'Toàn bộ danh sách đồ vật (objects), nhân vật (characters), màu sắc và cảm xúc nhận diện từ tranh vẽ được truyền trực tiếp vào mô hình như "sự thật bắt buộc". Cốt truyện 4 trang bắt buộc phải dẫn dắt từ nét vẽ của con, từ ngữ được tinh chỉnh chuẩn mực theo lứa tuổi 2-12.',
+        'Toàn bộ danh sách đồ vật (objects), nhân vật (characters), màu sắc và cảm xúc nhận diện từ tranh vẽ được truyền trực tiếp vào mô hình như "sự thật bắt buộc". Cốt truyện 4–5 trang phải dẫn dắt từ nét vẽ của con, từ ngữ được tinh chỉnh chuẩn mực theo lứa tuổi 2–12.',
       example:
-        'Ví dụ: Khi bé vẽ chú voi màu hồng, AI bắt buộc dùng hình tượng chú voi tai hồng làm trọng tâm, cấm tự ý thay thế bằng nhân vật ngoài tranh.',
+        'Ví dụ: Khi bé vẽ chú voi màu hồng, AI bắt buộc dùng hình tượng chú voi tai hồng làm trọng tâm, tuyệt đối không tự ý thay thế bằng nhân vật ngoài tranh.',
     },
     {
       step: 'Lớp 3',
@@ -123,9 +140,9 @@ export const TrustPage: React.FC = () => {
       badge: 'Thẩm Định Độc Lập',
       variant: 'lavender' as const,
       description:
-        'Mô hình giám định độc lập chấm điểm rủi ro (Risk Score 0-100) và độ bám sát nét vẽ (Faithfulness Score 0-100). Nếu truyện đạt điểm an toàn cao sẽ được duyệt ngay. Những câu chuyện chạm ngưỡng nghi vấn sẽ được chuyển sang hàng chờ để chuyên viên kiểm duyệt thủ công (Human-in-the-Loop).',
+        'Mô hình giám định độc lập chấm điểm rủi ro (Risk Score 0–100) và độ bám sát nét vẽ (Faithfulness Score 0–100). Nếu truyện đạt điểm an toàn cao sẽ được duyệt ngay. Những câu chuyện chạm ngưỡng nghi vấn sẽ được chuyển sang hàng chờ để Quản trị viên kiểm duyệt thủ công (Human-in-the-Loop).',
       example:
-        'Ví dụ: Truyện có từ ngữ tiêu cực hoặc độ bám tranh dưới 60 điểm sẽ tự động được sinh lại với góp ý cải thiện hoặc yêu cầu duyệt trước khi cho bé đọc.',
+        'Ví dụ: Truyện có độ bám tranh dưới 60 điểm sẽ tự động được sinh lại kèm góp ý cải thiện hoặc chuyển sang hàng chờ duyệt trước khi cho bé đọc.',
     },
   ];
 
@@ -138,42 +155,50 @@ export const TrustPage: React.FC = () => {
           <span>Responsible AI Framework for Children</span>
         </div>
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-heading font-extrabold text-ink tracking-tight">
-          Minh Bạch & An Toàn AI Tuyệt Đối
+          Minh Bạch & An Toàn AI Cho Trẻ Thơ
         </h1>
         <p className="text-sm md:text-base text-ink-soft max-w-2xl mx-auto leading-relaxed">
-          DrawToStory xây dựng môi trường sáng tạo trong sáng, bảo vệ quyền riêng tư của trẻ em theo chuẩn GDPR và Đạo luật Trí tuệ Nhân tạo Có trách nhiệm.
+          DrawToStory xây dựng môi trường sáng tạo trong sáng, bảo vệ quyền riêng tư của trẻ em theo nguyên tắc GDPR (Tối thiểu hóa dữ liệu & Quyền được xóa vĩnh viễn) và Trí tuệ Nhân tạo Có trách nhiệm.
         </p>
       </div>
 
-      {/* Real Database Metrics Row */}
+      {/* Live Database Metrics Row (Zero Hardcoded Claims) */}
       <Card variant="white" className="p-6 shadow-card border border-ink/10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 divide-y md:divide-y-0 md:divide-x divide-ink/10">
           <div className="pt-3 md:pt-0 md:px-4 first:pl-0 text-center">
-            <span className="text-2xl md:text-3xl font-heading font-extrabold text-brand-600 block">
-              {stats.approvalRate}%
+            <span className="text-xl md:text-2xl font-heading font-extrabold text-ink block">
+              {stats.totalStories}
             </span>
-            <span className="text-xs text-ink-soft mt-1 block font-medium">Tỷ lệ truyện đạt chuẩn</span>
+            <span className="text-xs text-ink-soft mt-1 block font-medium">
+              Tổng truyện đã thẩm định
+            </span>
           </div>
 
           <div className="pt-3 md:pt-0 md:px-4 text-center">
-            <span className="text-2xl md:text-3xl font-heading font-extrabold text-ink block">
-              {stats.avgReviewTime}
+            <span className="text-xl md:text-2xl font-heading font-extrabold text-brand-600 block">
+              {stats.approvalRateText}
             </span>
-            <span className="text-xs text-ink-soft mt-1 block font-medium">Thời gian kiểm duyệt TB</span>
+            <span className="text-xs text-ink-soft mt-1 block font-medium">
+              Tỷ lệ truyện đạt chuẩn
+            </span>
           </div>
 
           <div className="pt-3 md:pt-0 md:px-4 text-center">
-            <span className="text-2xl md:text-3xl font-heading font-extrabold text-[#166E48] block">
-              {stats.blockedCount}
+            <span className="text-xl md:text-2xl font-heading font-extrabold text-ink block">
+              {stats.avgReviewTimeText}
             </span>
-            <span className="text-xs text-ink-soft mt-1 block font-medium">Ảnh không phù hợp đã chặn</span>
+            <span className="text-xs text-ink-soft mt-1 block font-medium">
+              Thời gian xử lý AI TB
+            </span>
           </div>
 
           <div className="pt-3 md:pt-0 md:px-4 last:pr-0 text-center">
-            <span className="text-2xl md:text-3xl font-heading font-extrabold text-ink block">
-              100%
+            <span className="text-xl md:text-2xl font-heading font-extrabold text-[#166E48] block">
+              {stats.blockedCount}
             </span>
-            <span className="text-xs text-ink-soft mt-1 block font-medium">Không lưu trữ khuôn mặt</span>
+            <span className="text-xs text-ink-soft mt-1 block font-medium">
+              Nội dung rủi ro đã chặn
+            </span>
           </div>
         </div>
       </Card>
@@ -185,7 +210,7 @@ export const TrustPage: React.FC = () => {
             Kiến Trúc Phòng Thủ 3 Lớp Chuyên Biệt
           </h2>
           <p className="text-xs text-ink-soft mt-1">
-            Mọi bức tranh và câu chuyện đều trải qua quy trình xác thực tự động khắt khe trước khi bé có thể mở đọc.
+            Mọi bức tranh và câu chuyện đều trải qua quy trình xác thực tự động trên máy chủ trước khi bé có thể mở đọc.
           </p>
         </div>
 
@@ -195,12 +220,10 @@ export const TrustPage: React.FC = () => {
 
             return (
               <div key={layer.step} className="relative group">
-                {/* Timeline node icon */}
                 <div className="absolute -left-6 sm:-left-10 top-6 -translate-x-1/2 w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center font-heading font-bold text-xs shadow-btn-primary z-10 border-2 border-bg">
                   {idx + 1}
                 </div>
 
-                {/* Timeline card */}
                 <Card variant="white" className="p-6 md:p-8 space-y-4 border border-ink/10 shadow-card">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
@@ -208,7 +231,7 @@ export const TrustPage: React.FC = () => {
                         <Icon className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-mono font-bold text-brand-600 uppercase tracking-wider">
                             {layer.step}
                           </span>
@@ -234,7 +257,7 @@ export const TrustPage: React.FC = () => {
 
                   <div className="p-4 rounded-2xl bg-surface-2 border border-ink/10 text-xs text-ink leading-relaxed font-body">
                     <strong className="font-heading font-extrabold text-ink block mb-1">
-                      Minh chứng thực tế:
+                      Minh chứng quy trình:
                     </strong>
                     {layer.example}
                   </div>
@@ -252,10 +275,10 @@ export const TrustPage: React.FC = () => {
             <Lock className="w-5 h-5" />
           </div>
           <h3 className="text-lg font-heading font-extrabold text-ink">
-            Quyền Kiểm Soát Dữ Liệu Cá Nhân
+            Quyền Kiểm Soát & Xóa Vĩnh Viễn (GDPR)
           </h3>
           <p className="text-xs text-ink-soft leading-relaxed">
-            Chúng tôi cam kết không sử dụng tranh vẽ hay hình ảnh của bé để đào tạo bất kỳ mô hình công cộng nào. Phụ huynh có toàn quyền tải về hoặc xóa bỏ vĩnh viễn dữ liệu gia đình bất kỳ lúc nào.
+            Phụ huynh có toàn quyền xuất toàn bộ dữ liệu gia đình dạng JSON hoặc kích hoạt Xóa vĩnh viễn tài khoản để xóa sạch hồ sơ xác thực, tranh vẽ trên Storage và lịch sử truyện.
           </p>
         </Card>
 

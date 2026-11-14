@@ -6,148 +6,133 @@
 ---
 
 ## 1. BÀI TOÁN & BỐI CẢNH THỰC TẾ
-Trẻ em trong độ tuổi từ 2 đến 12 tuổi có trí tưởng tượng phong phú và thường thể hiện thế giới nội tâm qua các bức tranh vẽ nguệch ngoạc. Tuy nhiên:
-- Phụ huynh hiện đại thường bận rộn, gặp khó khăn trong việc thấu hiểu trọn vẹn câu chuyện đằng sau nét vẽ của con hoặc thiếu thời gian để sáng tác những câu chuyện cổ tích mang tính giáo dục phù hợp với bức tranh.
-- Các ứng dụng AI hiện nay trên thị trường phần lớn là chatbot văn bản thuần túy dành cho người lớn, thiếu giao diện trực quan dành riêng cho trẻ em, và quan trọng nhất là **chưa có cơ chế kiểm soát an toàn nghiêm ngặt đối với nội dung tâm lý trẻ nhỏ**.
-- Các mô hình AI thông thường khi nhận ảnh đầu vào thường hay bị "ảo giác" (hallucination): ví dụ nhận ảnh logo hoặc ảnh chụp người thật nhưng vẫn cố sinh ra truyện muông thú, hoặc nhận tranh hoa cỏ nhưng lại sáng tác truyện về "chú voi hồng" không hề có trong tranh.
+Trẻ em trong độ tuổi từ 2 đến 12 tuổi có trí tưởng tượng phong phú và thường thể hiện thế giới nội tâm qua các bức tranh vẽ tay trên giấy. Tuy nhiên:
+- Phụ huynh hiện đại thường bận rộn, gặp khó khăn trong việc kết nối câu chuyện đằng sau nét vẽ của con hoặc thiếu thời gian sáng tác những câu chuyện cổ tích mang tính giáo dục phù hợp lứa tuổi.
+- Các công cụ AI phổ thông phần lớn thiết kế cho người lớn, thiếu không gian đọc sách an toàn cho trẻ nhỏ và dễ mắc hiện tượng "ảo giác" (*hallucination*): nhận ảnh chụp đời thường hoặc logo nhưng vẫn bịa ra câu chuyện không liên quan tới nét vẽ của trẻ.
 
-**DrawToStory** ra đời như một cầu nối kỳ diệu: Phụ huynh chỉ cần chụp ảnh bức tranh của bé; hệ thống AI đa phương thức **Gemini 2.5 Flash** sẽ "ngắm nhìn" bức tranh, thấu cảm nét vẽ, bảo đảm các tiêu chuẩn Responsible AI và dệt nên một câu chuyện tranh cổ tích 4–5 trang có giọng đọc tiếng Việt truyền cảm, nhạc hộp ru ngủ êm dịu, lật trang sách chân thực, bám sát từng chi tiết bé vẽ (`grounded_objects`) và gợi ý các nét vẽ tiếp theo.
+**DrawToStory** giải quyết trọn vẹn bài toán trên: Phụ huynh chụp ảnh bức tranh vẽ tay của con; hệ thống **Pipeline AI 3 Lớp Google Gemini 2.5 Flash** chạy bảo mật trên Supabase Edge Functions sẽ phân loại nét vẽ, kiểm định an toàn thiếu nhi và dệt nên cuốn sách cổ tích 4–5 trang bám sát vật thể bé vẽ (`grounded_objects`), tích hợp giọng đọc tiếng Việt truyền cảm, nhạc hộp ru ngủ và gợi ý vẽ tiếp sáng tạo.
 
 ---
 
 ## 2. CHÂN DUNG NGƯỜI DÙNG (USER PERSONAS)
 1. **Phụ huynh (Primary Persona)**:
-   - Mong muốn khuyến khích con sáng tạo, giảm thời gian xem video thụ động (YouTube/TikTok).
-   - Cần một công cụ gắn kết gia đình vào mỗi buổi tối trước giờ đi ngủ (Bedtime Storytelling).
-   - Quan tâm sâu sắc đến quyền riêng tư, cô lập dữ liệu từng gia đình/từng bé, quản lý tài khoản cá nhân và kiểm soát bằng mã PIN phụ huynh băm SHA-256 an toàn.
+   - Mong muốn khuyến khích con vẽ tranh trên giấy thật và đọc sách cùng con trước giờ đi ngủ (Bedtime Storytelling).
+   - Đòi hỏi sự minh bạch dữ liệu, cô lập tuyệt đối hồ sơ giữa các gia đình và từng bé, bảo vệ bằng mã PIN 4 số riêng băm có Salt và quyền xóa vĩnh viễn tài khoản theo chuẩn GDPR.
+   - Được hỗ trợ ngay từ lần đăng nhập đầu tiên bởi **Bảng Hướng dẫn Sử dụng tương tác vuốt ngang (`UserGuideModal`)**.
 2. **Trẻ em 2 – 12 tuổi (End Beneficiary)**:
-   - Thích thú khi thấy bức tranh mình tự vẽ được "hóa phép" thành một cuốn sách thật có tên mình và nhận các huy hiệu khen thưởng lấp lánh.
-   - Thưởng thức giọng đọc ấm áp cùng nhạc hộp ru ngủ, nhìn tranh phóng to di chuyển theo từng phân cảnh (Ken Burns effect kẹp an toàn không bị crop).
-   - Trải nghiệm không gian đọc sách riêng biệt (Kid Mode `?mode=kid`) với nút bấm lớn $\ge 72\text{px}$, âm thanh sinh động và cổng bảo vệ ngăn thoát sang giao diện người lớn.
+   - Hào hứng khi thấy bức tranh của mình biến thành cuốn sách cổ tích có tên mình (được chuẩn hóa tự nhiên qua `formatChildName`, không bao giờ lặp `"Bé Bé ..."`).
+   - Đọc và nghe kể chuyện trong không gian **Chế độ Trẻ Em cô lập (`/kid` & `?mode=kid`)** với nút chạm lớn, toàn màn hình và cổng khóa phụ huynh an toàn.
 3. **Quản trị viên & Kiểm duyệt viên (Admin Persona)**:
-   - Giám sát toàn bộ các câu chuyện bị gắn cờ hoặc có điểm rủi ro AI vượt ngưỡng thông qua Hàng chờ kiểm duyệt (Moderation Queue với Split-View và phím tắt `A`/`R`).
-   - Cấu hình khóa Gemini API Key trực tiếp trên giao diện, quản lý bộ quy tắc an toàn (Safety Rules), thử nghiệm System Prompt Studio thời gian thực, điều tiết ngân sách tháng và quản lý hạn mức / khóa tài khoản vi phạm.
+   - Thẩm định các câu chuyện chờ duyệt hoặc bị báo cáo qua Hàng chờ kiểm duyệt Split View (`/admin/queue`, phím tắt `A`/`R`).
+   - Điều chỉnh quy tắc an toàn (`/admin/rules`), phiên bản System Prompt & chạy thử nghiệm AI thật trên máy chủ (`/admin/prompts`), giám sát chi phí USD & biểu đồ đồng bộ thời gian thực (`/admin`, `/admin/costs`) và quản lý hạn mức người dùng (`/admin/users`).
 
 ---
 
 ## 3. MA TRẬN PHÂN QUYỀN (ROLE-BASED ACCESS CONTROL - RBAC)
 
-| Chức năng / Dữ liệu | Khách vãng lai (Guest) | Phụ huynh (User đang hoạt động) | Quản trị viên (Admin) |
+| Chức năng / Đường dẫn | Khách vãng lai (Guest) | Phụ huynh (User đang hoạt động) | Quản trị viên (Admin) |
 | :--- | :---: | :---: | :---: |
-| Đăng nhập, Đăng ký, Quên mật khẩu (`/login`, `/register`, `/forgot-password`) | ✅ | ✅ (Tự chuyển về `/`) | ✅ (Tự chuyển về `/admin`) |
-| Đọc truyện được chia sẻ công khai hợp lệ (`/shared/:token`) | ✅ | ✅ | ✅ |
-| Xem thư viện tokens & components (`/dev/styleguide`) | ✅ | ✅ | ✅ |
-| Xem trang cam kết An toàn AI (`/trust`) | ❌ | ✅ | ✅ |
-| Quản lý hồ sơ cá nhân & Đổi mật khẩu (`/settings`) | ❌ | ✅ | ✅ |
-| Tạo, sửa, xóa hồ sơ bé (cho phép xóa về 0 bé) | ❌ | ✅ (Chỉ gia đình mình) | ✅ (Gia đình mình & xem thống kê) |
-| Cài đặt & Đổi mã PIN phụ huynh (băm SHA-256) | ❌ | ✅ | ✅ |
-| Tải ảnh tranh vẽ & Tạo truyện thần kỳ (`/create`) | ❌ | ✅ (Theo `min(daily_quota, daily_story_limit)`, mặc định 5/ngày) | ✅ (Mặc định 100/ngày, tùy chỉnh) |
-| Đọc truyện, nghe TTS Karaoke, Nhạc Ru ngủ (`/story/:id`) | ❌ | ✅ (Truyện gia đình mình) | ✅ (Toàn bộ thư viện để kiểm duyệt) |
-| Mở khóa 5 Huy hiệu Gamification & Chuỗi ngày đọc | ❌ | ✅ (Tự động theo bé/gia đình) | ✅ |
-| Sử dụng Chế độ Trẻ Em cô lập (`/kid` & `?mode=kid`) | ❌ | ✅ (Cổng khóa 3 cơ chế) | ✅ |
-| Chia sẻ công khai (tự bật `is_shared`), Xuất PDF / In sách | ❌ | ✅ (Truyện đã duyệt của mình) | ✅ |
-| Báo cáo truyện vi phạm (`pending_review`) | ❌ | ✅ | ✅ |
-| Xuất dữ liệu cá nhân (GDPR JSON) & Xóa sạch dữ liệu gia đình | ❌ | ✅ (Chỉ dữ liệu gia đình mình) | ✅ (Dữ liệu cá nhân mình) |
-| Tổng quan hệ thống 7 ngày / 30 ngày (`/admin`) | ❌ | ❌ | ✅ |
-| Hàng chờ kiểm duyệt Split View, phím tắt `A`/`R` (`/admin/moderation`) | ❌ | ❌ | ✅ |
-| Cấu hình Gemini API Key, Strict Drawing Check & Ngưỡng rủi ro (`/admin/settings`) | ❌ | ❌ | ✅ |
-| Quản lý Bộ quy tắc an toàn CRUD (`/admin/safety-rules`) | ❌ | ❌ | ✅ |
-| Chỉnh sửa & Chạy thử Gemini thật tại Prompt Studio (`/admin/prompts`) | ❌ | ❌ | ✅ |
+| Đăng nhập, Đăng ký, Quên mật khẩu (`/login`, `/register`, `/forgot-password`) | ✅ | Tự chuyển về `/` | Tự chuyển về `/admin` |
+| Đọc truyện chia sẻ công khai hợp lệ (`/shared/:token`) | ✅ | ✅ | ✅ |
+| Xem hướng dẫn sử dụng vuốt ngang khi đăng nhập & từ menu tài khoản | ❌ | ✅ (4 bước Phụ huynh) | ✅ (4 bước Quản trị & Phụ huynh) |
+| Xem trang cam kết Responsible AI & Số liệu thực (`/trust`) | ❌ | ✅ | ✅ |
+| Quản lý hồ sơ cá nhân, Đổi mật khẩu & Mã PIN riêng (`/settings`) | ❌ | ✅ | ✅ |
+| Tạo, sửa, xóa hồ sơ bé (cô lập từng gia đình) | ❌ | ✅ (Chỉ gia đình mình) | ✅ (Gia đình mình) |
+| Chụp/Tải tranh vẽ & Tạo truyện qua Edge Function (`/create`) | ❌ | ✅ (`min(daily_quota, daily_story_limit)`) | ✅ |
+| Đọc truyện lật trang, TTS Karaoke, Nhạc Ru ngủ (`/story/:id`) | ❌ | ✅ (Truyện gia đình mình) | ✅ (Toàn bộ thư viện để kiểm duyệt) |
+| Chế độ Trẻ Em cô lập (`/kid`, `/kid-mode` → `/kid`, `?mode=kid`) | ❌ | ✅ (Mở khóa bằng PIN riêng / Toán người lớn) | ✅ |
+| Chia sẻ công khai, Xuất PDF / In sách, Báo cáo nội dung | ❌ | ✅ (Truyện gia đình mình) | ✅ |
+| Xuất JSON & Xóa vĩnh viễn tài khoản GDPR (`delete-account`) | ❌ | ✅ (Xác thực lại mật khẩu + gõ `XOA`) | ✅ |
+| Tổng quan KPI & Biểu đồ Recharts 3 (`/admin`, `/admin/overview` → `/admin`) | ❌ | ❌ | ✅ |
+| Hàng chờ kiểm duyệt Split View (`/admin/queue`, `/admin/moderation` → `/admin/queue`) | ❌ | ❌ | ✅ |
+| Quản lý Bộ quy tắc an toàn CRUD (`/admin/rules`) | ❌ | ❌ | ✅ |
+| System Prompt Studio & AI Playground Server-Side (`/admin/prompts`) | ❌ | ❌ | ✅ |
 | Giám sát chi phí AI, Ngân sách tháng & Xuất CSV (`/admin/costs`) | ❌ | ❌ | ✅ |
-| Quản lý Hạn mức & Khóa/Mở khóa tài khoản (chống tự khóa mình) (`/admin/users`) | ❌ | ❌ | ✅ |
-| Xem & Tra cứu Nhật ký kiểm toán (`/admin/audit`) | ❌ | ❌ | ✅ |
-
-> **Cơ chế cưỡng chế tài khoản bị khóa (`is_locked = true`)**: Ngay khi Admin khóa một tài khoản, cả tầng RLS PostgreSQL (`is_active_user()`) lẫn tầng Frontend Guard tự động thu hồi phiên làm việc và chặn đăng nhập với thông báo rõ ràng.
+| Quản lý Hạn mức & Khóa/Mở khóa tài khoản (`/admin/users`) | ❌ | ❌ | ✅ |
+| Cấu hình Kiểm duyệt & Hướng dẫn Supabase Secrets (`/admin/settings`) | ❌ | ❌ | ✅ |
+| Nhật ký kiểm toán hệ thống (`/admin/audit`) | ❌ | ❌ | ✅ |
+| Thư viện Design Tokens (`/dev/styleguide`) | Chỉ mở trên môi trường `DEV` cục bộ (Tự động gỡ khỏi bản Production) | | |
 
 ---
 
-## 4. LUỒNG NGHIỆP VỤ TẠO TRUYỆN TOÀN TRÌNH (END-TO-END WORKFLOW)
+## 4. LUỒNG NGHIỆP VỤ HƯỚNG DẪN SỬ DỤNG & TẠO TRUYỆN TOÀN TRÌNH
+
+### 4.1. Luồng Hướng dẫn Sử dụng Thông minh (`UserGuideModal`)
+1. **Tự động mở khi vừa đăng nhập**: Ngay khi Phụ huynh hoặc Admin đăng nhập thành công, hộp thoại hướng dẫn 4 bước mở ra tương ứng với vai trò tài khoản.
+2. **Tương tác linh hoạt**: Người dùng có thể vuốt ngang trên màn hình cảm ứng, bấm nút Trước/Tiếp, bấm chấm chuyển slide, nhấn **"Đóng"** (ẩn trong phiên đăng nhập hiện tại) hoặc nhấn **"Tắt & Không hiện lại"** (lưu trạng thái theo `userId` để các lần đăng nhập sau không tự bật nữa).
+3. **Mở lại mọi lúc**: Trong menu thả xuống của tài khoản (cả giao diện Phụ huynh `UserLayout` và Quản trị `AdminLayout`), nút **"Hướng dẫn sử dụng"** được đặt cố định ngay phía trên nút **"Đăng xuất"**, cho phép xem lại hướng dẫn và bật lại chế độ tự hiện khi cần.
+
+### 4.2. Sơ đồ Tuần tự Tạo Truyện Bảo mật qua Edge Function
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Parent as Phụ Huynh
-    participant Client as DrawToStory App
-    participant Engine as AI Pipeline (Edge Function / Direct Gemini Service)
+    participant Client as DrawToStory SPA
+    participant Storage as Supabase Storage & RLS DB
+    participant Edge as Edge Function (generate-story)
     participant Gemini as Google Gemini 2.5 Flash
-    participant DB as Supabase Postgres & Storage
     actor Admin as Admin Kiểm Duyệt
 
-    Parent->>Client: Chọn hồ sơ bé (hoặc tạo mới), chụp/tải tranh vẽ & chọn sở thích
-    Client->>Client: Kiểm tra độ mờ (Laplacian > 45), độ sáng (Luminance >= 65) & Quota ngày còn lại
-    Client->>DB: Tải ảnh lên Storage bucket 'drawings' & ghi dòng metadata 'public.drawings'
-    Client->>Engine: Kích hoạt Pipeline 3 Lớp (nạp Safety Rules, Active Prompt & Cài đặt kiểm duyệt)
+    Parent->>Client: Chọn hồ sơ bé, chụp/tải tranh vẽ tay lên bàn vẽ
+    Client->>Client: Đo độ nét Laplacian (>45), độ sáng (>=65) & kiểm tra Quota ngày
+    Client->>Storage: Upload ảnh vào bucket riêng tư 'drawings/{user_id}/...'
+    Client->>Edge: POST /functions/v1/generate-story (kèm JWT Bearer Token)
+    Edge->>Storage: Xác thực JWT, kiểm tra is_locked, hạn mức ngày & tải ảnh gốc
     
     rect rgb(255, 245, 230)
-        Note over Engine,Gemini: LỚP 1: Phân Loại Đa Thể Thức & An Toàn Đầu Vào
-        Engine->>Gemini: Gửi ảnh + Structured JSON Schema (is_drawing, image_type, confidence...)
-        Gemini-->>Engine: Trả về {child_drawing | photo | logo_graphic | screenshot_text | other}
-        alt Không phải tranh vẽ & Strict Mode đang bật
-            Engine->>DB: Dọn dẹp ảnh không hợp lệ trên Storage
-            Engine-->>Client: Từ chối thân thiện: NOT_A_DRAWING ("Mình chưa thấy nét vẽ của bé")
-        else Có mặt người thật HOẶC PII HOẶC vi phạm quy tắc Block
-            Engine->>DB: Dọn dẹp ảnh trên Storage
-            Engine-->>Client: Từ chối UNSAFE_INPUT để bảo vệ quyền riêng tư & an toàn trẻ nhỏ
+        Note over Edge,Gemini: LỚP 1: Phân Loại Tranh Vẽ & An Toàn Đầu Vào
+        Edge->>Gemini: Gửi ảnh + JSON Schema (x-goog-api-key từ Supabase Secrets)
+        Gemini-->>Edge: {is_drawing, image_type, contains_real_person_face, pii_detected, objects}
+        alt Không phải tranh vẽ (khi bật strict_drawing_check) hoặc chứa mặt thật/PII
+            Edge->>Storage: Xóa tệp ảnh không hợp lệ khỏi Storage
+            Edge-->>Client: Trả mã lỗi NOT_A_DRAWING / REAL_FACE_DETECTED / PII_DETECTED
         end
     end
 
     rect rgb(230, 245, 255)
-        Note over Engine,Gemini: LỚP 2: Visual Grounding & Sáng Tác Sư Phạm
-        Engine->>Gemini: Active System Prompt + grounded_objects + Độ tuổi bé + Safety Rules
-        Gemini-->>Engine: Truyện 4-5 trang bám sát nét vẽ, Focus Region kẹp an toàn, Moral, 3 Gợi ý vẽ tiếp
+        Note over Edge,Gemini: LỚP 2: Sáng Tác Bám Sát Vật Thể (Visual Grounding)
+        Edge->>Gemini: Active System Prompt + Biệt danh chuẩn hóa + grounded_objects + Safety Rules
+        Gemini-->>Edge: Truyện 4-5 trang, Focus Region kẹp an toàn, Bài học & 3 Gợi ý vẽ tiếp
     end
 
     rect rgb(245, 230, 255)
-        Note over Engine,Gemini: LỚP 3: Faithfulness Scoring & Safety Judge
-        Engine->>Gemini: Đối chiếu truyện với grounded_objects & chấm điểm rủi ro (0-100)
-        Gemini-->>Engine: Trả về faithfulness_score, risk_score & safety_flags
+        Note over Edge,Gemini: LỚP 3: Chấm Điểm Trung Thực & Giám Định An Toàn
+        Edge->>Gemini: Đối chiếu truyện với grounded_objects & chấm risk_score (0-100)
+        Gemini-->>Edge: {faithfulness_score, risk_score, safety_flags}
         alt faithfulness_score < 60
-            Note over Engine,Gemini: Tự động tạo lại ở temperature 0.35 & chấm điểm Judge lại trên bản mới
+            Edge->>Gemini: Sinh lại ở temperature 0.35 & chấm điểm Judge lần 2
         end
     end
 
-    Engine->>DB: Ghi chi tiết token, độ trễ & chi phí USD vào bảng 'ai_logs'
-    alt Điểm rủi ro <= auto_approve_max_risk VÀ Chế độ 'auto'
-        Engine->>DB: Lưu truyện 'auto_approved' + các trang 'story_pages'
-        Engine->>DB: Tự động xét duyệt & trao Huy hiệu ('user_badges')
-        Engine-->>Client: Mở ngay trình đọc sách lật trang & phát âm thanh pháo hoa
-    else Điểm rủi ro > ngưỡng HOẶC Chế độ 'manual_all'
-        Engine->>DB: Lưu truyện 'pending_review'
-        Engine-->>Client: Thông báo truyện đang chờ Quản trị viên thẩm định an toàn
-        Admin->>DB: Thẩm định trên Split View (Phím A: Duyệt / Phím R: Từ chối kèm lý do)
-        Admin->>DB: Ghi nhận vào 'moderation_reviews' & 'admin_audit_logs'
+    Edge->>Storage: Lưu drawings, stories, story_pages, ai_logs (token & chi phí thật)
+    alt risk_score <= auto_approve_max_risk & Chế độ 'auto'
+        Edge-->>Client: Trạng thái 'auto_approved' -> Mở sách đọc ngay & xét trao Huy hiệu
+    else Vượt ngưỡng rủi ro hoặc Chế độ 'manual_all'
+        Edge-->>Client: Trạng thái 'pending_review' -> Chờ Admin duyệt tại /admin/queue
+        Admin->>Storage: Thẩm định Split View (Phím A: Duyệt / Phím R: Từ chối) + ghi Audit Log
     end
 ```
 
 ---
 
-## 5. BỘ QUY TẮC AN TOÀN TRẺ EM (SAFETY RULES SPECIFICATION)
-Hệ thống thiết lập 10 quy tắc phòng hộ thực tế được quản trị trực tiếp trên Database (`public.safety_rules`):
-1. **Bạo lực & Vũ khí (Mức 5 - Block)**: Tuyệt đối không cho phép vũ khí sát thương, hành vi bạo lực đẫm máu.
-2. **Nội dung người lớn (Mức 5 - Block)**: Chặn mọi yếu tố lệch chuẩn với tâm lý trẻ thơ.
-3. **Khuôn mặt người thật (Mức 5 - Block)**: Bảo vệ quyền riêng tư trẻ em, ngăn chặn chụp ảnh chân dung thật đưa lên mạng.
-4. **Thông tin cá nhân PII (Mức 5 - Block)**: Quét và chặn số điện thoại, địa chỉ nhà, tên trường học trên giấy.
-5. **Quái vật rùng rợn (Mức 4 - Flag)**: Gắn cờ đưa vào hàng chờ kiểm duyệt để đảm bảo cốt truyện biến bóng tối thành chi tiết tích cực, không gây ám ảnh tâm lý.
-6. **Ngôn từ tiêu cực (Mức 4 - Rewrite)**: Yêu cầu AI chuyển hóa thành ngôn ngữ trong sáng, khích lệ và hòa đồng.
-7. **Hành vi nguy hiểm bắt chước được (Mức 5 - Block)**: Cấm các hành vi nghịch lửa, leo trèo ban công, sờ ổ điện.
-8. **Phân biệt đối xử (Mức 3 - Rewrite)**: Loại bỏ các định kiến ngoại hình, màu da, giới tính.
-9. **Bi kịch bế tắc (Mức 4 - Rewrite)**: Đảm bảo câu chuyện luôn có lối thoát tươi sáng và hy vọng.
-10. **Xung đột gia đình gay gắt (Mức 4 - Flag)**: Đưa vào hàng chờ để kiểm duyệt viên kiểm tra yếu tố tình cảm gia đình ấm áp.
+## 5. BỘ 10 QUY TẮC AN TOÀN TRẺ EM & 5 HUY HIỆU GAMIFICATION
 
----
+### 5.1. 10 Quy tắc Phòng hộ Tâm lý Thiếu nhi (`public.safety_rules`)
+1. **Bạo lực & Vũ khí (Mức 5 – Block)**: Chặn tuyệt đối vũ khí sát thương và hành vi bạo lực.
+2. **Nội dung người lớn (Mức 5 – Block)**: Chặn mọi yếu tố nhạy cảm không phù hợp trẻ nhỏ.
+3. **Khuôn mặt người thật (Mức 5 – Block)**: Chặn ảnh chụp chân dung người thật để bảo vệ quyền riêng tư.
+4. **Thông tin cá nhân PII (Mức 5 – Block)**: Chặn ảnh chứa số điện thoại, địa chỉ nhà, tên trường lớp.
+5. **Quái vật rùng rợn (Mức 4 – Flag)**: Đưa vào hàng chờ kiểm duyệt để đảm bảo không gây sợ hãi.
+6. **Ngôn từ tiêu cực (Mức 4 – Rewrite)**: Chuyển hóa thành ngôn từ khích lệ, ấm áp.
+7. **Hành vi nguy hiểm bắt chước được (Mức 5 – Block)**: Cấm hành vi nghịch lửa, điện, leo trèo nguy hiểm.
+8. **Phân biệt đối xử (Mức 3 – Rewrite)**: Loại bỏ định kiến ngoại hình, giới tính, vùng miền.
+9. **Bi kịch bế tắc (Mức 4 – Rewrite)**: Đảm bảo kết truyện luôn tươi sáng và giàu hy vọng.
+10. **Xung đột gia đình gay gắt (Mức 4 – Flag)**: Chuyển kiểm duyệt viên rà soát yếu tố gắn kết gia đình.
 
-## 6. HỆ THỐNG GAMIFICATION & GẮN KẾT GIA ĐÌNH (5 HUY HIỆU TỰ ĐỘNG)
-Mỗi hành trình sáng tạo và đọc sách của bé đều được ghi nhận thực tế trong `reading_events` và `user_badges` kèm thanh tiến độ trực quan trên Bảng điều khiển:
-1. **Tác Giả Nhí Đầu Tiên (`first_story`)**: Mở khóa ngay khi gia đình hoàn thành cuốn truyện cổ tích đầu tiên từ tranh vẽ.
-2. **Nhà Thám Hiểm Sắc Màu (`art_explorer`)**: Trao tặng khi bé sáng tạo đạt mốc **5 cuốn truyện** từ các bức vẽ khác nhau.
-3. **Bạn Nhỏ Giờ Đi Ngủ (`bedtime_reader`)**: Tự động mở khóa khi bé hoàn thành đọc hết một cuốn truyện trong **Chế độ Ru ngủ (Bedtime Mode)**.
-4. **Chuỗi 3 Ngày Đọc Sách (`streak_3`)**: Ghi nhận thói quen đọc sách liên tục trong **3 ngày liên tiếp** dựa trên lịch sử `reading_events`.
-5. **Bậc Thầy Kể Chuyện (`master_storyteller`)**: Danh hiệu cao quý khi tủ sách của gia đình cán mốc **10 cuốn truyện đã duyệt** và tích lũy tối thiểu **30 phút nghe đọc**.
-
----
-
-## 7. KIẾN TRÚC DỮ LIỆU SẠCH & ĐỒNG BỘ THỜI GIAN THỰC (CLEAN DATA ARCHITECTURE)
-Hệ thống vận hành trên kiến trúc **Clean Database-First** hoàn chỉnh:
-1. **Khởi đầu sạch 100%**: Chạy `supabase/full_setup.sql` tạo đúng 2 tài khoản GoTrue thật (`admin@drawtostory.vn` và `me@phuhuynh.vn`), 0 hồ sơ bé, 0 bức tranh và 0 cuốn truyện mẫu. Phụ huynh tự tay thêm bé và sáng tạo trên dữ liệu thực.
-2. **Cô lập theo bé đang chọn (Active Child Scoping)**: Khi phụ huynh chuyển đổi giữa các bé trên thanh điều hướng, Bảng điều khiển, Tủ sách và Chế độ bé tự động lọc đúng sách, số phút đọc và chuỗi ngày đọc của bé đó.
-3. **Dọn dẹp dữ liệu trọn vẹn (Zero Orphaned Files)**: Khi phụ huynh xóa một cuốn truyện, xóa hồ sơ bé hoặc chọn xóa toàn bộ dữ liệu gia đình trong Cài đặt, hệ thống tự động xóa cả bản ghi cơ sở dữ liệu lẫn tệp ảnh gốc trong Supabase Storage bucket `drawings`.
+### 5.2. 5 Huy hiệu Sáng tạo Tự động theo Từng Bé (`public.badges` & `public.user_badges`)
+1. **Tác Giả Nhí Đầu Tiên (`first_story`)**: Hoàn thành cuốn sách cổ tích đầu tiên được duyệt.
+2. **Nhà Thám Hiểm Sắc Màu (`art_explorer`)**: Bức tranh sử dụng từ 5 gam màu phong phú trở lên.
+3. **Bạn Nhỏ Giờ Đi Ngủ (`bedtime_reader`)**: Đọc hoặc nghe kể chuyện trong Chế độ Ru ngủ.
+4. **Chuỗi 3 Ngày Sáng Tạo (`streak_3`)**: Duy trì hoạt động sáng tác/đọc sách 3 ngày liên tiếp.
+5. **Bậc Thầy Kể Chuyện (`master_storyteller`)**: Tủ sách của bé cán mốc 10 cuốn truyện đã duyệt.

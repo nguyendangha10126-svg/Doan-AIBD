@@ -14,11 +14,26 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-charts': ['recharts'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-supabase': ['@supabase/supabase-js'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@supabase/')) {
+              return 'vendor-supabase';
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion';
+            }
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router') ||
+              id.includes('\\react\\') ||
+              id.includes('\\react-dom\\') ||
+              id.includes('\\react-router')
+            ) {
+              return 'vendor-react';
+            }
+          }
+          return undefined;
         },
       },
     },
@@ -28,4 +43,3 @@ export default defineConfig({
     host: true,
   },
 });
-

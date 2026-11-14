@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
 import { useAuthStore } from '@/store/authStore';
+import { formatChildName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
@@ -34,6 +35,12 @@ export const LibraryPage: React.FC = () => {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
 
   const myChildIds = new Set(childrenList.map((c) => c.id));
+
+  useEffect(() => {
+    if (selectedChildFilter !== 'all' && !childrenList.some((c) => c.id === selectedChildFilter)) {
+      setSelectedChildFilter('all');
+    }
+  }, [childrenList, selectedChildFilter]);
 
   // Filter logic (strictly scoped to own children)
   const filteredStories = stories.filter((story) => {
@@ -152,7 +159,7 @@ export const LibraryPage: React.FC = () => {
               onClick={() => setSelectedChildFilter(kid.id)}
               icon={<span>{kid.avatar_emoji}</span>}
             >
-              {kid.nickname}
+              {formatChildName(kid.nickname)}
             </Chip>
           ))}
         </div>

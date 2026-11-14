@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -14,22 +15,46 @@ import {
   Menu,
   X,
   Sparkles,
+  BookOpenCheck,
+  ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useAdminStore } from '@/store/adminStore';
 import { vi } from '@/lib/i18n/vi';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
+import { UserGuideModal } from '@/features/onboarding/components/UserGuideModal';
+import { shouldAutoOpenUserGuide } from '@/features/onboarding/utils/userGuideStorage';
 
 export const AdminLayout: React.FC = () => {
   const { profile, logout } = useAuthStore();
   const { kpis, fetchAdminData } = useAdminStore();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAccountDropOpen, setIsAccountDropOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const accountDropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchAdminData();
   }, [fetchAdminData]);
+
+  // Auto-open interactive Admin User Guide upon login (unless dismissed forever)
+  useEffect(() => {
+    if (profile?.id && shouldAutoOpenUserGuide(profile.id)) {
+      setIsGuideOpen(true);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (accountDropRef.current && !accountDropRef.current.contains(e.target as Node)) {
+        setIsAccountDropOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -38,7 +63,12 @@ export const AdminLayout: React.FC = () => {
 
   const navLinks = [
     { to: '/admin', end: true, label: vi.admin.tabs.overview, icon: LayoutDashboard },
-    { to: '/admin/queue', label: vi.admin.tabs.queue, icon: ClipboardCheck, badge: kpis.pendingQueueCount > 0 ? String(kpis.pendingQueueCount) : undefined },
+    {
+      to: '/admin/queue',
+      label: vi.admin.tabs.queue,
+      icon: ClipboardCheck,
+      badge: kpis.pendingQueueCount > 0 ? String(kpis.pendingQueueCount) : undefined,
+    },
     { to: '/admin/rules', label: vi.admin.tabs.rules, icon: ShieldAlert },
     { to: '/admin/prompts', label: vi.admin.tabs.prompts, icon: Terminal },
     { to: '/admin/costs', label: vi.admin.tabs.costs, icon: DollarSign },
@@ -61,9 +91,10 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         <button
+          type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 rounded-xl bg-surface-2 text-ink min-h-[44px] min-w-[44px] flex items-center justify-center"
-          aria-label="Menu"
+          className="p-2 rounded-xl bg-surface-2 text-ink min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
+          aria-label="Mở menu quản trị"
         >
           {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -76,10 +107,10 @@ export const AdminLayout: React.FC = () => {
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-5 flex flex-col gap-6">
+        <div className="p-5 flex flex-col gap-6 overflow-y-auto min-h-0 flex-1">
           {/* Logo & Portal Info */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white shadow-btn-primary">
+            <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white shadow-btn-primary shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -93,7 +124,7 @@ export const AdminLayout: React.FC = () => {
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex flex-col gap-1.5" role="navigation">
+          <nav className="flex flex-col gap-1.5" role="navigation" aria-label="Menu quản trị">
             {navLinks.map((item) => {
               const Icon = item.icon;
               return (
@@ -112,7 +143,7 @@ export const AdminLayout: React.FC = () => {
                   }
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-4 h-4 shrink-0" />
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
@@ -126,36 +157,121 @@ export const AdminLayout: React.FC = () => {
           </nav>
         </div>
 
-        {/* Sidebar Footer Actions */}
-        <div className="p-4 border-t border-ink/10 flex flex-col gap-2 bg-surface-2">
-          <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-              AD
-            </div>
-            <div className="overflow-hidden">
-              <span className="block text-xs font-bold text-ink truncate">
-                {profile?.full_name || 'Quản trị viên'}
-              </span>
-              <span className="block text-[10px] text-brand-600 font-semibold truncate">
-                Bảo vệ an toàn trẻ em
-              </span>
-            </div>
-          </div>
+        {/* Sidebar Footer Account Dropdown & Direct Actions */}
+        <div
+          ref={accountDropRef}
+          className="relative p-4 border-t border-ink/10 flex flex-col gap-1.5 bg-surface-2 shrink-0"
+        >
+          <AnimatePresence>
+            {isAccountDropOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="absolute bottom-full left-3 right-3 mb-2 bg-surface border border-ink/10 rounded-2xl shadow-pop p-2 z-50 space-y-1"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountDropOpen(false);
+                    setIsMobileMenuOpen(false);
+                    navigate('/');
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-heading font-bold text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4 text-brand-600" />
+                  <span>Về ứng dụng người dùng</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountDropOpen(false);
+                    setIsMobileMenuOpen(false);
+                    setIsGuideOpen(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-heading font-bold text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+                >
+                  <BookOpenCheck className="w-4 h-4 text-brand-600" />
+                  <span>Hướng dẫn sử dụng</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAccountDropOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-heading font-bold text-danger hover:bg-danger-bg transition-colors cursor-pointer border-t border-ink/10 mt-1"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{vi.nav.logout}</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <button
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-xs font-heading font-bold text-ink-soft hover:text-ink px-3 py-2 rounded-xl hover:bg-surface transition-colors min-h-[44px]"
+            type="button"
+            onClick={() => setIsAccountDropOpen((prev) => !prev)}
+            className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl hover:bg-surface transition-colors cursor-pointer text-left"
+            aria-expanded={isAccountDropOpen}
+            aria-label="Menu tài khoản quản trị"
           >
-            <ArrowLeft className="w-4 h-4 text-brand-600" />
-            Về ứng dụng người dùng
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
+                AD
+              </div>
+              <div className="overflow-hidden">
+                <span className="block text-xs font-bold text-ink truncate">
+                  {profile?.full_name || 'Quản trị viên'}
+                </span>
+                <span className="block text-[10px] text-brand-600 font-semibold truncate">
+                  Bảo vệ an toàn trẻ em
+                </span>
+              </div>
+            </div>
+            <ChevronUp
+              className={cn(
+                'w-4 h-4 text-ink-faint transition-transform shrink-0',
+                isAccountDropOpen && 'rotate-180'
+              )}
+            />
           </button>
 
           <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-xs font-heading font-bold text-danger px-3 py-2 rounded-xl hover:bg-danger-bg transition-colors min-h-[44px]"
+            type="button"
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              navigate('/');
+            }}
+            className="flex items-center gap-2 text-xs font-heading font-bold text-ink-soft hover:text-ink px-3 py-2 rounded-xl hover:bg-surface transition-colors min-h-[40px] cursor-pointer"
           >
-            <LogOut className="w-4 h-4" />
-            {vi.nav.logout}
+            <ArrowLeft className="w-4 h-4 text-brand-600 shrink-0" />
+            <span>Về ứng dụng người dùng</span>
+          </button>
+
+          {/* Hướng dẫn sử dụng placed directly ABOVE Đăng xuất */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              setIsGuideOpen(true);
+            }}
+            className="flex items-center gap-2 text-xs font-heading font-bold text-ink-soft hover:text-ink px-3 py-2 rounded-xl hover:bg-surface transition-colors min-h-[40px] cursor-pointer"
+          >
+            <BookOpenCheck className="w-4 h-4 text-brand-600 shrink-0" />
+            <span>Hướng dẫn sử dụng</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-2 text-xs font-heading font-bold text-danger px-3 py-2 rounded-xl hover:bg-danger-bg transition-colors min-h-[40px] cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>{vi.nav.logout}</span>
           </button>
         </div>
       </aside>
@@ -172,6 +288,14 @@ export const AdminLayout: React.FC = () => {
       <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
         <Outlet />
       </main>
+
+      {/* Interactive Swipeable Admin User Guide Modal */}
+      <UserGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        role="admin"
+        userId={profile?.id}
+      />
     </div>
   );
 };

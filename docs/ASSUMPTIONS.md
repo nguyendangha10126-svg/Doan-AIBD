@@ -1,51 +1,48 @@
-# TÀI LIỆU CÁC GIẢ ĐỊNH KỸ THUẬT & NGHIỆP VỤ (ASSUMPTIONS)
+# TÀI LIỆU CÁC GIẢ ĐỊNH KỸ THUẬT & BẢO MẬT (ASSUMPTIONS.md)
 **Dự án: DrawToStory - Đồ án AI Based Programming**  
 *Repository:* [https://github.com/nguyendangha10126-svg/Doan-AIBD.git](https://github.com/nguyendangha10126-svg/Doan-AIBD.git)
 
 ---
 
-## 1. GIẢ ĐỊNH VỀ HẠ TẦNG & MÔI TRƯỜNG CHẠY
-1. **Nền tảng Client**: Ứng dụng là Single Page Application (SPA) phát triển bằng React 18, TypeScript (Strict Mode) và Vite. Vận hành chuẩn mực trên các trình duyệt hiện đại (Google Chrome, Microsoft Edge, Safari Mobile, Chrome Mobile).
-2. **Kích thước Màn hình Trọng tâm**:
-   - Màn hình di động chuẩn: `390px × 844px` (tương đương iPhone 12/13/14/15).
-   - Màn hình máy tính chuẩn: `1440px × 900px` (Desktop / Laptop).
-   - Tương thích co giãn trọn vẹn cho Tablet (`768px × 1024px`) và màn hình siêu nhỏ xuống tới `320px` mà không phát sinh thanh cuộn ngang (`overflow-x-hidden`).
-3. **Môi trường Backend**: Supabase cung cấp GoTrue Auth, PostgreSQL Database, Storage và Deno-based Edge Functions.
-4. **Cơ chế Dự phòng (Offline / Demo Mode)**: Khi biến môi trường đặt `VITE_USE_MOCK=true`, hệ thống tự động sử dụng kho dữ liệu mẫu chuẩn hóa (với banner *"DỮ LIỆU DEMO"* cố định) để hội đồng chấm thi vẫn có thể trải nghiệm luồng giao diện ngay cả khi ngắt kết nối mạng.
-5. **Kiến trúc Dữ liệu Sạch 1-Click (Clean Database-First)**: Mặc định (`VITE_USE_MOCK=false`), ứng dụng kết nối trực tiếp với dự án Supabase PostgreSQL thực tế (`htvslxbytqoteyimtcxg.supabase.co`). Khi chạy tệp `supabase/full_setup.sql`, cơ sở dữ liệu được làm sạch hoàn toàn (0 hồ sơ bé, 0 bức tranh, 0 cuốn truyện mẫu) và khởi tạo đúng 2 tài khoản GoTrue thật: Quản trị viên (`admin@drawtostory.vn` / `Admin@123`) và Phụ huynh (`me@phuhuynh.vn` / `Parent@123`, mã PIN mặc định `1234`).
+## 1. GIẢ ĐỊNH VỀ HẠ TẦNG, MÔI TRƯỜNG & CÔ LẬP DEMO
+1. **Nền tảng Client**: Ứng dụng là Single Page Application (SPA) xây dựng bằng React 18, TypeScript (Strict Mode), Vite 6 và Recharts 3, chia tách gói tải tự động bằng `React.lazy` để tối ưu tốc độ tải trang cho phụ huynh trên mạng di động.
+2. **Độ phân giải Màn hình Hỗ trợ**:
+   - Di động: `320px` – `430px` (chuẩn kiểm thử `390px × 844px`).
+   - Máy tính bảng & Máy tính để bàn: `768px` – `1920px` (chuẩn kiểm thử `1440px × 900px`).
+   - Hộp thoại chuẩn HTML5 `<dialog>` tự co giãn `max-h-[90dvh]` và trình đọc lật trang Desktop có vùng cuộn văn bản độc lập chống tràn/cắt chữ.
+3. **Cô lập Chế độ Demo Khỏi Production**:
+   - Cờ `isDemoMode` được định nghĩa nghiêm ngặt là `Boolean(import.meta.env.DEV) && import.meta.env.VITE_USE_MOCK === 'true'`.
+   - Khi đóng gói Production (`npm run build`), `import.meta.env.DEV` luôn bằng `false`: mọi cơ chế đăng nhập giả lập, dữ liệu mẫu cứng và route nội bộ `/dev/styleguide` đều bị loại bỏ hoàn toàn.
+4. **Cơ sở Dữ liệu Khởi Tạo Không Mật Khẩu Cứng (`supabase/full_setup.sql`)**:
+   - Kịch bản SQL khởi tạo sạch 14 bảng, 3 view thống kê, bucket `drawings`, 10 quy tắc an toàn, 5 danh mục huy hiệu và System Prompt v1.2 mà **không chứa bất kỳ mật khẩu tài khoản mặc định nào**.
+   - Chủ dự án tự đăng ký tài khoản thật qua Supabase GoTrue Auth và nâng quyền quản trị bằng hàm nội bộ `select public.promote_to_admin('email@domain.com');` trong SQL Editor.
 
 ---
 
-## 2. GIẢ ĐỊNH VỀ MÔ HÌNH AI & PIPELINE
-1. **Mô hình AI & Cấu hình Khóa Linh hoạt**: Sử dụng mô hình đa phương thức **Google Gemini 2.5 Flash** (`gemini-2.5-flash`) để tối ưu tốc độ phản hồi và chi phí. Hệ thống hỗ trợ nạp khóa API linh hoạt theo thứ tự ưu tiên:
-   - Supabase Edge Function (`GEMINI_API_KEY` secret trên Deno serverless).
-   - Khóa cấu hình trực tiếp bởi Admin tại giao diện `/admin/settings` (lưu trong `public.app_settings` với khóa `gemini_api_key`).
-   - Biến môi trường `VITE_GEMINI_API_KEY` trong tệp `.env`.
-2. **Định dạng Kết quả Sinh**: Áp dụng tính năng cấu trúc hóa `responseMimeType: "application/json"` kết hợp `responseSchema` của Gemini API và kiểm tra lại trên client để đảm bảo dữ liệu đầu ra tuân thủ 100% cấu trúc trang sách.
-3. **Ước tính Chi phí AI (Pricing Matrix)**:
+## 2. GIẢ ĐỊNH VỀ MÔ HÌNH AI, BẢO MẬT SECRETS & CHI PHÍ
+1. **Mô hình AI & Thực thi Server-Only**:
+   - Sử dụng mô hình đa phương thức **Google Gemini 2.5 Flash** (`gemini-2.5-flash`, có thể cấu hình qua biến `GEMINI_MODEL` trên máy chủ).
+   - Khóa `GEMINI_API_KEY` chỉ tồn tại trong **Supabase Edge Functions Secrets** (`Deno.env.get('GEMINI_API_KEY')`), tuyệt đối không lưu trong bảng `app_settings` và không gửi xuống trình duyệt.
+   - Để tính năng Tạo truyện và AI Playground hoạt động trên môi trường thật, quản trị viên cần cấu hình `GEMINI_API_KEY` và triển khai các Edge Functions (`generate-story`, `admin-test-prompt`, `get-shared-story`, `delete-account`).
+2. **Bảng Giá Ước Tính Token (`gemini-2.5-flash`)**:
    - Input Tokens: \$0.075 / 1,000,000 tokens.
    - Output Tokens: \$0.300 / 1,000,000 tokens.
-   - Chi phí thực tế cho mỗi lần sinh truyện 3 lớp ước tính khoảng \$0.0005 – \$0.0015 USD và được ghi nhận chính xác vào bảng `public.ai_logs`.
-4. **Kiểm duyệt 3 Lớp & Visual Grounding**:
-   - **Lớp 1 (Input Check)**: Xác định ảnh có phải tranh vẽ trẻ em hay không (`is_drawing`), phân loại thể thức (`child_drawing`, `artwork`, `photo`, `logo_graphic`, `screenshot_text`, `other`), kiểm tra khuôn mặt người thật (`contains_real_person_face`), PII (`pii_detected`) và các quy tắc `block` trong `safety_rules`.
-   - **Lớp 2 (Creative Story Generation)**: Sinh 4–5 trang truyện phù hợp độ tuổi theo `SystemPrompt` đang kích hoạt, bắt buộc bám sát `grounded_objects` và xác định tọa độ `focus_region` (`{x, y, zoom}`) kẹp an toàn ($\text{zoom} \le 1.35\times$) cho hiệu ứng Ken Burns không cắt viền (`object-fit: contain`).
-   - **Lớp 3 (Output Safety Judge & Faithfulness Retry)**: Chấm điểm `faithfulness_score` (0–100) và `risk_score` (0–100). Nếu `faithfulness_score < 60`, tự động sinh lại ở `temperature = 0.35` và chấm điểm Judge lại trên bản thảo mới. Ngưỡng tự động duyệt mặc định là `risk_score <= 25` (có thể điều chỉnh động tại `/admin/settings`).
+   - Số lượng token và chi phí USD được lấy trực tiếp từ `usageMetadata` của phản hồi Gemini API và lưu vào bảng `public.ai_logs`.
+3. **Khôi Phục Mật Khẩu Email**:
+   - Chức năng Quên mật khẩu (`/forgot-password`) sử dụng `supabase.auth.resetPasswordForEmail()`. Trong môi trường mặc định của Supabase, tần suất gửi email tuân theo giới hạn SMTP của dự án (khuyến nghị cấu hình Custom SMTP trên Supabase Dashboard khi vận hành quy mô lớn).
 
 ---
 
-## 3. GIẢ ĐỊNH VỀ GIỌNG ĐỌC & ĐA PHƯƠNG TIỆN (TTS & WEB AUDIO)
-1. **Web Speech API**: Sử dụng trực tiếp `window.speechSynthesis` sẵn có trên trình duyệt của người dùng, hoàn toàn miễn phí, không phát sinh độ trễ mạng và hoạt động ổn định trên cả trang đọc chính lẫn trang chia sẻ công khai.
-2. **Bộ Giọng Tiếng Việt Tự Nhiên Đa Dạng**: Hệ thống tự động quét danh sách giọng đọc `vi-VN` của thiết bị và ưu tiên các giọng tự nhiên (*Microsoft Hoài My*, *Microsoft Nam Minh*, *Google Tiếng Việt*, *Apple Linh*), hỗ trợ tùy chỉnh tốc độ kể chuyện `0.8x`, `1.0x`, `1.2x`.
-3. **Đồng bộ Câu đọc (Sentence Highlighting)**: Văn bản từng trang truyện được tách câu thông minh và bôi sáng Karaoke đồng bộ theo câu đang phát âm.
-4. **Hiệu ứng Âm thanh & Nhạc hộp Ru ngủ (`src/lib/sound.ts`)**: Tổng hợp 100% bằng Web Audio API mà không cần tệp `.mp3` tĩnh: tiếng lật trang sách `playPageTurn()`, chuông phép thuật `playSparkle()` / `playMagic()`, pháo hoa hoàn thành `playSuccess()`, nhạc hộp ru ngủ lặp êm dịu `startLullaby()` / `stopLullaby()`, cùng âm thanh tương tác `playTap()` và `playLock()`.
+## 3. GIẢ ĐỊNH VỀ GIỌNG ĐỌC & ÂM THANH (WEB SPEECH & WEB AUDIO)
+1. **Web Speech API (`window.speechSynthesis`)**: Tận dụng bộ đọc giọng nói sẵn có trên hệ điều hành/trình duyệt của người dùng (ưu tiên các giọng `vi-VN` như *Hoài My*, *Nam Minh*, *Google Tiếng Việt*, *Linh*), hoàn toàn miễn phí và không gửi âm thanh giọng nói của trẻ lên đám mây.
+2. **Web Audio API (`src/lib/sound.ts`)**: Toàn bộ âm thanh lật giấy, chuông phép thuật và hộp nhạc ru ngủ `startLullaby()` được tổng hợp toán học trực tiếp trên trình duyệt, không phụ thuộc tệp âm thanh bên ngoài.
 
 ---
 
-## 4. GIẢ ĐỊNH VỀ AN TOÀN TRẺ EM & QUYỀN RIÊNG TƯ (CHILD SAFETY & PRIVACY)
-1. **Dữ liệu Tối thiểu (Data Minimization)**: Hồ sơ trẻ em tuyệt đối **KHÔNG** lưu họ tên đầy đủ, ngày tháng năm sinh chính xác, địa chỉ nhà hay ảnh chụp chân dung. Chỉ lưu biệt danh (*Bé Bơ*, *Sóc Nâu*...), độ tuổi (`2–12`), sở thích khái quát và màu sắc/emoji đại diện.
-2. **Lưu trữ & Dọn dẹp Ảnh Tranh Vẽ (`drawings` Bucket)**:
-   - Tệp ảnh tranh vẽ được lưu tại đường dẫn phân tách theo từng gia đình `{user_id}/{child_id}_{timestamp}.{ext}` trong Supabase Storage bucket `drawings`. Đường dẫn ảnh sử dụng URL đọc tĩnh không hết hạn để cả gia đình và ông bà/người thân mở liên kết chia sẻ `/shared/:token` đều xem được tranh mượt mà mà không gặp lỗi gãy ảnh sau 60 phút.
-   - Quyền ghi/xóa tệp trên Storage và quyền truy vấn bảng metadata `public.drawings` được khóa chặt bằng RLS theo đúng `user_id` (chỉ mở đọc cho khách khi cuốn truyện chứa bức tranh đó đã duyệt và bật `is_shared = true`).
-   - Khi phụ huynh xóa truyện, xóa hồ sơ bé hoặc xóa dữ liệu tài khoản, hệ thống tự động xóa đồng bộ cả tệp vật lý trên Storage lẫn bản ghi cơ sở dữ liệu.
-3. **Bảo Mật Mã PIN Phụ Huynh**: Mã PIN phụ huynh được băm một chiều bằng SHA-256 (`fastHashPin`) trước khi lưu trữ vào `profiles.parent_pin_hash`.
-4. **Cô lập Chế độ Trẻ Em & Cổng Phụ Huynh (Kid Mode & Parental Gate)**: Trẻ đọc sách trong `/kid` và `/story/:id?mode=kid` được cô lập hoàn toàn khỏi các nút chia sẻ/in ấn/cài đặt của người lớn; để thoát ra ngoài, phụ huynh phải nhấn giữ nút khóa 2 giây, giải phép toán nhân ngẫu nhiên hoặc nhập đúng mã PIN 4 chữ số.
+## 4. GIẢ ĐỊNH VỀ AN TOÀN TRẺ EM & QUYỀN RIÊNG TƯ GDPR
+1. **Giảm Thiểu Dữ Liệu (Data Minimization)**: Chỉ lưu biệt danh đã chuẩn hóa (không lưu họ tên thật, ngày sinh đầy đủ, địa chỉ hay ảnh mặt thật) và độ tuổi (`2–12`) để điều chỉnh ngôn từ sư phạm.
+2. **Bảo Mật Mã PIN Phụ Huynh**:
+   - `parental_pin_hash` mặc định là `null` khi mới tạo tài khoản (không tồn tại PIN mặc định `1234`).
+   - Khi phụ huynh thiết lập PIN, mã PIN được băm một chiều kèm Salt riêng theo định danh tài khoản (`saltedHashPinSync(pin, userId)`). Nếu gia đình chưa đặt PIN, Cổng phụ huynh trong Chế độ Bé tự động yêu cầu giải phép nhân hai chữ số của người lớn.
+3. **Quyền Được Lãng Quên Thực Thụ (`delete-account` Edge Function)**:
+   - Khi phụ huynh xác nhận xóa tài khoản bằng mật khẩu hiện tại và từ khóa `XOA`, Edge Function `delete-account` sử dụng quyền quản trị máy chủ để xóa toàn bộ tệp tranh vẽ trong Storage bucket `drawings`, xóa bản ghi `public.profiles` (kéo theo xóa cascade toàn bộ `children`, `drawings`, `stories`, `story_pages`, `user_badges`, `reading_events`) và gọi `supabase.auth.admin.deleteUser(user.id)` để xóa hoàn toàn tài khoản đăng nhập.

@@ -1,9 +1,6 @@
 -- ====================================================================
--- SUPABASE FULL SETUP SCRIPT (1-CLICK EXECUTION - PRODUCTION CLEAN)
+-- MIGRATION 001: INITIAL SCHEMA, STRICT RLS, TRIGGERS, STORAGE & VIEWS
 -- PROJECT: DrawToStory - Child-Safe AI Storyteller
--- PURPOSE: Complete database schema, real Supabase Auth seed accounts,
---          strict RLS security, storage configuration & clean baseline
--- IDEMPOTENT: Safe to run multiple times in Supabase SQL Editor
 -- ====================================================================
 
 set search_path = public, extensions;
@@ -43,7 +40,7 @@ create table public.profiles (
   role text not null default 'user' check (role in ('user', 'admin')),
   is_locked boolean not null default false,
   daily_quota integer not null default 5 check (daily_quota >= 0),
-  parental_pin_hash text default '001627dbf308f962',
+  parental_pin_hash text default null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -153,6 +150,7 @@ create table public.stories (
   risk_score integer not null default 0 check (risk_score between 0 and 100),
   faithfulness_score integer not null default 100 check (faithfulness_score between 0 and 100),
   generation_stage text not null default 'done',
+  grounded_objects jsonb not null default '[]'::jsonb,
   risk_reasons jsonb not null default '[]'::jsonb,
   rejection_reason text,
   reviewed_by uuid references public.profiles(id) on delete set null,
@@ -572,14 +570,33 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(coalesce(new.email, 'Phụ Huynh Mới'), '@', 1)),
-    case when new.id = 'a0000000-0000-0000-0000-000000000001'::uuid then 'admin' else 'user' end,
-    case when new.id = 'a0000000-0000-0000-0000-000000000001'::uuid then 100 else 5 end,
-    '001627dbf308f962'
+    'user',
+    5,
+    nullif(new.raw_user_meta_data->>'parental_pin_hash', '')
   )
   on conflict (id) do update set
     email = excluded.email,
     full_name = coalesce(public.profiles.full_name, excluded.full_name);
   return new;
+end;
+$$;
+
+-- Owner-only helper to promote a registered user to Admin from Supabase SQL Editor
+create or replace function public.promote_to_admin(target_email text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.profiles
+  set role = 'admin',
+      daily_quota = greatest(daily_quota, 100),
+      updated_at = now()
+  where lower(email) = lower(trim(target_email));
+
+  if not found then
+    raise exception 'Không tìm thấy tài khoản với email: % (Hãy đăng ký tài khoản trước)', target_email;
+  end if;
 end;
 $$;
 
@@ -671,239 +688,40 @@ grant all on all tables in schema public to anon, authenticated;
 grant all on all sequences in schema public to anon, authenticated;
 grant all on all routines in schema public to anon, authenticated;
 
--- ====================================================================
--- 22. REAL SUPABASE AUTH ACCOUNTS SEED (ADMIN + MOM, ZERO CHILDREN)
--- ====================================================================
-do $$
-declare
-  v_admin_id uuid := 'a0000000-0000-0000-0000-000000000001';
-  v_mom_id   uuid := 'b0000000-0000-0000-0000-000000000002';
-  v_has_provider_id boolean;
-  v_id_type text;
-  v_col text;
-  v_str_cols text[] := array[
-    'confirmation_token',
-    'recovery_token',
-    'email_change_token_new',
-    'email_change',
-    'email_change_token_current',
-    'phone_change',
-    'phone_change_token',
-    'reauthentication_token'
-  ];
-  v_bool_cols text[] := array[
-    'is_sso_user',
-    'is_anonymous'
-  ];
-begin
-  -- Remove any pre-existing default accounts to recreate cleanly
-  delete from auth.identities
-  where user_id in (v_admin_id, v_mom_id)
-     or identity_data->>'email' in ('admin@drawtostory.vn', 'me@phuhuynh.vn');
-
-  delete from auth.users
-  where id in (v_admin_id, v_mom_id)
-     or email in ('admin@drawtostory.vn', 'me@phuhuynh.vn');
-
-  -- Insert real GoTrue users
-  insert into auth.users (
-    instance_id,
-    id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    confirmation_token,
-    email_change,
-    email_change_token_new,
-    recovery_token
-  ) values
-  (
-    '00000000-0000-0000-0000-000000000000',
-    v_admin_id,
-    'authenticated',
-    'authenticated',
-    'admin@drawtostory.vn',
-    crypt('Admin@123', gen_salt('bf')),
-    now(),
-    '{"provider": "email", "providers": ["email"]}'::jsonb,
-    '{"full_name": "Quản Trị Viên An Toàn"}'::jsonb,
-    now() - interval '30 days',
-    now(),
-    '',
-    '',
-    '',
-    ''
-  ),
-  (
-    '00000000-0000-0000-0000-000000000000',
-    v_mom_id,
-    'authenticated',
-    'authenticated',
-    'me@phuhuynh.vn',
-    crypt('Parent@123', gen_salt('bf')),
-    now(),
-    '{"provider": "email", "providers": ["email"]}'::jsonb,
-    '{"full_name": "Mẹ Thu Hà"}'::jsonb,
-    now() - interval '30 days',
-    now(),
-    '',
-    '',
-    '',
-    ''
-  );
-
-  -- Ensure all GoTrue v2 string token columns are non-NULL empty strings (prevents HTTP 500 on signInWithPassword)
-  foreach v_col in array v_str_cols loop
-    if exists (
-      select 1 from information_schema.columns
-      where table_schema = 'auth' and table_name = 'users' and column_name = v_col
-    ) then
-      execute format(
-        'update auth.users set %I = coalesce(%I, '''') where id in ($1, $2)',
-        v_col, v_col
-      ) using v_admin_id, v_mom_id;
-    end if;
-  end loop;
-
-  -- Ensure GoTrue v2 boolean flags are non-NULL false
-  foreach v_col in array v_bool_cols loop
-    if exists (
-      select 1 from information_schema.columns
-      where table_schema = 'auth' and table_name = 'users' and column_name = v_col
-    ) then
-      execute format(
-        'update auth.users set %I = coalesce(%I, false) where id in ($1, $2)',
-        v_col, v_col
-      ) using v_admin_id, v_mom_id;
-    end if;
-  end loop;
-
-  -- Inspect auth.identities schema dynamically to avoid static type mismatch across GoTrue versions
-  select exists (
-    select 1 from information_schema.columns
-    where table_schema = 'auth' and table_name = 'identities' and column_name = 'provider_id'
-  ) into v_has_provider_id;
-
-  select data_type
-  from information_schema.columns
-  where table_schema = 'auth' and table_name = 'identities' and column_name = 'id'
-  into v_id_type;
-
-  if v_has_provider_id then
-    if v_id_type = 'uuid' then
-      execute $sql$
-        insert into auth.identities (
-          id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-        ) values
-        (
-          gen_random_uuid(),
-          $1,
-          $1::text,
-          jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
-          'email',
-          now(),
-          now() - interval '30 days',
-          now()
-        ),
-        (
-          gen_random_uuid(),
-          $2,
-          $2::text,
-          jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
-          'email',
-          now(),
-          now() - interval '30 days',
-          now()
-        )
-      $sql$ using v_admin_id, v_mom_id;
-    else
-      execute $sql$
-        insert into auth.identities (
-          id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-        ) values
-        (
-          gen_random_uuid()::text,
-          $1,
-          $1::text,
-          jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
-          'email',
-          now(),
-          now() - interval '30 days',
-          now()
-        ),
-        (
-          gen_random_uuid()::text,
-          $2,
-          $2::text,
-          jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
-          'email',
-          now(),
-          now() - interval '30 days',
-          now()
-        )
-      $sql$ using v_admin_id, v_mom_id;
-    end if;
-  else
-    execute $sql$
-      insert into auth.identities (
-        id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-      ) values
-      (
-        $1::text,
-        $1,
-        jsonb_build_object('sub', $1::text, 'email', 'admin@drawtostory.vn', 'email_verified', true, 'phone_verified', false),
-        'email',
-        now(),
-        now() - interval '30 days',
-        now()
-      ),
-      (
-        $2::text,
-        $2,
-        jsonb_build_object('sub', $2::text, 'email', 'me@phuhuynh.vn', 'email_verified', true, 'phone_verified', false),
-        'email',
-        now(),
-        now() - interval '30 days',
-        now()
-      )
-    $sql$ using v_admin_id, v_mom_id;
-  end if;
-end $$;
-
--- Ensure profiles match clean baseline (PIN 1234 -> 001627dbf308f962)
-insert into public.profiles (id, email, full_name, role, is_locked, daily_quota, parental_pin_hash, created_at)
-values
-  ('a0000000-0000-0000-0000-000000000001', 'admin@drawtostory.vn', 'Quản Trị Viên An Toàn', 'admin', false, 100, '001627dbf308f962', now() - interval '30 days'),
-  ('b0000000-0000-0000-0000-000000000002', 'me@phuhuynh.vn', 'Mẹ Thu Hà', 'user', false, 5, '001627dbf308f962', now() - interval '30 days')
-on conflict (id) do update set
-  email = excluded.email,
-  full_name = excluded.full_name,
-  role = excluded.role,
-  is_locked = false,
-  daily_quota = excluded.daily_quota,
-  parental_pin_hash = excluded.parental_pin_hash;
+-- Restrict promote_to_admin strictly to SQL Editor (postgres) & service_role
+revoke execute on function public.promote_to_admin(text) from public, anon, authenticated;
+grant execute on function public.promote_to_admin(text) to postgres, service_role;
 
 -- ====================================================================
--- 23. SYSTEM BASELINE CONFIGURATION (NO CHILDREN, NO DRAWINGS, NO STORIES)
+-- PRODUCTION CLEAN SEED: SYSTEM SETTINGS, PROMPTS, SAFETY RULES & BADGES
+-- PROJECT: DrawToStory - Child-Safe AI Storyteller
+-- ====================================================================
+-- SECURITY NOTE:
+-- Tuyệt đối KHÔNG lưu mật khẩu tài khoản hay API Key công khai trong file SQL!
+-- Cách khởi tạo tài khoản Phụ huynh & Quản trị viên an toàn:
+--   1. Đăng ký tài khoản qua trang /register của ứng dụng (hoặc Supabase Auth -> Users -> Add user)
+--      với mật khẩu mạnh riêng tư của bạn.
+--   2. Để nâng cấp một tài khoản thành Quản trị viên (Admin), chạy lệnh sau trong Supabase SQL Editor:
+--        select public.promote_to_admin('dia-chi-email-admin-cua-ban@domain.com');
+--   3. Cấu hình GEMINI_API_KEY trong Supabase Edge Function Secrets (KHÔNG lưu ở bảng app_settings):
+--        supabase secrets set GEMINI_API_KEY=AIzaSy...
 -- ====================================================================
 
--- APP SETTINGS
+set search_path = public, extensions;
+
+-- Xóa mọi key nhạy cảm cũ nếu từng tồn tại trong app_settings
+delete from public.app_settings where key = 'gemini_api_key';
+
+-- APP SETTINGS (Chỉ chứa tham số vận hành không nhạy cảm)
 insert into public.app_settings (key, value) values
   ('moderation_mode', 'auto'),
   ('auto_approve_max_risk', '25'),
   ('daily_story_limit', '5'),
   ('monthly_budget_usd', '50.00'),
-  ('strict_drawing_check', 'true'),
-  ('gemini_api_key', '')
+  ('strict_drawing_check', 'true')
 on conflict (key) do update set value = excluded.value;
 
--- SYSTEM PROMPTS (v1.2 Active)
+-- SYSTEM PROMPTS (v1.2 Active — created_by = null để độc lập với danh sách user ban đầu)
 insert into public.system_prompts (id, name, version, prompt_text, is_active, created_by, created_at)
 values (
   'f0000000-0000-0000-0000-000000000001',
@@ -920,10 +738,13 @@ QUY TẮC BẮT BUỘC:
 5. Kết thúc và bài học (Moral): Câu chuyện luôn kết thúc có hậu, gửi gắm bài học nhân văn nhẹ nhàng về tình cảm gia đình, bạn bè, thiên nhiên hoặc lòng dũng cảm.
 6. Vẽ tiếp gì nào (Next Drawing Ideas): Đưa ra đúng 3 gợi ý nét vẽ sáng tạo để bé tiếp tục vẽ bức tranh tiếp theo cho câu chuyện.',
   true,
-  'a0000000-0000-0000-0000-000000000001',
+  null,
   now() - interval '30 days'
 )
-on conflict (id) do nothing;
+on conflict (id) do update set
+  name = excluded.name,
+  prompt_text = excluded.prompt_text,
+  is_active = excluded.is_active;
 
 -- 10 REALISTIC CHILD SAFETY RULES
 insert into public.safety_rules (id, category, description, severity, action, is_active, created_at)

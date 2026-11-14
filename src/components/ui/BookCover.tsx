@@ -9,6 +9,7 @@ import {
   Clock
 } from 'lucide-react';
 import { Story, isStoryApproved } from '@/types/database';
+import { formatChildName } from '@/lib/utils';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -111,7 +112,7 @@ export const BookCover: React.FC<BookCoverProps> = ({
             </h3>
             {story.child && (
               <span className="text-[11px] text-white/80 block mt-0.5 truncate font-medium">
-                Tác giả nhí: {story.child.nickname} ({story.child.age}t)
+                Tác giả nhí: {formatChildName(story.child.nickname)} ({story.child.age}t)
               </span>
             )}
           </div>

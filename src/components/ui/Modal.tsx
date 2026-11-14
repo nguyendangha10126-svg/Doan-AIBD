@@ -1,5 +1,4 @@
-import React, { useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,14 +21,77 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'md',
   showCloseButton = true,
 }) => {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descId = useId();
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    if (isOpen) {
+      if (!dialog.open) {
+        try {
+          dialog.showModal();
+        } catch {
+          // Ignore if already open
+        }
+      }
+    } else if (dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const handleNativeClose = () => {
+      dialog.returnValue = '';
+      if (isOpen) {
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    dialog.addEventListener('close', handleNativeClose);
+
+    // Fallback light-dismiss where native <dialog closedby="any"> is not supported yet
+    let cleanupFallback: (() => void) | undefined;
+    if (
+      typeof HTMLDialogElement !== 'undefined' &&
+      !('closedBy' in HTMLDialogElement.prototype)
+    ) {
+      let pressedOutside = false;
+      const isOutside = (e: PointerEvent) => {
+        const r = dialog.getBoundingClientRect();
+        return (
+          e.clientX < r.left ||
+          e.clientX > r.right ||
+          e.clientY < r.top ||
+          e.clientY > r.bottom
+        );
+      };
+      const onPointerDown = (e: PointerEvent) => {
+        pressedOutside = isOutside(e);
+      };
+      const onPointerUp = (e: PointerEvent) => {
+        if (pressedOutside && isOutside(e)) {
+          dialog.close();
+        }
+        pressedOutside = false;
+      };
+      dialog.addEventListener('pointerdown', onPointerDown);
+      dialog.addEventListener('pointerup', onPointerUp);
+      cleanupFallback = () => {
+        dialog.removeEventListener('pointerdown', onPointerDown);
+        dialog.removeEventListener('pointerup', onPointerUp);
+      };
+    }
+
+    return () => {
+      dialog.removeEventListener('close', handleNativeClose);
+      cleanupFallback?.();
+    };
   }, [isOpen, onClose]);
 
   const maxWidthClasses = {
@@ -41,69 +103,68 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
   };
 
+  if (!isOpen) {
+    return null;
+  }
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-ink/40 backdrop-blur-sm"
-            onClick={onClose}
-          />
+    <dialog
+      ref={dialogRef}
+      {...({ closedby: 'any' } as React.DialogHTMLAttributes<HTMLDialogElement>)}
+      aria-labelledby={title ? titleId : undefined}
+      aria-describedby={description ? descId : undefined}
+      aria-label={!title ? 'Hộp thoại' : undefined}
+      className={cn(
+        'dts-modal w-[calc(100%-1.5rem)] sm:w-full mx-auto my-auto rounded-[28px] shadow-pop overflow-hidden',
+        'max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:rounded-t-[28px]',
+        maxWidthClasses[maxWidth]
+      )}
+    >
+      {/* Mobile Sheet Drag Indicator */}
+      <div className="w-12 h-1.5 bg-ink/15 rounded-full mx-auto mt-3 sm:hidden shrink-0" />
 
-          {/* Modal / Bottom Sheet Container */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-            className={cn(
-              'relative w-full bg-surface border border-ink/10 shadow-pop z-10 overflow-hidden text-ink',
-              // Mobile is a bottom sheet with handle, desktop is centered card
-              'max-sm:rounded-t-[28px] max-sm:rounded-b-none max-sm:p-6 max-sm:max-h-[85vh] max-sm:overflow-y-auto',
-              'sm:rounded-[28px] sm:p-8 sm:my-8',
-              maxWidthClasses[maxWidth]
+      {/* Fixed Header */}
+      {(title || showCloseButton) && (
+        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3 sm:px-8 sm:pt-7 sm:pb-4 border-b border-ink/5 shrink-0">
+          <div className="min-w-0">
+            {title && (
+              <h2
+                id={titleId}
+                className="text-xl md:text-2xl font-heading font-extrabold text-ink tracking-tight"
+              >
+                {title}
+              </h2>
             )}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Mobile Sheet Drag Indicator */}
-            <div className="w-12 h-1.5 bg-ink/15 rounded-full mx-auto mb-4 sm:hidden" />
-
-            {/* Header */}
-            {(title || showCloseButton) && (
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
-                  {title && (
-                    <h3 className="text-xl md:text-2xl font-heading font-extrabold text-ink tracking-tight">
-                      {title}
-                    </h3>
-                  )}
-                  {description && (
-                    <p className="text-sm text-ink-soft mt-1 leading-relaxed">{description}</p>
-                  )}
-                </div>
-
-                {showCloseButton && (
-                  <button
-                    onClick={onClose}
-                    className="p-2 rounded-full hover:bg-ink/5 text-ink-faint hover:text-ink transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-2"
-                    aria-label="Đóng"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
+            {description && (
+              <p id={descId} className="text-sm text-ink-soft mt-1 leading-relaxed">
+                {description}
+              </p>
             )}
+          </div>
 
-            {/* Content */}
-            <div className="relative">{children}</div>
-          </motion.div>
+          {showCloseButton && (
+            <button
+              type="button"
+              onClick={() => dialogRef.current?.close()}
+              className="p-2 rounded-full hover:bg-ink/5 text-ink-faint hover:text-ink transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 -mt-1 shrink-0 cursor-pointer"
+              aria-label="Đóng hộp thoại"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       )}
-    </AnimatePresence>
+
+      {/* Scrollable Body (Prevents Desktop & Mobile Viewport Overflow/Clipping) */}
+      <div
+        className={cn(
+          'overflow-y-auto min-h-0 flex-1 px-6 pb-6 sm:px-8 sm:pb-8',
+          !(title || showCloseButton) && 'pt-6 sm:pt-8',
+          (title || showCloseButton) && 'pt-4'
+        )}
+      >
+        {children}
+      </div>
+    </dialog>
   );
 };

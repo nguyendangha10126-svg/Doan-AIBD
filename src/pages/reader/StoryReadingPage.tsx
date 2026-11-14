@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStoryStore } from '@/store/storyStore';
+import { formatChildName } from '@/lib/utils';
 import { vi } from '@/lib/i18n/vi';
 import { Story, StoryPage, isStoryApproved } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -454,11 +455,13 @@ export const StoryReadingPage: React.FC = () => {
 
   const isReducedMotion = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Font size mapping
-  const fontSizeClass = 
-    fontSizeLevel === 'sm' ? 'text-[clamp(18px,2vw,24px)]' :
-    fontSizeLevel === 'lg' ? 'text-[clamp(26px,2.8vw,36px)]' :
-    'text-[clamp(22px,2.4vw,32px)]';
+  // Font size mapping calibrated so 2-page flipbook spread never clips text
+  const fontSizeClass =
+    fontSizeLevel === 'sm'
+      ? 'text-[clamp(15px,1.3vw,18px)]'
+      : fontSizeLevel === 'lg'
+      ? 'text-[clamp(20px,1.8vw,24px)]'
+      : 'text-[clamp(17px,1.55vw,21px)]';
 
   // Grounded objects list
   const groundedObjects = story?.grounded_objects && story.grounded_objects.length > 0
@@ -530,7 +533,7 @@ export const StoryReadingPage: React.FC = () => {
                 {story.title}
               </h1>
               <p className={`text-xs font-semibold truncate ${isBedtimeMode ? 'text-[#C8B6FF]' : 'text-ink-soft'}`}>
-                {currentPageIndex >= totalPages ? 'Trang kết' : `Trang ${currentPageIndex + 1} / ${totalPages}`} · Bé {story.child?.nickname || 'Bé'}
+                {currentPageIndex >= totalPages ? 'Trang kết' : `Trang ${currentPageIndex + 1} / ${totalPages}`} · {formatChildName(story.child?.nickname)}
               </p>
             </div>
           </div>
@@ -732,7 +735,7 @@ export const StoryReadingPage: React.FC = () => {
                 useMouseEvents={true}
                 swipeDistance={30}
                 showPageCorners={true}
-                disableFlipByClick={false}
+                disableFlipByClick={true}
                 style={{}}
               >
                 {/* Generate two facing pages for each story page */}
@@ -748,10 +751,10 @@ export const StoryReadingPage: React.FC = () => {
 
                   return [
                     // LEFT SPREAD PAGE: Polaroid Artwork Frame
-                    <FlipPage key={`left-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-10 flex flex-col justify-between">
-                      <div className="space-y-4">
+                    <FlipPage key={`left-${pg.id}`} isBedtime={isBedtimeMode} className="p-6 sm:p-8 flex flex-col justify-between gap-3">
+                      <div className="space-y-3 min-h-0 flex-1 flex flex-col">
                         {/* Top Header of Left Page */}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between shrink-0">
                           <Badge variant={isBedtimeMode ? 'lavender' : 'peach'} size="sm">
                             {pg.page_number === 1 ? 'Khởi đầu' : `Chương ${pg.page_number}`}
                           </Badge>
@@ -762,8 +765,8 @@ export const StoryReadingPage: React.FC = () => {
                         </div>
 
                         {/* Polaroid / Paper Framed Artwork */}
-                        <div className="p-3 pb-5 bg-white rounded-2xl shadow-card border border-ink/10 rotate-[-1deg] transition-transform hover:rotate-0">
-                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
+                        <div className="p-2.5 pb-4 bg-white rounded-2xl shadow-card border border-ink/10 rotate-[-1deg] transition-transform hover:rotate-0 my-auto">
+                          <div className="relative aspect-[4/3] max-h-[290px] w-full rounded-xl overflow-hidden bg-surface-2 flex items-center justify-center">
                             {story.drawing?.image_path ? (
                               <motion.img
                                 key={pg.id}
@@ -786,15 +789,15 @@ export const StoryReadingPage: React.FC = () => {
                               <div className="text-6xl select-none">🎨</div>
                             )}
                           </div>
-                          <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2 tracking-wide">
-                            Tranh vẽ của Bé {story.child?.nickname || ''}
+                          <p className="text-[11px] font-heading font-bold text-ink-faint text-center mt-2 tracking-wide truncate">
+                            Tranh vẽ của {formatChildName(story.child?.nickname)}
                           </p>
                         </div>
                       </div>
 
                       {/* "Bé đã vẽ, AI thấy gì" Grounded Object Chips */}
                       {groundedObjects.length > 0 && (
-                        <div className={`pt-3 border-t space-y-1.5 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                        <div className={`pt-2.5 border-t space-y-1.5 shrink-0 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
                           <div className={`flex items-center gap-1.5 text-[11px] font-bold ${isBedtimeMode ? 'text-[#E3D9FF]' : 'text-ink-soft'}`}>
                             <Sparkles className={`w-3 h-3 ${isBedtimeMode ? 'text-butter' : 'text-magic-600'}`} />
                             <span>Bé đã vẽ, AI thấy gì:</span>
@@ -818,32 +821,35 @@ export const StoryReadingPage: React.FC = () => {
                     </FlipPage>,
 
                     // RIGHT SPREAD PAGE: Modern Story Text with Karaoke Sentence Highlight
-                    <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
-                      <div className="space-y-6">
-                        {/* Top Header of Right Page */}
-                        <div className={`flex items-center justify-between text-xs font-bold border-b pb-3 ${
-                          isBedtimeMode ? 'text-[#C8B6FF] border-white/10' : 'text-ink-soft border-ink/10'
+                    <FlipPage key={`right-${pg.id}`} isBedtime={isBedtimeMode} className="p-6 sm:p-9 flex flex-col justify-between gap-4">
+                      {/* Top Header of Right Page */}
+                      <div className={`flex items-center justify-between text-xs font-bold border-b pb-2.5 shrink-0 ${
+                        isBedtimeMode ? 'text-[#C8B6FF] border-white/10' : 'text-ink-soft border-ink/10'
+                      }`}>
+                        <span className={`font-heading tracking-wider uppercase text-[11px] truncate max-w-[230px] ${
+                          isBedtimeMode ? 'text-butter' : 'text-brand-600'
                         }`}>
-                          <span className={`font-heading tracking-wider uppercase text-[11px] truncate max-w-[240px] ${
-                            isBedtimeMode ? 'text-butter' : 'text-brand-600'
-                          }`}>
-                            {story.title}
-                          </span>
-                          <span>Trang {pg.page_number} / {totalPages}</span>
-                        </div>
+                          {story.title}
+                        </span>
+                        <span className="shrink-0">Trang {pg.page_number} / {totalPages}</span>
+                      </div>
 
-                        {/* Main Story Text with Karaoke Highlighting */}
-                        <div className={`font-story leading-[1.7] ${fontSizeClass} tracking-wide space-y-2 select-text`}>
+                      {/* Main Story Text with Karaoke Highlighting (Scrollable if long or large font) */}
+                      <div
+                        onWheel={(e) => e.stopPropagation()}
+                        className={`flex-1 min-h-0 overflow-y-auto pr-1 font-story leading-[1.7] ${fontSizeClass} tracking-wide flex items-center select-text`}
+                      >
+                        <div className="my-auto space-y-1.5">
                           {pgSentences.map((sent, sIdx) => {
                             const isHighlighted = isCurrentSpread && isPlayingVoice && currentSentenceIndex === sIdx;
                             return (
                               <span
                                 key={sIdx}
-                                className={`transition-all duration-300 rounded-lg px-1.5 py-0.5 inline-block ${
+                                className={`transition-all duration-300 rounded-lg px-1.5 py-0.5 inline ${
                                   isHighlighted
                                     ? isBedtimeMode
-                                      ? 'bg-butter text-[#181424] font-black shadow-sm scale-[1.02]'
-                                      : 'bg-brand-100 text-brand-700 font-black shadow-sm scale-[1.02]'
+                                      ? 'bg-butter text-[#181424] font-black shadow-sm'
+                                      : 'bg-brand-100 text-brand-700 font-black shadow-sm'
                                     : ''
                                 }`}
                               >
@@ -855,7 +861,7 @@ export const StoryReadingPage: React.FC = () => {
                       </div>
 
                       {/* Page Footer Decor */}
-                      <div className={`pt-4 border-t flex items-center justify-between text-xs font-heading ${
+                      <div className={`pt-3 border-t flex items-center justify-between text-xs font-heading shrink-0 ${
                         isBedtimeMode ? 'border-white/10 text-[#C8B6FF]/70' : 'border-ink/10 text-ink-faint'
                       }`}>
                         <span>DrawToStory</span>
@@ -866,23 +872,23 @@ export const StoryReadingPage: React.FC = () => {
                 })}
 
                 {/* FINAL SPREAD: CELEBRATION & NEXT DRAWING IDEAS */}
-                <FlipPage key="final-left" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
-                  <div className="space-y-6 text-center">
-                    <div className="w-16 h-16 rounded-full bg-butter/30 mx-auto flex items-center justify-center text-4xl shadow-sm">
+                <FlipPage key="final-left" isBedtime={isBedtimeMode} className="p-6 sm:p-9 flex flex-col justify-between gap-4">
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-5 text-center flex flex-col justify-center">
+                    <div className="w-14 h-14 rounded-full bg-butter/30 mx-auto flex items-center justify-center text-3xl shadow-sm shrink-0">
                       🎉
                     </div>
                     <div className="space-y-2">
-                      <h2 className={`text-2xl sm:text-3xl font-heading font-extrabold ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
+                      <h2 className={`text-xl sm:text-2xl font-heading font-extrabold ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
                         {vi.reader.congratsTitle}
                       </h2>
-                      <p className={`text-sm font-semibold leading-relaxed max-w-sm mx-auto ${isBedtimeMode ? 'text-[#C9F0DD]' : 'text-success'}`}>
+                      <p className={`text-xs sm:text-sm font-semibold leading-relaxed max-w-sm mx-auto ${isBedtimeMode ? 'text-[#C9F0DD]' : 'text-success'}`}>
                         💡 {vi.reader.moralTitle}{' '}
                         <strong className={isBedtimeMode ? 'text-white' : 'text-ink'}>{story.moral}</strong>
                       </p>
                     </div>
 
                     {/* Kid Emotion Feedback Buttons */}
-                    <div className={`p-4 rounded-2xl border space-y-2 max-w-xs mx-auto ${
+                    <div className={`p-3.5 rounded-2xl border space-y-2 max-w-xs mx-auto w-full ${
                       isBedtimeMode ? 'bg-[#2c2445] border-white/10' : 'bg-surface-2 border-ink/10'
                     }`}>
                       <p className={`text-xs font-bold ${isBedtimeMode ? 'text-[#E3D9FF]' : 'text-ink-soft'}`}>
@@ -896,14 +902,15 @@ export const StoryReadingPage: React.FC = () => {
                         ].map((rx) => (
                           <button
                             key={rx.key}
+                            type="button"
                             onClick={() => {
                               soundEffects.playMagic();
                               setKidReaction(rx.key as 'love' | 'happy' | 'neutral');
                               toast.success('Cảm ơn bé đã chấm điểm câu chuyện! ❤️');
                             }}
-                            className={`p-2.5 rounded-2xl text-2xl transition-all transform ${
+                            className={`p-2.5 rounded-2xl text-2xl transition-all transform cursor-pointer ${
                               kidReaction === rx.key
-                                ? 'bg-brand-600 scale-125 shadow-btn-primary'
+                                ? 'bg-brand-600 scale-115 shadow-btn-primary'
                                 : isBedtimeMode
                                 ? 'bg-[#382e57] hover:scale-110 shadow-sm border border-white/10'
                                 : 'bg-surface hover:scale-110 shadow-sm border border-ink/10'
@@ -917,16 +924,16 @@ export const StoryReadingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className={`text-center text-xs ${isBedtimeMode ? 'text-[#C8B6FF]/70' : 'text-ink-faint'}`}>
+                  <div className={`text-center text-xs shrink-0 ${isBedtimeMode ? 'text-[#C8B6FF]/70' : 'text-ink-faint'}`}>
                     Bé hãy tiếp tục khám phá thêm các bức vẽ mới nhé!
                   </div>
                 </FlipPage>
 
-                <FlipPage key="final-right" isBedtime={isBedtimeMode} className="p-8 sm:p-12 flex flex-col justify-between">
-                  <div className="space-y-5">
-                    <div className={`flex items-center gap-2 border-b pb-3 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
-                      <Sparkles className={`w-5 h-5 ${isBedtimeMode ? 'text-butter' : 'text-magic-600'}`} />
-                      <h3 className={`font-heading font-black text-lg ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
+                <FlipPage key="final-right" isBedtime={isBedtimeMode} className="p-6 sm:p-9 flex flex-col justify-between gap-4">
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+                    <div className={`flex items-center gap-2 border-b pb-2.5 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                      <Sparkles className={`w-5 h-5 shrink-0 ${isBedtimeMode ? 'text-butter' : 'text-magic-600'}`} />
+                      <h3 className={`font-heading font-black text-base sm:text-lg ${isBedtimeMode ? 'text-[#F3EFE6]' : 'text-ink'}`}>
                         {vi.reader.nextDrawingIdeasTitle}
                       </h3>
                     </div>
@@ -939,7 +946,7 @@ export const StoryReadingPage: React.FC = () => {
                       {story.next_drawing_ideas?.map((idea, idx) => (
                         <div
                           key={idx}
-                          className={`p-3.5 rounded-2xl border shadow-card flex items-center gap-3 text-xs font-bold group transition-colors ${
+                          className={`p-3 rounded-2xl border shadow-card flex items-center gap-3 text-xs font-bold group transition-colors ${
                             isBedtimeMode
                               ? 'bg-[#2c2445] border-white/10 text-[#F3EFE6] hover:border-butter'
                               : 'bg-surface border-ink/10 text-ink hover:border-brand-600'
@@ -955,7 +962,7 @@ export const StoryReadingPage: React.FC = () => {
                   </div>
 
                   {/* Actions: Print & Read Again */}
-                  <div className={`pt-4 border-t flex items-center justify-between gap-3 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
+                  <div className={`pt-3 border-t flex items-center justify-between gap-2 shrink-0 ${isBedtimeMode ? 'border-white/10' : 'border-ink/10'}`}>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -1138,7 +1145,7 @@ export const StoryReadingPage: React.FC = () => {
         <div className="text-center border-b border-black/20 pb-4 space-y-1">
           <h1 className="text-2xl font-heading font-extrabold">{story.title}</h1>
           <p className="text-sm">
-            Sáng tác từ nét vẽ của Bé {story.child?.nickname || 'Bé yêu'} · DrawToStory
+            Sáng tác từ nét vẽ của {formatChildName(story.child?.nickname, 'Bé yêu')} · DrawToStory
           </p>
         </div>
 

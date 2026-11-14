@@ -147,7 +147,7 @@ export interface SystemPrompt {
   version: number;
   prompt_text: string;
   is_active: boolean;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 }
 

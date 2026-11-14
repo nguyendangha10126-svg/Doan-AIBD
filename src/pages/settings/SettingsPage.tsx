@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
   Key,
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { useAuthStore, isUsingDemoSession } from '@/store/authStore';
 import { useStoryStore } from '@/store/storyStore';
 import { supabase } from '@/lib/supabase';
+import { formatChildName } from '@/lib/utils';
 import { vi } from '@/lib/i18n/vi';
 import { Child } from '@/types/database';
 import { Card } from '@/components/ui/Card';
@@ -27,6 +29,7 @@ import { OtpPinInput } from '@/components/ui/OtpPinInput';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export const SettingsPage: React.FC = () => {
+  const navigate = useNavigate();
   const {
     profile,
     childrenList,
@@ -36,7 +39,7 @@ export const SettingsPage: React.FC = () => {
     updateProfileName,
     updatePassword,
     updatePin,
-    logout,
+    deleteAccount,
   } = useAuthStore();
   const { stories, exportUserDataJson, clearAllUserData } = useStoryStore();
 
@@ -76,6 +79,9 @@ export const SettingsPage: React.FC = () => {
 
   // GDPR delete account modal
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteConfirmWord, setDeleteConfirmWord] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const emojiOptions = ['🥑', '🐿️', '🐱', '🐰', '🐻', '🦁', '🌟', '🎨', '🚀', '🦕', '🌸', '🦊'];
   const colorOptions = ['#FF8FA3', '#7C6CF0', '#C9F0DD', '#FFD6BA', '#CDE7FF', '#FFF1B8', '#F0607F', '#8B7CF6'];
@@ -169,7 +175,7 @@ export const SettingsPage: React.FC = () => {
       });
       setIsSavingChild(false);
       if (created) {
-        toast.success(`Đã thêm hồ sơ bé ${created.nickname} thành công!`);
+        toast.success(`Đã thêm hồ sơ ${formatChildName(created.nickname)} thành công!`);
         setIsChildModalOpen(false);
       } else {
         toast.error(useAuthStore.getState().error || 'Không thể thêm hồ sơ bé.');
@@ -179,10 +185,10 @@ export const SettingsPage: React.FC = () => {
 
   const handleDeleteChildConfirmed = async () => {
     if (!childToDelete) return;
-    const targetName = childToDelete.nickname;
+    const targetName = formatChildName(childToDelete.nickname);
     const ok = await deleteChild(childToDelete.id);
     if (ok) {
-      toast.success(`Đã xóa hồ sơ bé ${targetName} và toàn bộ tranh truyện liên quan`);
+      toast.success(`Đã xóa hồ sơ ${targetName} và toàn bộ tranh truyện liên quan`);
       setChildToDelete(null);
     } else {
       toast.error(useAuthStore.getState().error || 'Không thể xóa hồ sơ bé lúc này.');
@@ -236,16 +242,30 @@ export const SettingsPage: React.FC = () => {
     toast.success('Đã tải xuống toàn bộ dữ liệu gia đình dạng JSON!');
   };
 
-  const handleDeleteAccountConfirmed = async () => {
-    // Cascade delete all children (which cleans up Storage drawings, stories, badges & reading events)
-    for (const kid of [...childrenList]) {
-      await deleteChild(kid.id);
+  const handleDeleteAccountConfirmed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (deleteConfirmWord.trim().toUpperCase() !== 'XOA') {
+      toast.error('Vui lòng gõ chính xác chữ "XOA" để xác nhận.');
+      return;
     }
+    if (!isUsingDemoSession() && !deleteAccountPassword.trim()) {
+      toast.error('Vui lòng nhập mật khẩu tài khoản hiện tại để xác thực.');
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    const result = await deleteAccount(deleteAccountPassword);
+    setIsDeletingAccount(false);
+
+    if (!result.success) {
+      toast.error(result.error || 'Không thể xóa vĩnh viễn tài khoản lúc này.');
+      return;
+    }
+
     clearAllUserData();
-    await logout();
-    toast.success('Đã xóa vĩnh viễn toàn bộ dữ liệu gia đình và đăng xuất');
+    toast.success('Tài khoản và toàn bộ dữ liệu gia đình đã được xóa vĩnh viễn.');
     setIsDeleteAccountOpen(false);
-    window.location.href = '/login';
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -408,7 +428,7 @@ export const SettingsPage: React.FC = () => {
                     </div>
                     <div className="overflow-hidden">
                       <span className="font-heading font-extrabold text-base text-ink block truncate">
-                        {kid.nickname}
+                        {formatChildName(kid.nickname)}
                       </span>
                       <span className="text-xs font-bold text-brand-600 block mt-0.5">
                         {kid.age} tuổi • <strong>{storyCount}</strong> câu chuyện
@@ -469,10 +489,12 @@ export const SettingsPage: React.FC = () => {
                 {profile?.parental_pin_hash ? <Check className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                 {profile?.parental_pin_hash ? 'Đã đặt mã PIN' : 'Chưa đặt mã PIN'}
               </Badge>
-              <span className="text-xs text-ink-faint">Băm một chiều an toàn</span>
+              <span className="text-xs text-ink-faint">Băm một chiều có salt riêng từng tài khoản</span>
             </div>
             <p className="text-xs text-ink-soft">
-              Mã PIN 4 số bảo vệ Cổng phụ huynh trong Chế độ Bé (mặc định ban đầu: <strong>1234</strong>).
+              {profile?.parental_pin_hash
+                ? 'Mã PIN 4 số riêng của gia đình đang bảo vệ Cổng phụ huynh khi bé ở Chế độ Trẻ Em.'
+                : 'Gia đình chưa đặt mã PIN. Khi chưa có PIN, Cổng phụ huynh sẽ yêu cầu giải phép nhân 2 chữ số của người lớn.'}
             </p>
           </div>
 
@@ -541,10 +563,14 @@ export const SettingsPage: React.FC = () => {
             <Button
               variant="danger"
               size="sm"
-              onClick={() => setIsDeleteAccountOpen(true)}
+              onClick={() => {
+                setDeleteAccountPassword('');
+                setDeleteConfirmWord('');
+                setIsDeleteAccountOpen(true);
+              }}
               leftIcon={<Trash2 className="w-4 h-4" />}
             >
-              Xóa dữ liệu & Đăng xuất
+              Xóa vĩnh viễn tài khoản
             </Button>
           </div>
         </div>
@@ -607,7 +633,7 @@ export const SettingsPage: React.FC = () => {
                 Thẻ xem trước
               </span>
               <h4 className="font-heading font-extrabold text-base text-ink">
-                {childNickname.trim() || 'Tên của bé'}
+                {childNickname.trim() ? formatChildName(childNickname) : 'Tên của bé'}
               </h4>
               <span className="text-xs text-ink-soft font-bold block mt-0.5">
                 Độ tuổi: {childAge} tuổi • Sẵn sàng dệt truyện
@@ -718,7 +744,7 @@ export const SettingsPage: React.FC = () => {
         isOpen={Boolean(childToDelete)}
         onClose={() => setChildToDelete(null)}
         onConfirm={handleDeleteChildConfirmed}
-        title={`Xác nhận xóa hồ sơ bé ${childToDelete?.nickname}?`}
+        title={`Xác nhận xóa hồ sơ ${formatChildName(childToDelete?.nickname)}?`}
         description="Toàn bộ tranh vẽ trên đám mây, các trang truyện và huy hiệu gắn với hồ sơ này sẽ được xóa sạch vĩnh viễn. Bạn có chắc chắn muốn xóa không?"
         confirmText="Xóa hồ sơ"
         cancelText="Giữ lại"
@@ -783,17 +809,65 @@ export const SettingsPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Delete Family Data Confirm Dialog requiring user to type "XOA" */}
-      <ConfirmDialog
+      {/* GDPR Right-to-Erasure Modal requiring password + typing "XOA" */}
+      <Modal
         isOpen={isDeleteAccountOpen}
-        onClose={() => setIsDeleteAccountOpen(false)}
-        onConfirm={handleDeleteAccountConfirmed}
-        title="Xóa vĩnh viễn toàn bộ dữ liệu gia đình?"
-        description="Thao tác này sẽ xóa sạch toàn bộ hồ sơ các bé, ảnh tranh vẽ trên Storage, các cuốn truyện tranh và lịch sử nghe đọc trên máy chủ. Bạn sẽ không thể khôi phục lại."
-        confirmWord="XOA"
-        confirmText="Xác nhận xóa vĩnh viễn"
-        cancelText="Hủy bỏ"
-      />
+        onClose={() => {
+          if (!isDeletingAccount) setIsDeleteAccountOpen(false);
+        }}
+        title="Xóa vĩnh viễn tài khoản gia đình?"
+        description="Thao tác này thực thi Quyền được lãng quên (GDPR): xóa sạch toàn bộ ảnh tranh vẽ trên Supabase Storage, hồ sơ các bé, các cuốn truyện tranh và xóa luôn tài khoản đăng nhập khỏi hệ thống. Không thể khôi phục."
+        maxWidth="sm"
+      >
+        <form onSubmit={handleDeleteAccountConfirmed} className="space-y-4 pt-2">
+          {!isUsingDemoSession() && (
+            <Input
+              label="Mật khẩu tài khoản hiện tại"
+              type="password"
+              placeholder="Nhập mật khẩu để xác thực chính chủ"
+              value={deleteAccountPassword}
+              onChange={(e) => setDeleteAccountPassword(e.target.value)}
+              required
+            />
+          )}
+
+          <div className="space-y-1.5 p-3 rounded-2xl bg-danger-bg/50 border border-danger-text/20">
+            <p className="text-xs text-ink-soft">
+              Gõ chính xác chữ <strong className="font-mono text-danger-text font-bold">XOA</strong> để xác nhận xóa vĩnh viễn:
+            </p>
+            <Input
+              value={deleteConfirmWord}
+              onChange={(e) => setDeleteConfirmWord(e.target.value)}
+              placeholder='Gõ "XOA" để xác nhận'
+              required
+            />
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-ink/10">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              disabled={isDeletingAccount}
+              onClick={() => setIsDeleteAccountOpen(false)}
+            >
+              Hủy bỏ
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="submit"
+              isLoading={isDeletingAccount}
+              disabled={
+                deleteConfirmWord.trim().toUpperCase() !== 'XOA' ||
+                (!isUsingDemoSession() && !deleteAccountPassword.trim())
+              }
+            >
+              Xác nhận xóa vĩnh viễn
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

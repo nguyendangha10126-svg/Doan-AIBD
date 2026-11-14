@@ -11,12 +11,15 @@ import {
   LogOut, 
   ChevronDown,
   LayoutDashboard,
-  Plus
+  Plus,
+  BookOpenCheck
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { vi } from '@/lib/i18n/vi';
-import { cn } from '@/lib/utils';
+import { cn, formatChildName } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { UserGuideModal } from '@/features/onboarding/components/UserGuideModal';
+import { shouldAutoOpenUserGuide } from '@/features/onboarding/utils/userGuideStorage';
 
 export const UserLayout: React.FC = () => {
   const { profile, logout, childrenList, selectedChildId, setSelectedChildId } = useAuthStore();
@@ -26,9 +29,17 @@ export const UserLayout: React.FC = () => {
   // Dropdown states
   const [isChildDropdownOpen, setIsChildDropdownOpen] = useState(false);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const childDropdownRef = useRef<HTMLDivElement>(null);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Auto-open interactive User Guide upon login (unless user clicked "Tắt & Không hiện lại")
+  useEffect(() => {
+    if (profile?.id && shouldAutoOpenUserGuide(profile.id)) {
+      setIsGuideOpen(true);
+    }
+  }, [profile?.id]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -158,7 +169,7 @@ export const UserLayout: React.FC = () => {
                     {selectedChild.avatar_emoji}
                   </span>
                   <span className="hidden sm:inline text-xs font-heading font-bold text-ink">
-                    Đang xem: <strong className="text-brand-600">{selectedChild.nickname}</strong>
+                    Đang xem: <strong className="text-brand-600">{formatChildName(selectedChild.nickname)}</strong>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-faint" />
                 </button>
@@ -198,7 +209,7 @@ export const UserLayout: React.FC = () => {
                             >
                               {kid.avatar_emoji}
                             </span>
-                            <span>{kid.nickname}</span>
+                            <span>{formatChildName(kid.nickname)}</span>
                           </div>
                           <span className="text-[11px] text-ink-faint">{kid.age} tuổi</span>
                         </button>
@@ -316,6 +327,18 @@ export const UserLayout: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setIsAccountDropdownOpen(false);
+                        setIsGuideOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-heading font-bold text-ink hover:bg-surface-2 transition-colors cursor-pointer"
+                    >
+                      <BookOpenCheck className="w-4 h-4 text-brand-600" />
+                      <span>Hướng dẫn sử dụng</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAccountDropdownOpen(false);
                         handleLogout();
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-heading font-bold text-[#B42343] hover:bg-[#FFE3EA] transition-colors cursor-pointer border-t border-ink/10 mt-1"
@@ -381,6 +404,13 @@ export const UserLayout: React.FC = () => {
           );
         })}
       </nav>
+      {/* Interactive Swipeable User Guide Modal */}
+      <UserGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        role={profile?.role || 'user'}
+        userId={profile?.id}
+      />
     </div>
   );
 };
